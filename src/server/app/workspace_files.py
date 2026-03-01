@@ -43,7 +43,7 @@ from ptc_agent.core.paths import (
 )
 from src.server.database.workspace import get_workspace as db_get_workspace
 from src.server.services.workspace_manager import WorkspaceManager
-from src.server.services.file_persistence_service import FilePersistenceService
+from src.server.services.persistence.file import FilePersistenceService
 
 logger = logging.getLogger(__name__)
 

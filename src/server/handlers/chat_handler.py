@@ -37,7 +37,7 @@ from src.server.services.workflow_tracker import WorkflowTracker
 
 # Database persistence imports
 from src.server.database import conversation as qr_db
-from src.server.services.conversation_persistence_service import (
+from src.server.services.persistence.conversation import (
     ConversationPersistenceService,
 )
 

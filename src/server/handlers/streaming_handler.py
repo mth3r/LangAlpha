@@ -664,7 +664,7 @@ class WorkflowStreamHandler:
 
             # After workflow completes, emit credit_usage event
             try:
-                from src.server.services.usage_persistence_service import UsagePersistenceService
+                from src.server.services.persistence.usage import UsagePersistenceService
 
                 # Get token tracking from callback (already stored in self.token_callback)
                 per_call_records = None

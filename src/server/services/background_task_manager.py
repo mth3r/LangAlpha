@@ -969,7 +969,7 @@ class BackgroundTaskManager:
             # Workflow interrupted - persist interrupt state with all required fields
             if workspace_id and user_id:
                 try:
-                    from src.server.services.conversation_persistence_service import ConversationPersistenceService
+                    from src.server.services.persistence.conversation import ConversationPersistenceService
 
                     persistence_service = ConversationPersistenceService.get_instance(thread_id)
                     persistence_service._on_pair_persisted = lambda: self.clear_event_buffer(thread_id)
@@ -1050,7 +1050,7 @@ class BackgroundTaskManager:
                     await self._mark_failed(thread_id, f"Completion callback failed: {str(e)}")
 
         # Spawn collector for subagent events + usage merge
-        from src.server.services.conversation_persistence_service import ConversationPersistenceService
+        from src.server.services.persistence.conversation import ConversationPersistenceService
         ps = ConversationPersistenceService.get_instance(thread_id)
         response_id = ps._current_response_id
 
@@ -1127,7 +1127,7 @@ class BackgroundTaskManager:
 
         if workspace_id and user_id:
             try:
-                from src.server.services.conversation_persistence_service import ConversationPersistenceService
+                from src.server.services.persistence.conversation import ConversationPersistenceService
 
                 persistence_service = ConversationPersistenceService.get_instance(thread_id)
                 persistence_service._on_pair_persisted = lambda: self.clear_event_buffer(thread_id)
@@ -1212,7 +1212,7 @@ class BackgroundTaskManager:
 
         if workspace_id and user_id:
             try:
-                from src.server.services.conversation_persistence_service import ConversationPersistenceService
+                from src.server.services.persistence.conversation import ConversationPersistenceService
 
                 persistence_service = ConversationPersistenceService.get_instance(
                     thread_id,
@@ -1479,7 +1479,7 @@ class BackgroundTaskManager:
 
         updated_chunks = main_chunks + cleaned
 
-        from src.server.services.conversation_persistence_service import (
+        from src.server.services.persistence.conversation import (
             ConversationPersistenceService,
         )
         persistence_service = ConversationPersistenceService.get_instance(
@@ -1512,7 +1512,7 @@ class BackgroundTaskManager:
             workspace_id: Workspace ID for the usage record
             user_id: User ID for the usage record
         """
-        from src.server.services.usage_persistence_service import UsagePersistenceService
+        from src.server.services.persistence.usage import UsagePersistenceService
 
         tasks_with_records = [t for t in tasks if t.per_call_records]
         if not tasks_with_records:
@@ -1594,7 +1594,7 @@ class BackgroundTaskManager:
 
         if workspace_id and user_id:
             try:
-                from src.server.services.conversation_persistence_service import ConversationPersistenceService
+                from src.server.services.persistence.conversation import ConversationPersistenceService
 
                 persistence_service = ConversationPersistenceService.get_instance(thread_id)
                 persistence_service._on_pair_persisted = lambda: self.clear_event_buffer(thread_id)

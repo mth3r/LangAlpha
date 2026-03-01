@@ -25,7 +25,7 @@ from src.server.database.workspace import (
     update_workspace_activity,
     update_workspace_status,
 )
-from src.server.services.file_persistence_service import FilePersistenceService
+from src.server.services.persistence.file import FilePersistenceService
 from src.server.services.sync_user_data import sync_user_data_to_sandbox
 
 logger = logging.getLogger(__name__)

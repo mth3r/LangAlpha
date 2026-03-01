@@ -197,7 +197,7 @@ async def list_shared_files(
     thread, workspace_id = await _get_shared_workspace_id(share_token, require_files=True)
 
     from src.server.database.workspace import get_workspace as db_get_workspace
-    from src.server.services.file_persistence_service import FilePersistenceService
+    from src.server.services.persistence.file import FilePersistenceService
     from src.server.services.workspace_manager import WorkspaceManager
 
     workspace = await db_get_workspace(workspace_id)
@@ -265,7 +265,7 @@ async def read_shared_file(
     thread, workspace_id = await _get_shared_workspace_id(share_token, require_files=True)
 
     from src.server.database.workspace import get_workspace as db_get_workspace
-    from src.server.services.file_persistence_service import FilePersistenceService
+    from src.server.services.persistence.file import FilePersistenceService
     from src.server.services.workspace_manager import WorkspaceManager
 
     workspace = await db_get_workspace(workspace_id)
@@ -355,7 +355,7 @@ async def download_shared_file(
     thread, workspace_id = await _get_shared_workspace_id(share_token, require_download=True)
 
     from src.server.database.workspace import get_workspace as db_get_workspace
-    from src.server.services.file_persistence_service import FilePersistenceService
+    from src.server.services.persistence.file import FilePersistenceService
     from src.server.services.workspace_manager import WorkspaceManager
 
     workspace = await db_get_workspace(workspace_id)

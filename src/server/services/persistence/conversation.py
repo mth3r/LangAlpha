@@ -286,7 +286,7 @@ class ConversationPersistenceService:
                     # NEW: Create usage record (token + infrastructure credits)
                     # Track credits even for interrupted workflows to enable proper billing
                     if per_call_records or tool_usage:
-                        from src.server.services.usage_persistence_service import UsagePersistenceService
+                        from src.server.services.persistence.usage import UsagePersistenceService
 
                         usage_service = UsagePersistenceService(
                             thread_id=self.thread_id,
@@ -475,7 +475,7 @@ class ConversationPersistenceService:
 
                     # NEW: Create usage record (token + infrastructure credits)
                     if per_call_records or tool_usage:
-                        from src.server.services.usage_persistence_service import UsagePersistenceService
+                        from src.server.services.persistence.usage import UsagePersistenceService
 
                         usage_service = UsagePersistenceService(
                             thread_id=self.thread_id,
@@ -594,7 +594,7 @@ class ConversationPersistenceService:
                     # NEW: Create usage record (token + infrastructure credits)
                     # Track credits even for failed workflows for accurate billing
                     if per_call_records or tool_usage:
-                        from src.server.services.usage_persistence_service import UsagePersistenceService
+                        from src.server.services.persistence.usage import UsagePersistenceService
 
                         usage_service = UsagePersistenceService(
                             thread_id=self.thread_id,
@@ -718,7 +718,7 @@ class ConversationPersistenceService:
                     # NEW: Create usage record (token + infrastructure credits)
                     # Track credits even for cancelled workflows for accurate billing
                     if per_call_records or tool_usage:
-                        from src.server.services.usage_persistence_service import UsagePersistenceService
+                        from src.server.services.persistence.usage import UsagePersistenceService
 
                         usage_service = UsagePersistenceService(
                             thread_id=self.thread_id,
