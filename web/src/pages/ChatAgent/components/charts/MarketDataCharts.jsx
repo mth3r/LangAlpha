@@ -17,7 +17,7 @@ const GRID_COLOR = 'var(--color-border-default)';
 const TEXT_COLOR = 'var(--color-text-secondary)';
 // Resolved hex colors for canvas charts (lightweight-charts cannot resolve CSS variables)
 const CANVAS_THEMES = {
-  dark:  { bg: '#0f1422', grid: '#1a1f35', text: '#8b8fa3', up: '#0FEDBE', down: '#FF383C', upA: 'rgba(15, 237, 190, 0.3)', downA: 'rgba(255, 56, 60, 0.3)' },
+  dark:  { bg: '#000000', grid: '#1A1A1A', text: '#666666', up: '#0FEDBE', down: '#FF383C', upA: 'rgba(15, 237, 190, 0.3)', downA: 'rgba(255, 56, 60, 0.3)' },
   light: { bg: '#FFFCF9', grid: '#DDD7D0', text: '#7A756F', up: '#16A34A', down: '#DC2626', upA: 'rgba(22, 163, 74, 0.3)', downA: 'rgba(220, 38, 38, 0.3)' },
 };
 const GREEN = 'var(--color-profit)';

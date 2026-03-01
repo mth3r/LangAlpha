@@ -105,6 +105,24 @@
   color: var(--color-text-secondary);
 }
 
+/* Live dot next to section title */
+.trading-sidebar-live-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-profit);
+  box-shadow: 0 0 4px var(--color-profit);
+  margin-left: 5px;
+  vertical-align: middle;
+  animation: pulse-live 2s ease-in-out infinite;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .trading-sidebar-add-btn {
   display: flex;
   align-items: center;

@@ -20,10 +20,12 @@ export function calculateMA(data, period) {
 }
 
 /**
- * Wilder's smoothed RSI — O(n), correct algorithm
+ * Wilder's smoothed RSI — O(n), correct algorithm.
+ * Returns { data: [{ time, value }], state: { avgGain, avgLoss, lastClose, period } }
+ * so live ticks can continue incrementally via updateRSIIncremental().
  */
 export function calculateRSI(data, period = 14) {
-  if (data.length < period + 1) return [];
+  if (data.length < period + 1) return { data: [], state: null };
   const result = [];
 
   // Calculate price changes
@@ -55,5 +57,27 @@ export function calculateRSI(data, period = 14) {
       result.push({ time: data[i].time, value: rsi });
     }
   }
-  return result;
+
+  return {
+    data: result,
+    state: { avgGain, avgLoss, lastClose: data[data.length - 1].close, period },
+  };
+}
+
+/**
+ * O(1) incremental RSI update for a single new bar.
+ * @param {{ avgGain, avgLoss, lastClose, period }} prevState — from calculateRSI().state or a prior call
+ * @param {number} newClose — the new bar's close price
+ * @returns {{ value: number, state: { avgGain, avgLoss, lastClose, period } }}
+ */
+export function updateRSIIncremental(prevState, newClose) {
+  const { avgGain: prevAvgGain, avgLoss: prevAvgLoss, lastClose, period } = prevState;
+  const change = newClose - lastClose;
+  const gain = change > 0 ? change : 0;
+  const loss = change < 0 ? -change : 0;
+  const avgGain = (prevAvgGain * (period - 1) + gain) / period;
+  const avgLoss = (prevAvgLoss * (period - 1) + loss) / period;
+  const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+  const value = avgLoss === 0 ? 100 : 100 - 100 / (1 + rs);
+  return { value, state: { avgGain, avgLoss, lastClose: newClose, period } };
 }

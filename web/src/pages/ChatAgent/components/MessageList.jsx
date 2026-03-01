@@ -265,7 +265,7 @@ function MessageBubble({ message, hideAvatar, compactToolCalls, isSubagentView, 
           }`}
           style={{
             backgroundColor: isUser
-              ? 'var(--color-gray-292929)'
+              ? 'var(--color-bg-elevated)'
               : 'transparent',
             border: 'none',
             color: 'var(--color-text-primary)',

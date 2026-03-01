@@ -13,6 +13,19 @@ import { useTradingChat } from './hooks/useTradingChat';
 import { getWorkspaces } from '../ChatAgent/utils/api';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import CompanyOverviewPanel from './components/CompanyOverviewPanel';
+import { MarketDataWSProvider, useMarketDataWSContext } from './contexts/MarketDataWSContext';
+
+// --- localStorage persistence helpers (shared key prefix with TradingChart) ---
+const STORAGE_PREFIX = 'trading-chart:';
+function loadPref(key, fallback) {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
+    return raw !== null ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+function savePref(key, value) {
+  try { localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value)); } catch { /* noop */ }
+}
 
 const QUICK_QUERIES = [
   'Analyze the technical setup of {symbol}',
@@ -25,16 +38,17 @@ const QUICK_QUERIES = [
   "What's the MACD crossover status for {symbol}?",
 ];
 
-function TradingCenter() {
+function TradingCenterInner() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
-  const [selectedStock, setSelectedStock] = useState('GOOGL');
+  const { prices: wsPrices, connectionStatus: wsStatus, subscribe: wsSubscribe, unsubscribe: wsUnsubscribe } = useMarketDataWSContext();
+  const [selectedStock, setSelectedStock] = useState(() => loadPref('symbol', 'GOOGL'));
   const [selectedStockDisplay, setSelectedStockDisplay] = useState(null);
   const [stockInfo, setStockInfo] = useState(null);
   const [realTimePrice, setRealTimePrice] = useState(null);
   const [chartMeta, setChartMeta] = useState(null);
-  const [selectedInterval, setSelectedInterval] = useState('1day');
+  const [selectedInterval, setSelectedInterval] = useState(() => loadPref('interval', '1day'));
   const chartRef = useRef();
   const [chartImage, setChartImage] = useState(null);       // base64 data URL
   const [chartImageDesc, setChartImageDesc] = useState(null); // text description for LLM
@@ -53,6 +67,10 @@ function TradingCenter() {
   }, []);
 
   const [quickQueries, setQuickQueries] = useState(() => pickRandomQueries(selectedStock));
+
+  // Persist user preferences to localStorage (dedicated effects — no other side effects)
+  useEffect(() => { savePref('symbol', selectedStock); }, [selectedStock]);
+  useEffect(() => { savePref('interval', selectedInterval); }, [selectedInterval]);
 
   useEffect(() => {
     setQuickQueries(pickRandomQueries(selectedStock));
@@ -110,8 +128,22 @@ function TradingCenter() {
     setShowOverview(false);
   }, []);
 
+  // Subscribe selected stock to WS feed
+  useEffect(() => {
+    if (!selectedStock) return;
+    wsSubscribe([selectedStock]);
+    return () => wsUnsubscribe([selectedStock]);
+  }, [selectedStock, wsSubscribe, wsUnsubscribe]);
+
+  // Wire WS price → realTimePrice state
+  useEffect(() => {
+    const wsPrice = wsPrices.get(selectedStock);
+    if (wsPrice) setRealTimePrice(wsPrice);
+  }, [wsPrices, selectedStock]);
+
   // Consolidated fetch: stockInfo + realTimePrice from a single API call
-  // with AbortController and Page Visibility API
+  // with AbortController and Page Visibility API.
+  // When WS is connected, only fetch once (for stockInfo/name/exchange) — skip polling.
   useEffect(() => {
     if (!selectedStock) return;
 
@@ -138,6 +170,11 @@ function TradingCenter() {
 
     loadStockQuote();
 
+    // Suppress 60s polling when WS is connected — WS provides sub-second updates
+    if (wsStatus === 'connected') {
+      return () => abortController.abort();
+    }
+
     // Refresh price every 60s, but skip when tab is hidden (Page Visibility API)
     const priceInterval = setInterval(async () => {
       if (document.hidden) return; // Skip fetch when tab is not visible
@@ -154,7 +191,7 @@ function TradingCenter() {
       abortController.abort();
       clearInterval(priceInterval);
     };
-  }, [selectedStock]);
+  }, [selectedStock, wsStatus]);
 
   // Fetch company overview data (lifted from CompanyOverviewPanel)
   useEffect(() => {
@@ -404,6 +441,8 @@ function TradingCenter() {
             chartMeta={chartMeta}
             displayOverride={selectedStockDisplay}
             onToggleOverview={() => setShowOverview(v => !v)}
+            wsStatus={wsStatus}
+            quoteData={overviewData?.quote || null}
           />
           <div className="trading-chart-area">
             {showOverview && (
@@ -426,6 +465,7 @@ function TradingCenter() {
               earningsData={overviewData?.earningsSurprises || null}
               overlayData={overlayData}
               stockMeta={chartMeta}
+              liveTick={wsPrices.get(selectedStock)?.barData || null}
             />
           </div>
         </div>
@@ -509,6 +549,14 @@ function TradingCenter() {
         </button>
       )}
     </div>
+  );
+}
+
+function TradingCenter() {
+  return (
+    <MarketDataWSProvider>
+      <TradingCenterInner />
+    </MarketDataWSProvider>
   );
 }
 

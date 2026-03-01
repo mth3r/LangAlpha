@@ -1115,7 +1115,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
                           <div
                             className="max-w-[80%] rounded-lg rounded-tr-none px-4 py-3 overflow-hidden"
                             style={{
-                              backgroundColor: 'var(--color-gray-292929)',
+                              backgroundColor: 'var(--color-bg-elevated)',
                               color: 'var(--color-text-primary)',
                             }}
                           >

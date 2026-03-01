@@ -47,8 +47,8 @@ function TradingViewWidget({ symbol, interval = '1day' }) {
       theme: theme === 'light' ? 'light' : 'dark',
       style: '1', // Candlestick
       locale: 'en',
-      backgroundColor: theme === 'light' ? '#FFFCF9' : '#0f1422',
-      gridColor: theme === 'light' ? '#E8E2DB' : '#1a1f35',
+      backgroundColor: theme === 'light' ? '#FFFCF9' : '#000000',
+      gridColor: theme === 'light' ? '#E8E2DB' : '#1A1A1A',
       allow_symbol_change: false,
       hide_side_toolbar: false, // Keep drawing tools visible
       hide_top_toolbar: false,

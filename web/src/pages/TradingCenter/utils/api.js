@@ -7,6 +7,33 @@ import { supabase } from '@/lib/supabase';
 
 const baseURL = api.defaults.baseURL;
 
+/**
+ * Build the WebSocket URL for the market data aggregate stream.
+ * Converts the HTTP baseURL (e.g. http://localhost:8000) to ws:// scheme.
+ * @param {string} [market='stock'] - Market type (stock, index, crypto, forex)
+ * @param {string} [interval='second'] - Aggregate interval (second, minute)
+ * @returns {string} Full WS URL with path
+ */
+export function getMarketDataWSUrl(market = 'stock', interval = 'second') {
+  const wsBase = baseURL.replace(/^http/, 'ws');
+  return `${wsBase}/ws/v1/market-data/aggregates/${market}?interval=${interval}`;
+}
+
+/**
+ * Get the current Supabase access token for WS auth.
+ * Returns null when auth is disabled (local dev).
+ * @returns {Promise<string|null>}
+ */
+export async function getWSAuthToken() {
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Get Bearer auth headers for raw fetch() calls (SSE streams). */
 async function getAuthHeaders() {
   if (!supabase) return {};

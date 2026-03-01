@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWatchlistData } from '../../Dashboard/hooks/useWatchlistData';
 import { usePortfolioData } from '../../Dashboard/hooks/usePortfolioData';
+import { useMarketDataWSContext } from '../contexts/MarketDataWSContext';
 import AddWatchlistItemDialog from '../../Dashboard/components/AddWatchlistItemDialog';
 import AddPortfolioHoldingDialog from '../../Dashboard/components/AddPortfolioHoldingDialog';
 import ConfirmDialog from '../../Dashboard/components/ConfirmDialog';
@@ -14,6 +15,17 @@ function TradingSidebarPanel({ activeSymbol, onSymbolClick }) {
   const [activeTab, setActiveTab] = useState('watchlist');
   const watchlist = useWatchlistData();
   const portfolio = usePortfolioData();
+  const { prices: wsPrices, connectionStatus: wsStatus, subscribe: wsSubscribe, unsubscribe: wsUnsubscribe } = useMarketDataWSContext();
+
+  // Subscribe all sidebar symbols to WS feed
+  useEffect(() => {
+    const symbols = [...new Set([
+      ...watchlist.rows.map((r) => r.symbol),
+      ...portfolio.rows.map((r) => r.symbol),
+    ])].filter(Boolean);
+    if (symbols.length) wsSubscribe(symbols);
+    return () => { if (symbols.length) wsUnsubscribe(symbols); };
+  }, [watchlist.rows, portfolio.rows, wsSubscribe, wsUnsubscribe]);
 
   const [deleteConfirm, setDeleteConfirm] = useState({
     open: false,
@@ -88,8 +100,24 @@ function TradingSidebarPanel({ activeSymbol, onSymbolClick }) {
     ));
 
   const isWatchlist = activeTab === 'watchlist';
-  const currentRows = isWatchlist ? watchlist.rows : portfolio.rows;
   const currentLoading = isWatchlist ? watchlist.loading : portfolio.loading;
+
+  // Overlay WS live prices onto rows
+  const currentRows = useMemo(() => {
+    const rows = isWatchlist ? watchlist.rows : portfolio.rows;
+    return rows.map((row) => {
+      const ws = wsPrices.get(row.symbol);
+      if (!ws) return row;
+      const changeField = isWatchlist ? 'changePercent' : 'unrealizedPlPercent';
+      const wsChangePercent = parseFloat(ws.changePercent);
+      return {
+        ...row,
+        price: ws.price,
+        [changeField]: isNaN(wsChangePercent) ? row[changeField] : wsChangePercent,
+        isPositive: ws.change >= 0,
+      };
+    });
+  }, [isWatchlist, watchlist.rows, portfolio.rows, wsPrices]);
 
   // Collapsed state — thin toggle strip
   if (!expanded) {
@@ -158,6 +186,7 @@ function TradingSidebarPanel({ activeSymbol, onSymbolClick }) {
       <div className="trading-sidebar-section-header">
         <span className="trading-sidebar-section-title">
           {isWatchlist ? 'WATCHLIST' : 'PORTFOLIO'}
+          {wsStatus === 'connected' && <span className="trading-sidebar-live-dot" title="Live prices" />}
         </span>
         <button
           className="trading-sidebar-add-btn"

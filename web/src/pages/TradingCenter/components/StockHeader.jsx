@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Info } from 'lucide-react';
 import './StockHeader.css';
 
-const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverride, onToggleOverview }) => {
+const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverride, onToggleOverview, wsStatus, quoteData }) => {
   const formatNumber = (num) => {
     if (num == null || (num !== 0 && !num)) return '—';
     if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
@@ -22,13 +22,27 @@ const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverr
   const low = realTimePrice?.low ?? stockInfo?.Low ?? null;
   const fiftyTwoWeekHigh = chartMeta?.fiftyTwoWeekHigh ?? stockInfo?.['52WeekHigh'] ?? null;
   const fiftyTwoWeekLow = chartMeta?.fiftyTwoWeekLow ?? stockInfo?.['52WeekLow'] ?? null;
-  const averageVolume = stockInfo?.AverageVolume ?? null;
+  const averageVolume = quoteData?.avgVolume ?? stockInfo?.AverageVolume ?? null;
   const volume = stockInfo?.Volume ?? null;
   const dayRange = (high != null && low != null) ? (Number(high) - Number(low)) : null;
   const changePct = realTimePrice?.changePercent != null ? realTimePrice.changePercent : null;
 
   const displayName = displayOverride?.name ?? stockInfo?.Name ?? `${symbol} Corp`;
   const displayExchange = displayOverride?.exchange ?? stockInfo?.Exchange ?? 'NASDAQ';
+
+  // Live timestamp — updates every second when WS is connected
+  const isLive = wsStatus === 'connected';
+  const [tickTime, setTickTime] = useState(null);
+  useEffect(() => {
+    if (realTimePrice?.timestamp) {
+      setTickTime(new Date(realTimePrice.timestamp));
+    }
+  }, [realTimePrice?.timestamp]);
+
+  const formatTickTime = (date) => {
+    if (!date) return null;
+    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
 
   return (
     <div className="stock-header">
@@ -48,6 +62,20 @@ const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverr
           <div className="stock-price">{price.toFixed(2)}</div>
           <div className={`stock-change ${isPositive ? 'positive' : 'negative'}`}>
             {isPositive ? '+' : ''}{change.toFixed(2)} {isPositive ? '+' : ''}{changePercent}
+          </div>
+          <div className="stock-data-source">
+            {isLive ? (
+              <>
+                <span className="data-source-dot data-source-dot--live" />
+                <span className="data-source-label">Live</span>
+                {tickTime && <span className="data-source-time">{formatTickTime(tickTime)}</span>}
+              </>
+            ) : (
+              <>
+                <span className="data-source-dot data-source-dot--delayed" />
+                <span className="data-source-label">Delayed</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -108,9 +136,6 @@ const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverr
           <span className={`metric-value ${(parseFloat(changePct) || 0) >= 0 ? 'positive' : 'negative'}`}>
             {changePct != null && changePct !== '' ? (parseFloat(changePct) >= 0 ? '+' : '') + changePct : '—'}
           </span>
-        </div>
-        <div className="metric-item view-all">
-          <span className="view-all-link">View all</span>
         </div>
       </div>
     </div>
