@@ -9,6 +9,7 @@ import ChatInput from '../../components/ui/chat-input';
 import MarketPanel from './components/MarketPanel';
 import MarketSidebarPanel from './components/MarketSidebarPanel';
 import { fetchStockQuote, fetchCompanyOverview, fetchAnalystData } from './utils/api';
+import { supports1sInterval } from './utils/chartConstants';
 import { useMarketChat } from './hooks/useMarketChat';
 import { getWorkspaces } from '../ChatAgent/utils/api';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
@@ -42,7 +43,7 @@ function MarketViewInner() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
-  const { prices: wsPrices, connectionStatus: wsStatus, subscribe: wsSubscribe, unsubscribe: wsUnsubscribe } = useMarketDataWSContext();
+  const { prices: wsPrices, connectionStatus: wsStatus, ginlixDataEnabled, subscribe: wsSubscribe, unsubscribe: wsUnsubscribe } = useMarketDataWSContext();
   const [selectedStock, setSelectedStock] = useState(() => loadPref('symbol', 'GOOGL'));
   const [selectedStockDisplay, setSelectedStockDisplay] = useState(null);
   const [stockInfo, setStockInfo] = useState(null);
@@ -71,6 +72,13 @@ function MarketViewInner() {
   // Persist user preferences to localStorage (dedicated effects — no other side effects)
   useEffect(() => { savePref('symbol', selectedStock); }, [selectedStock]);
   useEffect(() => { savePref('interval', selectedInterval); }, [selectedInterval]);
+
+  // Auto-downgrade 1s → 1m when the current symbol doesn't support 1s
+  useEffect(() => {
+    if (selectedInterval === '1s' && !supports1sInterval(selectedStock)) {
+      setSelectedInterval('1min');
+    }
+  }, [selectedStock, selectedInterval]);
 
   useEffect(() => {
     setQuickQueries(pickRandomQueries(selectedStock));
@@ -442,6 +450,7 @@ function MarketViewInner() {
             displayOverride={selectedStockDisplay}
             onToggleOverview={() => setShowOverview(v => !v)}
             wsStatus={wsStatus}
+            ginlixDataEnabled={ginlixDataEnabled}
             quoteData={overviewData?.quote || null}
           />
           <div className="market-chart-area">
@@ -467,6 +476,7 @@ function MarketViewInner() {
               stockMeta={chartMeta}
               liveTick={wsPrices.get(selectedStock)?.barData || null}
               wsStatus={wsStatus}
+              ginlixDataEnabled={ginlixDataEnabled}
             />
           </div>
         </div>

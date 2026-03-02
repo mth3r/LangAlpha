@@ -185,3 +185,21 @@ export function computeExtendedHoursRegions(data) {
   }
   return regions;
 }
+
+// --- Symbol classification ---
+export const FOREIGN_EXCHANGES = new Set(['HK', 'SS', 'SZ', 'L', 'T', 'TO', 'AX', 'DE', 'PA', 'MC']);
+
+/** Returns true for US-listed equities (not indexes, not foreign stocks). */
+export function isUSEquity(sym) {
+  if (!sym) return true;
+  if (sym.startsWith('^')) return false;
+  const dotIdx = sym.lastIndexOf('.');
+  if (dotIdx === -1) return true;
+  const suffix = sym.slice(dotIdx + 1).toUpperCase();
+  return !FOREIGN_EXCHANGES.has(suffix);
+}
+
+/** 1s interval is only supported for US equities. */
+export function supports1sInterval(sym) {
+  return isUSEquity(sym);
+}

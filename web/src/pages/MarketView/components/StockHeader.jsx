@@ -1,17 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Info } from 'lucide-react';
 import './StockHeader.css';
+import { isUSEquity } from '../utils/chartConstants';
 
 const EXCHANGE_LABELS = { HK: 'HK', SS: 'SH', SZ: 'SZ', L: 'LON', T: 'TYO', TO: 'TSX', AX: 'ASX' };
-const FOREIGN_EXCHANGES = new Set(['HK', 'SS', 'SZ', 'L', 'T', 'TO', 'AX', 'DE', 'PA', 'MC']);
-
-function isUSSymbol(sym) {
-  if (!sym) return true;
-  const dotIdx = sym.lastIndexOf('.');
-  if (dotIdx === -1) return true;
-  const suffix = sym.slice(dotIdx + 1).toUpperCase();
-  return !FOREIGN_EXCHANGES.has(suffix);
-}
 
 function getDelayedLabel(sym) {
   if (!sym) return 'Delayed';
@@ -21,7 +13,7 @@ function getDelayedLabel(sym) {
   return EXCHANGE_LABELS[suffix] ? `${EXCHANGE_LABELS[suffix]} Delayed` : 'Delayed';
 }
 
-const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverride, onToggleOverview, wsStatus, quoteData }) => {
+const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverride, onToggleOverview, wsStatus, ginlixDataEnabled = true, quoteData }) => {
   const formatNumber = (num) => {
     if (num == null || (num !== 0 && !num)) return '—';
     if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
@@ -50,7 +42,7 @@ const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverr
   const displayExchange = displayOverride?.exchange ?? stockInfo?.Exchange ?? '';
 
   // Live timestamp — updates every second when WS is connected
-  const usSymbol = isUSSymbol(symbol);
+  const usSymbol = isUSEquity(symbol);
   const isLive = wsStatus === 'connected' && usSymbol;
   const [tickTime, setTickTime] = useState(null);
   useEffect(() => {
@@ -85,6 +77,10 @@ const StockHeader = ({ symbol, stockInfo, realTimePrice, chartMeta, displayOverr
                   <span className="data-source-label">{getDelayedLabel(symbol)}</span>
                 </>
               )}
+              <span className="data-source-tooltip">
+                <span>Source: {ginlixDataEnabled ? 'Ginlix Data' : 'FMP'}</span>
+                <span>WebSocket: {wsStatus === 'connected' ? 'Connected' : wsStatus === 'disabled' ? 'Not available' : wsStatus === 'reconnecting' ? 'Reconnecting' : 'Disconnected'}</span>
+              </span>
             </span>
           </div>
           <button className="stock-overview-toggle" onClick={onToggleOverview}>

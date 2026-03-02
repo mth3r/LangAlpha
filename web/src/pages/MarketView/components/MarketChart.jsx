@@ -11,6 +11,7 @@ import {
   MA_CONFIGS, DEFAULT_ENABLED_MA, RSI_PERIODS, BARS_PER_DAY, AUTO_FIT_BARS,
   OVERLAY_COLORS, OVERLAY_LABELS,
   EXTENDED_HOURS_INTERVALS, isExtendedHours, computeExtendedHoursRegions,
+  supports1sInterval,
 } from '../utils/chartConstants';
 import { ExtendedHoursBgPrimitive } from '../utils/extendedHoursBg';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -57,6 +58,7 @@ const MarketChart = React.memo(forwardRef(({
   stockMeta,
   liveTick,
   wsStatus,
+  ginlixDataEnabled = true,
 }, ref) => {
   const { theme } = useTheme();
   const ct = getChartTheme(theme);
@@ -98,6 +100,8 @@ const MarketChart = React.memo(forwardRef(({
   const [indicatorsOpen, setIndicatorsOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [intervalsOpen, setIntervalsOpen] = useState(false);
+  const [disabledTooltip, setDisabledTooltip] = useState(null);
+  const disabledTooltipTimer = useRef(null);
   const indicatorsDropdownRef = useRef(null);
   const toolsDropdownRef = useRef(null);
   const intervalsDropdownRef = useRef(null);
@@ -958,6 +962,11 @@ const MarketChart = React.memo(forwardRef(({
             handleScrollLoadMore();
           }
         } else {
+          // Silently downgrade 1s → 1min when ginlix-data unavailable or symbol ineligible
+          if (interval === '1s' && (!ginlixDataEnabled || !supports1sInterval(symbol))) {
+            onIntervalChange?.('1min');
+            return;
+          }
           clearChartSeries();
           let fallbackMsg;
           if (interval === '1s') {
@@ -972,6 +981,11 @@ const MarketChart = React.memo(forwardRef(({
         }
       } catch (err) {
         if (abortController.signal.aborted) return;
+        // Silently downgrade 1s → 1min when ginlix-data unavailable or symbol ineligible
+        if (interval === '1s' && (!ginlixDataEnabled || !supports1sInterval(symbol))) {
+          onIntervalChange?.('1min');
+          return;
+        }
         console.error('Failed to load stock data:', err);
         clearChartSeries();
         setError(err?.message || 'Failed to load data');
@@ -1143,17 +1157,31 @@ const MarketChart = React.memo(forwardRef(({
         <div className="chart-tools-left">
           <div className="interval-selector">
             {INTERVALS.filter(({ key }) => PRIMARY_INTERVAL_KEYS.has(key)).map(({ key, label }) => {
-              const wsUnavailable = key === '1s' && wsStatus === 'disabled';
+              const is1sDisabled = key === '1s' && (!ginlixDataEnabled || !supports1sInterval(symbol));
               return (
-              <button
-                key={key}
-                type="button"
-                className={`interval-btn${interval === key ? ' interval-btn-active' : ''}${wsUnavailable ? ' interval-btn-disabled' : ''}`}
-                onClick={() => { if (wsUnavailable) return; onIntervalChange?.(key); setIntervalsOpen(false); setIndicatorsOpen(false); setToolsOpen(false); }}
-                title={wsUnavailable ? '1s interval is not supported by the current data source' : undefined}
-              >
-                {label}
-              </button>
+              <div key={key} style={{ position: 'relative', display: 'inline-flex' }}>
+                <button
+                  type="button"
+                  className={`interval-btn${interval === key ? ' interval-btn-active' : ''}${is1sDisabled ? ' interval-btn-disabled' : ''}`}
+                  onClick={() => {
+                    if (is1sDisabled) {
+                      const msg = !ginlixDataEnabled
+                        ? '1s data is not available'
+                        : '1s interval is only available for US stocks';
+                      setDisabledTooltip(msg);
+                      clearTimeout(disabledTooltipTimer.current);
+                      disabledTooltipTimer.current = setTimeout(() => setDisabledTooltip(null), 2000);
+                      return;
+                    }
+                    onIntervalChange?.(key); setIntervalsOpen(false); setIndicatorsOpen(false); setToolsOpen(false);
+                  }}
+                >
+                  {label}
+                </button>
+                {is1sDisabled && disabledTooltip && (
+                  <div className="interval-disabled-tooltip">{disabledTooltip}</div>
+                )}
+              </div>
               );
             })}
             {/* "More" dropdown for secondary intervals */}

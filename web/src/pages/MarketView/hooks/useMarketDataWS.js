@@ -36,6 +36,7 @@ const HIDDEN_CLOSE_DELAY_MS = 60000; // close 60s after page hidden
 export default function useMarketDataWS() {
   const [prices, setPrices] = useState(() => new Map());
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  const [ginlixDataEnabled, setGinlixDataEnabled] = useState(true); // assume enabled until preflight says otherwise
 
   const wsRef = useRef(null);
   const subscribedRef = useRef(new Map()); // symbol → refCount
@@ -171,6 +172,7 @@ export default function useMarketDataWS() {
       if (!mountedRef.current) return;
       if (!available) {
         disabledRef.current = true;
+        setGinlixDataEnabled(false);
         setConnectionStatus('disabled');
         return;
       }
@@ -343,5 +345,5 @@ export default function useMarketDataWS() {
     };
   }, [connect, disconnect]);
 
-  return { prices, connectionStatus, subscribe, unsubscribe };
+  return { prices, connectionStatus, ginlixDataEnabled, subscribe, unsubscribe };
 }

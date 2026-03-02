@@ -127,15 +127,21 @@ const DashboardHeader = ({ onStockSearch, onModifyPreferences, onStartOnboarding
   const handleSubmit = (e) => {
     e.preventDefault();
     const q = searchValue.trim();
-    if (q) {
-      const symbol = q.toUpperCase();
-      setSearchValue(symbol);
-      setShowDropdown(false);
-      if (onStockSearch) {
-        onStockSearch(symbol, null);
-      } else {
-        navigate(`/market?symbol=${encodeURIComponent(symbol)}`);
-      }
+    if (!q) return;
+
+    // Default to the first search result when available
+    if (searchResults.length > 0) {
+      handleSelectStock(searchResults[0]);
+      return;
+    }
+
+    const symbol = q.toUpperCase();
+    setSearchValue(symbol);
+    setShowDropdown(false);
+    if (onStockSearch) {
+      onStockSearch(symbol, null);
+    } else {
+      navigate(`/market?symbol=${encodeURIComponent(symbol)}`);
     }
   };
 

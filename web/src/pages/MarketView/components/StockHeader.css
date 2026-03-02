@@ -68,6 +68,30 @@
   gap: 5px;
   font-size: 11px;
   color: var(--color-text-secondary);
+  position: relative;
+  cursor: default;
+}
+
+.data-source-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-elevated);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 20;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stock-data-source:hover .data-source-tooltip {
+  display: flex;
 }
 
 .data-source-dot {
