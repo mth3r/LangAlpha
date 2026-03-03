@@ -1010,7 +1010,7 @@ class BackgroundTaskManager:
                         "msg_type": metadata.get("msg_type"),
                         "stock_code": metadata.get("stock_code"),
                         "deepthinking": metadata.get("deepthinking", False),
-                        "byok_active": metadata.get("byok_active", False)
+                        "is_byok": metadata.get("is_byok", False)
                     }
 
                     await persistence_service.persist_interrupt(
@@ -1083,7 +1083,7 @@ class BackgroundTaskManager:
                                 tasks=tasks_to_collect,
                                 workspace_id=workspace_id,
                                 user_id=user_id,
-                                is_byok=metadata.get("byok_active", False),
+                                is_byok=metadata.get("is_byok", False),
                             ),
                             name=f"subagent-collector-{thread_id}-post-tail",
                         )
@@ -1155,7 +1155,7 @@ class BackgroundTaskManager:
                     "stock_code": metadata.get("stock_code"),
                     "agent_llm_preset": metadata.get("agent_llm_preset", "default"),
                     "deepthinking": metadata.get("deepthinking", False),
-                    "byok_active": metadata.get("byok_active", False)
+                    "is_byok": metadata.get("is_byok", False)
                 }
 
                 await persistence_service.persist_error(
@@ -1240,7 +1240,7 @@ class BackgroundTaskManager:
                     "stock_code": metadata.get("stock_code"),
                     "agent_llm_preset": metadata.get("agent_llm_preset", "default"),
                     "deepthinking": metadata.get("deepthinking", False),
-                    "byok_active": metadata.get("byok_active", False),
+                    "is_byok": metadata.get("is_byok", False),
                     "soft_interrupted": True
                 }
 
@@ -1273,7 +1273,7 @@ class BackgroundTaskManager:
                             workspace_id=workspace_id,
                             user_id=user_id,
                             timeout=120.0,
-                            is_byok=metadata.get("byok_active", False),
+                            is_byok=metadata.get("is_byok", False),
                         ),
                         name=f"subagent-collector-{thread_id}",
                     )
@@ -1622,7 +1622,7 @@ class BackgroundTaskManager:
                     "stock_code": metadata.get("stock_code"),
                     "agent_llm_preset": metadata.get("agent_llm_preset", "default"),
                     "deepthinking": metadata.get("deepthinking", False),
-                    "byok_active": metadata.get("byok_active", False),
+                    "is_byok": metadata.get("is_byok", False),
                     "cancelled_by_user": True
                 }
 

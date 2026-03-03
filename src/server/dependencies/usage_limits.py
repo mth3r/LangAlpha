@@ -53,7 +53,7 @@ async def close_http_client() -> None:
 class ChatAuthResult:
     """Result from chat rate-limit dependency, carrying BYOK status to avoid re-querying."""
     user_id: str
-    byok_active: bool = False
+    is_byok: bool = False
 
 
 async def _get_bearer_token() -> Optional[str]:
@@ -181,7 +181,7 @@ async def enforce_chat_limit(
     # Check BYOK status locally (passed to resolve_llm_config for key lookup)
     from src.server.database.api_keys import is_byok_active
 
-    byok = await is_byok_active(user_id)
+    is_byok = await is_byok_active(user_id)
 
     # Burst guard for all users (BYOK, OAuth, and platform)
     max_concurrent = _DEFAULT_MAX_CONCURRENT
@@ -197,7 +197,7 @@ async def enforce_chat_limit(
             headers={"Retry-After": "5"},
         )
 
-    return ChatAuthResult(user_id=user_id, byok_active=byok)
+    return ChatAuthResult(user_id=user_id, is_byok=is_byok)
 
 
 async def enforce_credit_limit(user_id: str) -> None:

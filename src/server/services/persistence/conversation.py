@@ -357,7 +357,7 @@ class ConversationPersistenceService:
                         deepthinking = metadata.get("deepthinking", False) if metadata else False
 
                         # Extract BYOK flag from metadata
-                        is_byok = metadata.get("byok_active", False) if metadata else False
+                        is_byok = metadata.get("is_byok", False) if metadata else False
 
                         # Persist to conversation_usage table (status='interrupted')
                         # Override msg_type to 'interrupted' for interrupted workflows
@@ -549,7 +549,7 @@ class ConversationPersistenceService:
                         deepthinking = metadata.get("deepthinking", False) if metadata else False
 
                         # Extract BYOK flag from metadata
-                        is_byok = metadata.get("byok_active", False) if metadata else False
+                        is_byok = metadata.get("is_byok", False) if metadata else False
 
                         # Persist to conversation_usage table (status='completed')
                         await usage_service.persist_usage(
@@ -672,7 +672,7 @@ class ConversationPersistenceService:
                         deepthinking = metadata.get("deepthinking", False) if metadata else False
 
                         # Extract BYOK flag from metadata
-                        is_byok = metadata.get("byok_active", False) if metadata else False
+                        is_byok = metadata.get("is_byok", False) if metadata else False
 
                         # Persist to conversation_usage table (status='error')
                         usage_persisted = await usage_service.persist_usage(
@@ -800,7 +800,7 @@ class ConversationPersistenceService:
                         deepthinking = metadata.get("deepthinking", False) if metadata else False
 
                         # Extract BYOK flag from metadata
-                        is_byok = metadata.get("byok_active", False) if metadata else False
+                        is_byok = metadata.get("is_byok", False) if metadata else False
 
                         # Persist to conversation_usage table (status='cancelled')
                         usage_persisted = await usage_service.persist_usage(

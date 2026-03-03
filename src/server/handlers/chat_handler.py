@@ -282,15 +282,15 @@ async def queue_message_for_subagent(
         )
 
 
-async def resolve_byok_llm_client(user_id: str, model_name: str, byok_active: bool):
+async def resolve_byok_llm_client(user_id: str, model_name: str, is_byok: bool):
     """
     If BYOK is active, look up the user's key for the model's provider
     and return a fresh LLM client.  Returns None if BYOK isn't applicable.
 
     Uses a single combined query (get_byok_key_for_provider) instead of
-    separate is_byok_active + get_key_for_provider calls.
+    separate is_is_byok + get_key_for_provider calls.
     """
-    if not byok_active:
+    if not is_byok:
         return None
 
     from src.server.database.api_keys import get_byok_key_for_provider
@@ -367,7 +367,7 @@ async def resolve_llm_config(
     base_config,
     user_id: str,
     request_model: str | None,
-    byok_active: bool,
+    is_byok: bool,
     mode: str = "ptc",
 ):
     """
@@ -409,9 +409,9 @@ async def resolve_llm_config(
             config = config.model_copy(deep=True)
         config.llm_client = oauth_client
     # Then try BYOK
-    elif byok_active:
+    elif is_byok:
         byok_client = await resolve_byok_llm_client(
-            user_id, effective_model, byok_active
+            user_id, effective_model, is_byok
         )
         if byok_client:
             if config is base_config:
@@ -426,7 +426,7 @@ async def astream_flash_workflow(
     thread_id: str,
     user_input: str,
     user_id: str,
-    byok_active: bool = False,
+    is_byok: bool = False,
     config=None,
 ):
     """
@@ -573,7 +573,7 @@ async def astream_flash_workflow(
         # Resolve LLM config (pre-resolved by route handler, fallback for standalone use)
         if config is None:
             config = await resolve_llm_config(
-                setup.agent_config, user_id, request.llm_model, byok_active, mode="flash"
+                setup.agent_config, user_id, request.llm_model, is_byok, mode="flash"
             )
 
         # Fetch user profile for prompt injection
@@ -734,7 +734,7 @@ async def astream_flash_workflow(
 
                 if persistence_service:
                     await persistence_service.persist_completion(
-                        metadata={"msg_type": "flash", "byok_active": byok_active},
+                        metadata={"msg_type": "flash", "is_byok": is_byok},
                         execution_time=execution_time,
                         per_call_records=_per_call_records,
                         tool_usage=_tool_usage,
@@ -774,7 +774,7 @@ async def astream_flash_workflow(
                 "started_at": datetime.now().isoformat(),
                 "start_time": start_time,
                 "msg_type": "flash",
-                "byok_active": byok_active,
+                "is_byok": is_byok,
                 "handler": handler,
                 "token_callback": token_callback,
             },
@@ -820,7 +820,7 @@ async def astream_flash_workflow(
                     persistence_service=persistence_service,
                     start_time=start_time,
                     request=request,
-                    byok_active=byok_active,
+                    is_byok=is_byok,
                 ),
                 name=f"sse-disconnect-cleanup-{thread_id}",
             )
@@ -855,7 +855,7 @@ async def astream_flash_workflow(
                 await persistence_service.persist_error(
                     error_message=str(e),
                     execution_time=execution_time,
-                    metadata={"msg_type": "flash", "byok_active": byok_active},
+                    metadata={"msg_type": "flash", "is_byok": is_byok},
                     per_call_records=per_call_records,
                     tool_usage=tool_usage,
                     sse_events=sse_events,
@@ -899,7 +899,7 @@ async def _handle_sse_disconnect(
     persistence_service,
     start_time: float,
     request,
-    byok_active: bool = False,
+    is_byok: bool = False,
 ):
     """Fire-and-forget cleanup when the SSE client disconnects.
 
@@ -927,7 +927,7 @@ async def _handle_sse_disconnect(
                     execution_time=time.time() - start_time,
                     metadata={
                         "workspace_id": request.workspace_id,
-                        "byok_active": byok_active,
+                        "is_byok": is_byok,
                     },
                     per_call_records=_per_call_records,
                     tool_usage=_tool_usage,
@@ -1017,7 +1017,7 @@ async def astream_ptc_workflow(
     user_input: str,
     user_id: str,
     workspace_id: str,
-    byok_active: bool = False,
+    is_byok: bool = False,
     config=None,
 ):
     """
@@ -1239,7 +1239,7 @@ async def astream_ptc_workflow(
         # Resolve LLM config (pre-resolved by route handler, fallback for standalone use)
         if config is None:
             config = await resolve_llm_config(
-                setup.agent_config, user_id, request.llm_model, byok_active, mode="ptc"
+                setup.agent_config, user_id, request.llm_model, is_byok, mode="ptc"
             )
 
         subagents = request.subagents_enabled or config.subagents.enabled
@@ -1607,7 +1607,7 @@ async def astream_ptc_workflow(
                         "locale": request.locale,
                         "timezone": timezone_str,
                         "msg_type": "ptc",
-                        "byok_active": byok_active,
+                        "is_byok": is_byok,
                     },
                     execution_time=execution_time,
                     per_call_records=_per_call_records,
@@ -1662,7 +1662,7 @@ async def astream_ptc_workflow(
                 "started_at": datetime.now().isoformat(),
                 "start_time": start_time,
                 "msg_type": "ptc",
-                "byok_active": byok_active,
+                "is_byok": is_byok,
                 "locale": request.locale,
                 "timezone": timezone_str,
                 "handler": handler,
@@ -1715,7 +1715,7 @@ async def astream_ptc_workflow(
                     persistence_service=persistence_service,
                     start_time=start_time,
                     request=request,
-                    byok_active=byok_active,
+                    is_byok=is_byok,
                 ),
                 name=f"sse-disconnect-cleanup-{thread_id}",
             )
@@ -1844,7 +1844,7 @@ async def astream_ptc_workflow(
                             metadata={
                                 "workspace_id": request.workspace_id,
                                 "msg_type": "ptc",
-                                "byok_active": byok_active,
+                                "is_byok": is_byok,
                             },
                             per_call_records=_per_call_records,
                             tool_usage=_tool_usage,
@@ -1902,7 +1902,7 @@ async def astream_ptc_workflow(
                         metadata={
                             "workspace_id": request.workspace_id,
                             "msg_type": "ptc",
-                            "byok_active": byok_active,
+                            "is_byok": is_byok,
                         },
                         per_call_records=_per_call_records,
                         tool_usage=_tool_usage,
