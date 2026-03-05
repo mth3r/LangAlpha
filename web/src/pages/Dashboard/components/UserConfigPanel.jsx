@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, User, LogOut, Eye, EyeOff, Trash2, HelpCircle, MessageSquareText, Sun, Moon, Monitor, Link2, Unlink, ExternalLink, Shield, ClipboardCopy } from 'lucide-react';
+import { X, User, LogOut, Eye, EyeOff, Trash2, HelpCircle, MessageSquareText, Sun, Moon, Monitor, Link2, Unlink, ExternalLink, Shield, ClipboardCopy, Plus, Pencil } from 'lucide-react';
 import { Input } from '../../../components/ui/input';
+import { Select } from '../../../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../components/ui/dialog';
 import { updateCurrentUser, getCurrentUser, updatePreferences, getPreferences, clearPreferences, uploadAvatar, getAvailableModels, getUserApiKeys, updateUserApiKeys, deleteUserApiKey, initiateCodexDevice, pollCodexDevice, getCodexOAuthStatus, disconnectCodexOAuth } from '../utils/api';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -38,10 +39,24 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
   const [byokEnabled, setByokEnabled] = useState(false);
   const [byokProviders, setByokProviders] = useState([]);
   const [keyInputs, setKeyInputs] = useState({});
+  const [baseUrlInputs, setBaseUrlInputs] = useState({});
   const [visibleKeys, setVisibleKeys] = useState({});
+  const [selectedByokProvider, setSelectedByokProvider] = useState('');
   const [deletingProvider, setDeletingProvider] = useState(null);
+
+  // Custom (sub-)providers state
+  const [showAddProviderForm, setShowAddProviderForm] = useState(false);
+  const [addProviderForm, setAddProviderForm] = useState({ name: '', parent_provider: '' });
+  const [addProviderError, setAddProviderError] = useState(null);
   const [modelTabError, setModelTabError] = useState(null);
   const [modelSaveSuccess, setModelSaveSuccess] = useState(false);
+
+  // Custom Models state
+  const [customModels, setCustomModels] = useState([]);
+  const [showCustomModelForm, setShowCustomModelForm] = useState(false);
+  const [editingCustomModelIdx, setEditingCustomModelIdx] = useState(null);
+  const [customModelForm, setCustomModelForm] = useState({ name: '', model_id: '', provider: '', parameters: '', extra_body: '' });
+  const [customModelError, setCustomModelError] = useState(null);
 
   // Connected Accounts (Codex OAuth — Device Code Flow)
   const [codexOAuthStatus, setCodexOAuthStatus] = useState({ connected: false });
@@ -170,8 +185,14 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
       setAvailableModels(modelsRes?.models || {});
       setByokEnabled(keysRes?.byok_enabled || false);
       setByokProviders(keysRes?.providers || []);
+      const initialBaseUrls = {};
+      (keysRes?.providers || []).forEach(p => {
+        if (p.base_url) initialBaseUrls[p.provider] = p.base_url;
+      });
+      setBaseUrlInputs(initialBaseUrls);
       setPreferredModel(prefsRes?.other_preference?.preferred_model || '');
       setPreferredFlashModel(prefsRes?.other_preference?.preferred_flash_model || '');
+      setCustomModels(prefsRes?.other_preference?.custom_models || []);
       setCodexOAuthStatus(codexStatus || { connected: false });
     } catch {
       setModelTabError(t('settings.failedToLoadModels'));
@@ -183,21 +204,41 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
     setModelSaveSuccess(false);
     setIsSubmitting(true);
     try {
-      // 1. Save model preferences
+      // 1. Save model preferences (including custom models + custom providers)
+      const customProvidersList = byokProviders
+        .filter(p => p.is_custom)
+        .map(p => {
+          const entry = { name: p.provider, parent_provider: p.parent_provider };
+          if (p.use_response_api) entry.use_response_api = true;
+          return entry;
+        });
       await updatePreferences({
         other_preference: {
           preferred_model: preferredModel || null,
           preferred_flash_model: preferredFlashModel || null,
+          custom_models: customModels.length > 0 ? customModels : null,
+          custom_providers: customProvidersList.length > 0 ? customProvidersList : null,
         },
       });
 
-      // 2. Save any pending API key inputs
+      // 2. Save any pending API key inputs and base URL changes
       const pendingKeys = Object.entries(keyInputs).filter(([, v]) => v?.trim());
-      for (const [provider, key] of pendingKeys) {
-        const result = await updateUserApiKeys({ api_keys: { [provider]: key.trim() } });
-        setByokProviders(result.providers);
+      const pendingBaseUrls = {};
+      for (const [provider, url] of Object.entries(baseUrlInputs)) {
+        const original = byokProviders.find(p => p.provider === provider)?.base_url || '';
+        if (url !== original) pendingBaseUrls[provider] = url || null;
       }
-      if (pendingKeys.length > 0) {
+
+      if (pendingKeys.length > 0 || Object.keys(pendingBaseUrls).length > 0) {
+        const payload = {};
+        if (pendingKeys.length > 0) {
+          payload.api_keys = Object.fromEntries(pendingKeys.map(([p, k]) => [p, k.trim()]));
+        }
+        if (Object.keys(pendingBaseUrls).length > 0) {
+          payload.base_urls = pendingBaseUrls;
+        }
+        const result = await updateUserApiKeys(payload);
+        setByokProviders(result.providers);
         setKeyInputs({});
       }
 
@@ -233,6 +274,45 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
     } finally {
       setDeletingProvider(null);
     }
+  };
+
+  const PROVIDER_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$/;
+
+  const handleAddProviderSave = () => {
+    const name = addProviderForm.name.trim();
+    const parent = addProviderForm.parent_provider;
+    const apiKey = (addProviderForm.api_key || '').trim();
+    const baseUrl = (addProviderForm.base_url || '').trim();
+    if (!name) { setAddProviderError(t('settings.providerNameRequired')); return; }
+    if (!PROVIDER_NAME_RE.test(name)) { setAddProviderError(t('settings.providerNameInvalid')); return; }
+    if (byokProviders.some(p => p.provider === name)) { setAddProviderError(t('settings.providerNameDuplicate')); return; }
+    if (!parent) { setAddProviderError(t('settings.parentProviderRequired')); return; }
+    // Add to providers list (will be persisted on Save)
+    setByokProviders(prev => [...prev, {
+      provider: name,
+      display_name: name,
+      parent_provider: parent,
+      has_key: false,
+      masked_key: null,
+      base_url: baseUrl || null,
+      is_custom: true,
+      use_response_api: addProviderForm.use_response_api || false,
+    }]);
+    // Seed key/url inputs so they get saved with the main Save button
+    if (apiKey) setKeyInputs(prev => ({ ...prev, [name]: apiKey }));
+    if (baseUrl) setBaseUrlInputs(prev => ({ ...prev, [name]: baseUrl }));
+    setSelectedByokProvider(name);
+    setShowAddProviderForm(false);
+    setAddProviderForm({ name: '', parent_provider: '', api_key: '', base_url: '', use_response_api: false });
+    setAddProviderError(null);
+  };
+
+  const handleDeleteCustomProvider = (providerName) => {
+    setByokProviders(prev => prev.filter(p => p.provider !== providerName));
+    // Also clean up any pending key/url inputs
+    setKeyInputs(prev => { const next = { ...prev }; delete next[providerName]; return next; });
+    setBaseUrlInputs(prev => { const next = { ...prev }; delete next[providerName]; return next; });
+    if (selectedByokProvider === providerName) setSelectedByokProvider('');
   };
 
   const handleCodexConnectClick = () => {
@@ -292,6 +372,83 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
     setIsPollingCodex(false);
     setCodexDeviceCode(null);
     setCodexDeviceError(null);
+  };
+
+  // Custom Models helpers
+  const CUSTOM_MODEL_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/;
+
+  const validateCustomModelForm = (form, existingModels, editIdx) => {
+    if (!form.name?.trim()) return t('settings.customModelNameRequired');
+    if (!CUSTOM_MODEL_NAME_RE.test(form.name.trim())) return t('settings.customModelNameInvalid');
+    if (!form.model_id?.trim()) return t('settings.customModelIdRequired');
+    if (!form.provider?.trim()) return t('settings.customModelProviderRequired');
+    // Check collision with system models
+    const allSystemModels = Object.values(availableModels).flatMap(pd => Array.isArray(pd) ? pd : pd?.models || []);
+    if (allSystemModels.includes(form.name.trim())) return t('settings.customModelNameConflict');
+    // Check duplicate in custom models
+    const dup = existingModels.findIndex((cm, i) => i !== editIdx && cm.name === form.name.trim());
+    if (dup >= 0) return t('settings.customModelNameDuplicate');
+    // Check that the selected provider has a BYOK key configured
+    const providerName = form.provider.trim();
+    const prov = byokProviders.find(p => p.provider === providerName);
+    if (!prov || !prov.has_key) return t('settings.customModelProviderNoKey', { provider: providerName });
+    // Validate JSON fields
+    for (const field of ['parameters', 'extra_body']) {
+      const val = form[field]?.trim();
+      if (val) {
+        try { JSON.parse(val); } catch { return `${field}: ${t('settings.customModelInvalidJson')}`; }
+      }
+    }
+    return null;
+  };
+
+  const handleCustomModelSave = () => {
+    const err = validateCustomModelForm(customModelForm, customModels, editingCustomModelIdx);
+    if (err) { setCustomModelError(err); return; }
+    const entry = {
+      name: customModelForm.name.trim(),
+      model_id: customModelForm.model_id.trim(),
+      provider: customModelForm.provider.trim(),
+    };
+    if (customModelForm.parameters?.trim()) entry.parameters = JSON.parse(customModelForm.parameters.trim());
+    if (customModelForm.extra_body?.trim()) entry.extra_body = JSON.parse(customModelForm.extra_body.trim());
+    setCustomModels(prev => {
+      const next = [...prev];
+      if (editingCustomModelIdx != null) next[editingCustomModelIdx] = entry;
+      else next.push(entry);
+      return next;
+    });
+    setShowCustomModelForm(false);
+    setEditingCustomModelIdx(null);
+    setCustomModelForm({ name: '', model_id: '', provider: '', parameters: '', extra_body: '' });
+    setCustomModelError(null);
+  };
+
+  const handleCustomModelEdit = (idx) => {
+    const cm = customModels[idx];
+    const isKnown = byokProviders.some(p => p.provider === cm.provider);
+    setCustomModelForm({
+      name: cm.name,
+      model_id: cm.model_id,
+      provider: cm.provider,
+      parameters: cm.parameters ? JSON.stringify(cm.parameters, null, 2) : '',
+      extra_body: cm.extra_body ? JSON.stringify(cm.extra_body, null, 2) : '',
+      _customProvider: !isKnown,
+    });
+    setEditingCustomModelIdx(idx);
+    setShowCustomModelForm(true);
+    setCustomModelError(null);
+  };
+
+  const handleCustomModelDelete = (idx) => {
+    setCustomModels(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleCustomModelCancel = () => {
+    setShowCustomModelForm(false);
+    setEditingCustomModelIdx(null);
+    setCustomModelForm({ name: '', model_id: '', provider: '', parameters: '', extra_body: '' });
+    setCustomModelError(null);
   };
 
   const handleCodexDisconnect = async () => {
@@ -533,48 +690,36 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
 
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-primary)' }}>{t('settings.timezone')}</label>
-                    <select
+                    <Select
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
-                      className="w-full rounded-md px-3 py-2 text-sm"
-                      style={{
-                        backgroundColor: 'var(--color-bg-card)',
-                        border: '1px solid var(--color-border-muted)',
-                        color: 'var(--color-text-primary)',
-                      }}
                       disabled={isSubmitting}
                     >
                       {timezones.map((item, i) => (
                         item.value !== undefined ? (
-                          <option key={i} value={item.value} style={{ backgroundColor: 'var(--color-bg-card)' }}>{item.label}</option>
+                          <option key={i} value={item.value}>{item.label}</option>
                         ) : (
-                          <optgroup key={i} label={item.group} style={{ backgroundColor: 'var(--color-bg-card)' }}>
+                          <optgroup key={i} label={item.group}>
                             {item.options.map((opt, j) => (
-                              <option key={`${i}-${j}`} value={opt.value} style={{ backgroundColor: 'var(--color-bg-card)' }}>{opt.label}</option>
+                              <option key={`${i}-${j}`} value={opt.value}>{opt.label}</option>
                             ))}
                           </optgroup>
                         )
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-primary)' }}>{t('settings.locale')}</label>
-                    <select
+                    <Select
                       value={locale}
                       onChange={(e) => handleLocaleChange(e.target.value)}
-                      className="w-full rounded-md px-3 py-2 text-sm"
-                      style={{
-                        backgroundColor: 'var(--color-bg-card)',
-                        border: '1px solid var(--color-border-muted)',
-                        color: 'var(--color-text-primary)',
-                      }}
                       disabled={isSubmitting}
                     >
                       {locales.map((item, i) => (
-                        <option key={i} value={item.value} style={{ backgroundColor: 'var(--color-bg-card)' }}>{item.label}</option>
+                        <option key={i} value={item.value}>{item.label}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
 
                   {/* Theme Toggle */}
@@ -794,26 +939,40 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
                       <div key={label} className="mb-4">
                         <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>{label}</label>
                         <p className="text-xs mb-2" style={{ color: 'var(--color-text-tertiary)' }}>{desc}</p>
-                        <select
+                        <Select
                           value={value}
                           onChange={(e) => setter(e.target.value)}
-                          className="w-full rounded-md px-3 py-2 text-sm"
-                          style={{
-                            backgroundColor: 'var(--color-bg-card)',
-                            border: '1px solid var(--color-border-muted)',
-                            color: 'var(--color-text-primary)',
-                          }}
                           disabled={isSubmitting}
                         >
-                          <option value="" style={{ backgroundColor: 'var(--color-bg-card)' }}>{t('settings.systemDefault')}</option>
-                          {Object.entries(availableModels).map(([provider, models]) => (
-                            <optgroup key={provider} label={provider.charAt(0).toUpperCase() + provider.slice(1)} style={{ backgroundColor: 'var(--color-bg-card)' }}>
+                          <option value="">{t('settings.systemDefault')}</option>
+                          {Object.entries(availableModels).map(([provider, providerData]) => {
+                            const models = Array.isArray(providerData) ? providerData : providerData?.models || [];
+                            const displayName = providerData?.display_name || provider.charAt(0).toUpperCase() + provider.slice(1);
+                            return (
+                            <optgroup key={provider} label={displayName}>
                               {models.map((m) => (
-                                <option key={m} value={m} style={{ backgroundColor: 'var(--color-bg-card)' }}>{m}</option>
+                                <option key={m} value={m}>{m}</option>
                               ))}
                             </optgroup>
-                          ))}
-                        </select>
+                            );
+                          })}
+                          {byokProviders.filter(p => p.is_custom && p.has_key).length > 0 && (
+                            <optgroup label={t('settings.byokProviders', 'BYOK Providers')}>
+                              {byokProviders.filter(p => p.is_custom && p.has_key).map((prov) => (
+                                <option key={`byok-${prov.provider}`} value={prov.provider}>
+                                  {prov.display_name || prov.provider} ({prov.parent_provider})
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {customModels.length > 0 && (
+                            <optgroup label={t('settings.customModels')}>
+                              {customModels.map((cm) => (
+                                <option key={`custom-${cm.name}`} value={cm.name}>{cm.name}</option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </Select>
                       </div>
                     ))}
 
@@ -985,50 +1144,438 @@ function UserConfigPanel({ isOpen, onClose, onModifyPreferences, onStartOnboardi
                       </button>
                     </div>
 
-                    {byokEnabled && (
+                    {byokEnabled && (<>
                       <div className="space-y-3 mt-4">
-                        {byokProviders.map((prov) => (
-                          <div key={prov.provider} className="flex items-center gap-2">
-                            <span className="text-xs font-medium w-24 shrink-0" style={{ color: 'var(--color-text-secondary)' }}>
-                              {prov.display_name || prov.provider}
-                            </span>
-                            <div className="flex-1 relative">
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={selectedByokProvider}
+                            onChange={(e) => setSelectedByokProvider(e.target.value)}
+                            className="flex-1 min-w-0"
+                          >
+                            <option value="">{t('settings.selectProvider')}</option>
+                            {byokProviders.filter(p => !p.is_custom).map((prov) => (
+                              <option key={prov.provider} value={prov.provider}>
+                                {prov.display_name || prov.provider}{prov.has_key ? ' ✓' : ''}
+                              </option>
+                            ))}
+                            {byokProviders.some(p => p.is_custom) && (
+                              <optgroup label="─────────">
+                                {byokProviders.filter(p => p.is_custom).map((prov) => (
+                                  <option key={prov.provider} value={prov.provider}>
+                                    {prov.display_name}{prov.has_key ? ' ✓' : ''} ({prov.parent_provider})
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </Select>
+                          <button
+                            type="button"
+                            onClick={() => { setShowAddProviderForm(true); setAddProviderForm({ name: '', parent_provider: '', api_key: '', base_url: '', use_response_api: false }); setAddProviderError(null); }}
+                            className="p-2 rounded-md shrink-0 transition-colors"
+                            style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent-primary)' }}
+                            title={t('settings.addProvider')}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        {/* Add Provider inline form */}
+                        {showAddProviderForm && (
+                          <div
+                            className="rounded-lg p-3 space-y-3"
+                            style={{ backgroundColor: 'var(--color-bg-card)', border: '1px solid var(--color-border-muted)' }}
+                          >
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                  {t('settings.addProviderName')} *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={addProviderForm.name}
+                                  onChange={(e) => setAddProviderForm(f => ({ ...f, name: e.target.value }))}
+                                  placeholder={t('settings.addProviderNamePlaceholder')}
+                                  className="w-full rounded-md px-2.5 py-1.5 text-sm"
+                                  style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-primary)' }}
+                                  autoFocus
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                  {t('settings.parentProvider')} *
+                                </label>
+                                <Select
+                                  value={addProviderForm.parent_provider}
+                                  onChange={(e) => setAddProviderForm(f => ({ ...f, parent_provider: e.target.value }))}
+                                  style={{ backgroundColor: 'var(--color-bg-elevated)' }}
+                                >
+                                  <option value="">{t('settings.selectProvider')}</option>
+                                  {byokProviders.filter(p => !p.is_custom).map(p => (
+                                    <option key={p.provider} value={p.provider}>{p.display_name || p.provider}</option>
+                                  ))}
+                                </Select>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                {t('settings.enterApiKey')}
+                              </label>
                               <input
-                                type={visibleKeys[prov.provider] ? 'text' : 'password'}
-                                value={keyInputs[prov.provider] || ''}
-                                onChange={(e) => setKeyInputs((prev) => ({ ...prev, [prov.provider]: e.target.value }))}
-                                placeholder={prov.has_key ? prov.masked_key : t('settings.enterApiKey')}
-                                className="w-full rounded-md px-3 py-1.5 pr-8 text-sm"
-                                style={{
-                                  backgroundColor: 'var(--color-bg-card)',
-                                  border: '1px solid var(--color-border-muted)',
-                                  color: 'var(--color-text-primary)',
-                                }}
+                                type="password"
+                                value={addProviderForm.api_key || ''}
+                                onChange={(e) => setAddProviderForm(f => ({ ...f, api_key: e.target.value }))}
+                                placeholder="sk-..."
+                                className="w-full rounded-md px-2.5 py-1.5 text-sm"
+                                style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-primary)' }}
                               />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                {t('settings.baseUrlPlaceholder')}
+                              </label>
+                              <input
+                                type="text"
+                                value={addProviderForm.base_url || ''}
+                                onChange={(e) => setAddProviderForm(f => ({ ...f, base_url: e.target.value }))}
+                                placeholder="https://api.example.com/v1"
+                                className="w-full rounded-md px-2.5 py-1.5 text-sm"
+                                style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-tertiary)' }}
+                              />
+                            </div>
+                            {addProviderForm.parent_provider === 'openai' && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{t('settings.useResponseApi')}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setAddProviderForm(f => ({ ...f, use_response_api: !f.use_response_api }))}
+                                  className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+                                  style={{ backgroundColor: addProviderForm.use_response_api ? 'var(--color-accent-primary)' : 'var(--color-border-muted)' }}
+                                >
+                                  <span className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform" style={{ transform: addProviderForm.use_response_api ? 'translateX(17px)' : 'translateX(3px)' }} />
+                                </button>
+                              </div>
+                            )}
+                            {addProviderError && (
+                              <p className="text-xs" style={{ color: 'var(--color-loss)' }}>{addProviderError}</p>
+                            )}
+                            <div className="flex items-center gap-2 justify-end">
                               <button
                                 type="button"
-                                onClick={() => setVisibleKeys((prev) => ({ ...prev, [prov.provider]: !prev[prov.provider] }))}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5"
-                                style={{ color: 'var(--color-text-tertiary)' }}
+                                onClick={() => { setShowAddProviderForm(false); setAddProviderError(null); }}
+                                className="px-3 py-1.5 rounded-md text-xs font-medium"
+                                style={{ color: 'var(--color-text-primary)', backgroundColor: 'transparent' }}
                               >
-                                {visibleKeys[prov.provider] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                {t('common.cancel')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleAddProviderSave}
+                                className="px-3 py-1.5 rounded-md text-xs font-medium"
+                                style={{ backgroundColor: 'var(--color-accent-primary)', color: 'var(--color-text-on-accent)' }}
+                              >
+                                {t('settings.addProvider')}
                               </button>
                             </div>
-                            {prov.has_key && (
+                          </div>
+                        )}
+
+                        {(() => {
+                          const prov = byokProviders.find(p => p.provider === selectedByokProvider);
+                          if (!prov) return null;
+                          return (
+                            <div className="space-y-2">
+                              {prov.is_custom && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                                    style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent-primary)' }}
+                                  >
+                                    {prov.parent_provider}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteCustomProvider(prov.provider)}
+                                    className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded transition-colors"
+                                    style={{ color: 'var(--color-loss)' }}
+                                  >
+                                    <Trash2 className="h-3 w-3" /> Remove
+                                  </button>
+                                </div>
+                              )}
+                              <div className="flex-1 relative">
+                                <input
+                                  type={visibleKeys[prov.provider] ? 'text' : 'password'}
+                                  value={keyInputs[prov.provider] || ''}
+                                  onChange={(e) => setKeyInputs((prev) => ({ ...prev, [prov.provider]: e.target.value }))}
+                                  placeholder={prov.has_key ? prov.masked_key : t('settings.enterApiKey')}
+                                  className="w-full rounded-md px-3 py-1.5 pr-16 text-sm"
+                                  style={{
+                                    backgroundColor: 'var(--color-bg-card)',
+                                    border: '1px solid var(--color-border-muted)',
+                                    color: 'var(--color-text-primary)',
+                                  }}
+                                />
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setVisibleKeys((prev) => ({ ...prev, [prov.provider]: !prev[prov.provider] }))}
+                                    className="p-0.5"
+                                    style={{ color: 'var(--color-text-tertiary)' }}
+                                  >
+                                    {visibleKeys[prov.provider] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                  </button>
+                                  {prov.has_key && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteProviderKey(prov.provider)}
+                                      disabled={deletingProvider === prov.provider}
+                                      className="p-0.5"
+                                      style={{ color: 'var(--color-loss)' }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Base URL + options only for custom sub-providers */}
+                              {prov.is_custom && (
+                                <>
+                                  <input
+                                    type="text"
+                                    value={baseUrlInputs[prov.provider] || ''}
+                                    onChange={(e) => setBaseUrlInputs((prev) => ({ ...prev, [prov.provider]: e.target.value }))}
+                                    placeholder={t('settings.baseUrlPlaceholder')}
+                                    className="w-full rounded-md px-3 py-1.5 text-sm"
+                                    style={{
+                                      backgroundColor: 'var(--color-bg-card)',
+                                      border: '1px solid var(--color-border-muted)',
+                                      color: 'var(--color-text-tertiary)',
+                                    }}
+                                  />
+                                  {/* Provider options — only for openai-based */}
+                                  {prov.parent_provider === 'openai' && (
+                                    <div className="flex items-center justify-between pt-1">
+                                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{t('settings.useResponseApi')}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setByokProviders(prev => prev.map(p =>
+                                            p.provider === prov.provider ? { ...p, use_response_api: !p.use_response_api } : p
+                                          ));
+                                        }}
+                                        className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+                                        style={{ backgroundColor: prov.use_response_api ? 'var(--color-accent-primary)' : 'var(--color-border-muted)' }}
+                                      >
+                                        <span className="inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform" style={{ transform: prov.use_response_api ? 'translateX(17px)' : 'translateX(3px)' }} />
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Custom Models — inside BYOK */}
+                      <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--color-border-muted)' }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <label className="block text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                              {t('settings.customModels')}
+                            </label>
+                            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-tertiary)' }}>
+                              {t('settings.customModelsDesc')}
+                            </p>
+                          </div>
+                          {!showCustomModelForm && (
+                            <button
+                              type="button"
+                              onClick={() => { setShowCustomModelForm(true); setEditingCustomModelIdx(null); setCustomModelForm({ name: '', model_id: '', provider: '', parameters: '', extra_body: '' }); setCustomModelError(null); }}
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors"
+                              style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent-primary)' }}
+                            >
+                              <Plus className="h-3 w-3" /> {t('settings.addCustomModel')}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Existing custom models list */}
+                        {customModels.length > 0 && !showCustomModelForm && (
+                          <div className="space-y-2 mb-3">
+                            {customModels.map((cm, idx) => (
+                              <div
+                                key={cm.name}
+                                className="flex items-center justify-between rounded-md px-3 py-2"
+                                style={{ backgroundColor: 'var(--color-bg-card)', border: '1px solid var(--color-border-muted)' }}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>{cm.name}</span>
+                                  <span
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
+                                    style={{ backgroundColor: 'var(--color-accent-soft)', color: 'var(--color-accent-primary)' }}
+                                  >
+                                    {cm.provider}
+                                  </span>
+                                  <span className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)' }}>{cm.model_id}</span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCustomModelEdit(idx)}
+                                    className="p-1 rounded transition-colors"
+                                    style={{ color: 'var(--color-text-tertiary)' }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCustomModelDelete(idx)}
+                                    className="p-1 rounded transition-colors"
+                                    style={{ color: 'var(--color-loss)' }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Inline form for add/edit */}
+                        {showCustomModelForm && (
+                          <div
+                            className="rounded-lg p-3 space-y-3 mt-2"
+                            style={{ backgroundColor: 'var(--color-bg-card)', border: '1px solid var(--color-border-muted)' }}
+                          >
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                  {t('settings.customModelName')} *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={customModelForm.name}
+                                  onChange={(e) => setCustomModelForm(f => ({ ...f, name: e.target.value }))}
+                                  placeholder="my-random-model"
+                                  className="w-full rounded-md px-2.5 py-1.5 text-sm"
+                                  style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-primary)' }}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                  {t('settings.customModelId')} *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={customModelForm.model_id}
+                                  onChange={(e) => setCustomModelForm(f => ({ ...f, model_id: e.target.value }))}
+                                  placeholder="gpt-5.2"
+                                  className="w-full rounded-md px-2.5 py-1.5 text-sm"
+                                  style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-primary)' }}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                {t('settings.customModelProvider')} *
+                              </label>
+                              {(() => {
+                                const isKnown = byokProviders.some(p => p.provider === customModelForm.provider);
+                                const isCustomMode = customModelForm.provider !== '' && !isKnown;
+                                const selectValue = isKnown ? customModelForm.provider : (isCustomMode || customModelForm._customProvider ? '__custom__' : '');
+                                return (
+                                  <>
+                                    <Select
+                                      value={selectValue}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '__custom__') {
+                                          setCustomModelForm(f => ({ ...f, provider: '', _customProvider: true }));
+                                        } else {
+                                          setCustomModelForm(f => ({ ...f, provider: val, _customProvider: false }));
+                                        }
+                                      }}
+                                      style={{ backgroundColor: 'var(--color-bg-elevated)' }}
+                                    >
+                                      <option value="">{t('settings.selectProvider')}</option>
+                                      {byokProviders.filter(p => !p.is_custom).map(p => (
+                                        <option key={p.provider} value={p.provider}>{p.display_name || p.provider}</option>
+                                      ))}
+                                      {byokProviders.some(p => p.is_custom) && (
+                                        <optgroup label="─────────">
+                                          {byokProviders.filter(p => p.is_custom).map(p => (
+                                            <option key={p.provider} value={p.provider}>{p.display_name} ({p.parent_provider})</option>
+                                          ))}
+                                        </optgroup>
+                                      )}
+                                      <option value="__custom__">{t('settings.customProvider')}</option>
+                                    </Select>
+                                    {(isCustomMode || customModelForm._customProvider) && (
+                                      <input
+                                        type="text"
+                                        value={customModelForm.provider}
+                                        onChange={(e) => setCustomModelForm(f => ({ ...f, provider: e.target.value, _customProvider: true }))}
+                                        placeholder={t('settings.customProviderPlaceholder')}
+                                        className="w-full rounded-md px-2.5 py-1.5 text-sm mt-2"
+                                        style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-primary)' }}
+                                        autoFocus
+                                      />
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                {t('settings.customModelParameters')}
+                              </label>
+                              <textarea
+                                value={customModelForm.parameters}
+                                onChange={(e) => setCustomModelForm(f => ({ ...f, parameters: e.target.value }))}
+                                placeholder='{"reasoning": {"effort": "medium", "summary": "auto"}}'
+                                rows={2}
+                                className="w-full rounded-md px-2.5 py-1.5 text-xs font-mono resize-none"
+                                style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-primary)' }}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>
+                                {t('settings.customModelExtraBody')}
+                              </label>
+                              <textarea
+                                value={customModelForm.extra_body}
+                                onChange={(e) => setCustomModelForm(f => ({ ...f, extra_body: e.target.value }))}
+                                placeholder='{"thinking": {"type": "enabled"}}'
+                                rows={2}
+                                className="w-full rounded-md px-2.5 py-1.5 text-xs font-mono resize-none"
+                                style={{ backgroundColor: 'var(--color-bg-elevated)', border: '1px solid var(--color-border-muted)', color: 'var(--color-text-primary)' }}
+                              />
+                            </div>
+                            {customModelError && (
+                              <p className="text-xs" style={{ color: 'var(--color-loss)' }}>{customModelError}</p>
+                            )}
+                            <div className="flex items-center gap-2 justify-end">
                               <button
                                 type="button"
-                                onClick={() => handleDeleteProviderKey(prov.provider)}
-                                disabled={deletingProvider === prov.provider}
-                                className="p-1.5 rounded-md shrink-0 transition-colors"
-                                style={{ color: 'var(--color-loss)' }}
+                                onClick={handleCustomModelCancel}
+                                className="px-3 py-1.5 rounded-md text-xs font-medium"
+                                style={{ color: 'var(--color-text-primary)', backgroundColor: 'transparent' }}
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                {t('common.cancel')}
                               </button>
-                            )}
+                              <button
+                                type="button"
+                                onClick={handleCustomModelSave}
+                                className="px-3 py-1.5 rounded-md text-xs font-medium"
+                                style={{ backgroundColor: 'var(--color-accent-primary)', color: 'var(--color-text-on-accent)' }}
+                              >
+                                {t('common.save')}
+                              </button>
+                            </div>
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
+                    </>)}
                   </div>
 
                   {modelTabError && (
