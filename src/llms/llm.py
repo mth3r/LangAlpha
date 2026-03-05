@@ -382,6 +382,9 @@ class LLM:
     def _get_anthropic_llm(self):
         """Get Anthropic LLM."""
         from langchain_anthropic import ChatAnthropic
+        from src.llms.extension import ChatAnthropicOAuth
+
+        is_oauth = self.provider_info.get("auth_type") == "oauth"
 
         # Set API key: prefer BYOK override, then env var
         api_key = self.api_key_override or (os.getenv(self.env_key) if self.env_key else None)
@@ -413,6 +416,10 @@ class LLM:
         if self.extra_body:
             params["extra_body"] = self.extra_body
 
+        # OAuth tokens (sk-ant-oat*) need Authorization: Bearer, not X-Api-Key.
+        # ChatAnthropicOAuth redirects api_key → auth_token on the underlying SDK client.
+        if is_oauth:
+            return ChatAnthropicOAuth(**params)
         return ChatAnthropic(**params)
 
     def _get_gemini_llm(self):

@@ -152,6 +152,71 @@
           "cache_1h": 7.50,
           "unit": "per_1m_tokens"
         }
+      },
+      {
+        "id": "claude-haiku-4-5-20251001",
+        "name": "Claude 4.5 Haiku",
+        "is_reasoning": true,
+        "description": "Fast and cost-efficient model",
+        "alias": ["claude-haiku-4.5"],
+        "pricing": {
+          "input": 0.80,
+          "cached_input": 0.08,
+          "cache_5m": 1.00,
+          "output": 4.00,
+          "unit": "per_1m_tokens"
+        }
+      }
+    ],
+    "claude-oauth": [
+      {
+        "id": "claude-opus-4-6",
+        "name": "Claude 4.6 Opus",
+        "is_reasoning": true,
+        "description": "Claude 4.6 Opus model",
+        "alias": ["claude-opus-4.6"],
+        "pricing": {
+          "input": 5.00,
+          "cached_input": 0.50,
+          "cache_5m": 6.25,
+          "output": 25.00,
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude 4.6 Sonnet",
+        "is_reasoning": true,
+        "description": "Claude 4.6 Sonnet model",
+        "alias": ["claude-sonnet-4.6"],
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 200000, "rate": 3.00, "cached_input": 0.30},
+            {"max_tokens": null, "rate": 6.00, "cached_input": 0.60}
+          ],
+          "output_tiers": [
+            {"max_tokens": 200000, "rate": 15.00},
+            {"max_tokens": null, "rate": 22.50}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "cache_5m": 3.75,
+          "cache_1h": 7.50,
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "claude-haiku-4-5-20251001",
+        "name": "Claude 4.5 Haiku",
+        "is_reasoning": true,
+        "description": "Fast and cost-efficient model",
+        "alias": ["claude-haiku-4.5"],
+        "pricing": {
+          "input": 0.80,
+          "cached_input": 0.08,
+          "cache_5m": 1.00,
+          "output": 4.00,
+          "unit": "per_1m_tokens"
+        }
       }
     ],
     "gemini": [
@@ -854,6 +919,16 @@
       "use_response_api": true,
       "auth_type": "oauth",
       "display_name": "ChatGPT Codex"
+    },
+    "claude-oauth": {
+      "sdk": "anthropic",
+      "base_url": "https://api.anthropic.com",
+      "env_key": null,
+      "auth_type": "oauth",
+      "display_name": "Claude (OAuth)",
+      "default_headers": {
+        "anthropic-beta": "oauth-2025-04-20"
+      }
     },
     "deepinfra": {
       "sdk": "openai",

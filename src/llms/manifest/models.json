@@ -501,6 +501,40 @@
       }
     }
 },
+"claude-sonnet-4-6-oauth": {
+    "model_id": "claude-sonnet-4-6",
+    "provider": "claude-oauth",
+    "visible": true,
+    "parameters": {
+      "thinking": {
+        "type": "adaptive"
+      }
+    }
+  },
+  "claude-opus-4-6-oauth": {
+    "model_id": "claude-opus-4-6",
+    "provider": "claude-oauth",
+    "visible": true,
+    "parameters": {
+      "thinking": {
+        "type": "adaptive"
+      },
+      "output_config": {
+        "effort": "medium"
+      }
+    }
+  },
+  "claude-haiku-4-5-oauth": {
+    "model_id": "claude-haiku-4-5-20251001",
+    "provider": "claude-oauth",
+    "visible": true,
+    "parameters": {
+      "thinking": {
+        "type": "enabled",
+        "budget_tokens": 8000
+      }
+    }
+  },
 "embedding-small": {
   "model_id": "text-embedding-3-small",
   "provider": "openai",

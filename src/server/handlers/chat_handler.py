@@ -431,11 +431,16 @@ async def resolve_oauth_llm_client(
     if not model_info:
         return None
 
-    provider_info = mc.get_provider_info(model_info["provider"])
+    provider = model_info["provider"]
+    provider_info = mc.get_provider_info(provider)
     if provider_info.get("auth_type") != "oauth":
         return None
 
-    from src.server.services.codex_oauth import get_valid_token
+    # Dispatch to the correct OAuth service by provider
+    if provider == "claude-oauth":
+        from src.server.services.claude_oauth import get_valid_token
+    else:
+        from src.server.services.codex_oauth import get_valid_token
 
     token_data = await get_valid_token(user_id)
     if not token_data:
@@ -444,19 +449,23 @@ async def resolve_oauth_llm_client(
     access_token = token_data["access_token"]
     if not access_token or not isinstance(access_token, str):
         logger.error(
-            f"[CHAT] Codex OAuth token is empty or not a string: type={type(access_token)}"
+            f"[CHAT] OAuth token is empty or not a string for provider={provider}: type={type(access_token)}"
         )
         return None
 
-    token_type = "sk-key" if access_token.startswith("sk-") else "oauth-jwt"
-    account_id = token_data.get("account_id", "")
-    logger.info(
-        f"[CHAT] Using Codex OAuth for provider={model_info['provider']} token_type={token_type} account_id={account_id[:8]}..."
-    )
-
+    # Provider-specific headers
     headers = {}
-    if account_id:
-        headers["ChatGPT-Account-Id"] = account_id
+    if provider == "claude-oauth":
+        logger.info(f"[CHAT] Using Claude OAuth for provider={provider}")
+    else:
+        # Codex: set ChatGPT-Account-Id header
+        account_id = token_data.get("account_id", "")
+        token_type = "sk-key" if access_token.startswith("sk-") else "oauth-jwt"
+        logger.info(
+            f"[CHAT] Using Codex OAuth for provider={provider} token_type={token_type} account_id={account_id[:8]}..."
+        )
+        if account_id:
+            headers["ChatGPT-Account-Id"] = account_id
 
     return create_llm(
         model_name,
