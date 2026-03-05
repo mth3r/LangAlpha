@@ -156,6 +156,19 @@
     ],
     "gemini": [
       {
+        "id": "gemini-3.1-flash-lite-preview",
+        "name": "Gemini 3.1 Flash-Lite Preview",
+        "is_reasoning": true,
+        "description": "Google's most cost-efficient model, optimized for high-volume agentic tasks, translation, and simple data processing",
+        "pricing": {
+          "input": 0.25,
+          "cached_input": 0.025,
+          "output": 1.50,
+          "cache_storage": 1.00,
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
         "id": "gemini-3.1-flash-image-preview",
         "name": "Gemini 3.1 Flash Image Preview",
         "description": "Designed for speed and efficiency, effective for quick interactive responses and high throughput image generation",
@@ -199,20 +212,9 @@
         }
       }
     ],
-    "lm-studio": [],
+    "lm-studio": [
+    ],
     "openrouter": [
-      {
-        "id": "x-ai/grok-4-fast:free",
-        "name": "xAI Grok 4 Fast (Free)",
-        "is_reasoning": true,
-        "description": "xAI's Grok 4 Fast model with reasoning capabilities (free tier)",
-        "pricing": {
-          "input": 0,
-          "output": 0,
-          "unit": "per_1m_tokens"
-        },
-        "context_window": 2000000
-      }
     ],
     "deepseek": [
       {
@@ -229,30 +231,6 @@
       }
     ],
     "vllm": [
-      {
-        "id": "gpt-oss-120b",
-        "name": "GPT-OSS-120B",
-        "is_reasoning": true,
-        "description": "OpenAI's open-source 120B reasoning model",
-        "pricing": {
-          "input": 0.25,
-          "cached_input": 0.025,
-          "output": 2.00,
-          "unit": "per_1m_tokens"
-        }
-      },
-      {
-        "id": "gpt-oss-20b",
-        "name": "GPT-OSS-20B",
-        "is_reasoning": true,
-        "description": "OpenAI's open-source 20B reasoning model",
-        "pricing": {
-          "input": 0.05,
-          "cached_input": 0.005,
-          "output": 0.40,
-          "unit": "per_1m_tokens"
-        }
-      }
     ],
     "z-ai": [
       {
@@ -327,7 +305,8 @@
         "id": "minimax-m2.5",
         "name": "MiniMax-M2.5",
         "alias": ["MiniMax-M2.5", "minimax-m2.5"],
-        "description": "MiniMax's M2.5 model",
+        "is_reasoning": false,
+        "description": "MiniMax's M2.5 model for commercial use",
         "pricing": {
           "input": 0.30,
           "output": 1.20,
@@ -340,6 +319,7 @@
         "id": "minimax-m2.5-highspeed",
         "name": "MiniMax-M2.5-Highspeed",
         "alias": ["MiniMax-M2.5-highspeed"],
+        "is_reasoning": false,
         "description": "MiniMax's M2.5 Highspeed model with faster inference and higher output pricing",
         "pricing": {
           "input": 0.60,
@@ -443,17 +423,161 @@
         "is_reasoning": true,
         "description": "Alibaba's Qwen3.5 Plus model with thinking capabilities and 1M context",
         "context_window": 1000000,
-        "max_output": 32768,
+        "max_output": 65536,
         "pricing": {
           "input_tiers": [
-            {"max_tokens": 128000, "rate": 0.115},
-            {"max_tokens": 256000, "rate": 0.287},
-            {"max_tokens": 1000000, "rate": 0.573}
+            {"max_tokens": 128000, "rate": 0.115, "cached_input": 0.023},
+            {"max_tokens": 256000, "rate": 0.287, "cached_input": 0.057},
+            {"max_tokens": 1000000, "rate": 0.573, "cached_input": 0.115}
           ],
           "output_tiers": [
             {"max_tokens": 128000, "rate": 0.688},
             {"max_tokens": 256000, "rate": 1.72},
             {"max_tokens": 1000000, "rate": 3.44}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "qwen3.5-flash",
+        "name": "Qwen3.5 Flash",
+        "is_reasoning": true,
+        "description": "Alibaba's Qwen3.5 Flash — fastest and most cost-efficient in the series, 1M context",
+        "context_window": 1000000,
+        "max_output": 65536,
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 128000, "rate": 0.029, "cached_input": 0.006},
+            {"max_tokens": 256000, "rate": 0.115, "cached_input": 0.023},
+            {"max_tokens": 1000000, "rate": 0.172, "cached_input": 0.034}
+          ],
+          "output_tiers": [
+            {"max_tokens": 128000, "rate": 0.287},
+            {"max_tokens": 256000, "rate": 1.147},
+            {"max_tokens": 1000000, "rate": 1.72}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "qwen3.5-397b-a17b",
+        "name": "Qwen3.5 397B-A17B",
+        "is_reasoning": true,
+        "description": "Alibaba's largest Qwen3.5 open-weight model (397B total, 17B active MoE)",
+        "context_window": 262144,
+        "max_output": 65536,
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 128000, "rate": 0.172},
+            {"max_tokens": 256000, "rate": 0.43}
+          ],
+          "output_tiers": [
+            {"max_tokens": 128000, "rate": 1.032},
+            {"max_tokens": 256000, "rate": 2.58}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "qwen3.5-122b-a10b",
+        "name": "Qwen3.5 122B-A10B",
+        "is_reasoning": true,
+        "description": "Alibaba's Qwen3.5 mid-large model (122B total, 10B active MoE)",
+        "context_window": 262144,
+        "max_output": 65536,
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 128000, "rate": 0.115},
+            {"max_tokens": 256000, "rate": 0.287}
+          ],
+          "output_tiers": [
+            {"max_tokens": 128000, "rate": 0.917},
+            {"max_tokens": 256000, "rate": 2.293}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "qwen3.5-27b",
+        "name": "Qwen3.5 27B",
+        "is_reasoning": true,
+        "description": "Alibaba's Qwen3.5 mid-size dense model (27B parameters)",
+        "context_window": 262144,
+        "max_output": 65536,
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 128000, "rate": 0.086},
+            {"max_tokens": 256000, "rate": 0.258}
+          ],
+          "output_tiers": [
+            {"max_tokens": 128000, "rate": 0.688},
+            {"max_tokens": 256000, "rate": 2.064}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "qwen3.5-35b-a3b",
+        "name": "Qwen3.5 35B-A3B",
+        "is_reasoning": true,
+        "description": "Alibaba's smallest Qwen3.5 MoE model (35B total, 3B active)",
+        "context_window": 262144,
+        "max_output": 65536,
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 128000, "rate": 0.057},
+            {"max_tokens": 256000, "rate": 0.229}
+          ],
+          "output_tiers": [
+            {"max_tokens": 128000, "rate": 0.459},
+            {"max_tokens": 256000, "rate": 1.835}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "unit": "per_1m_tokens"
+        }
+      }
+    ],
+    "dashscope-sg": [
+      {
+        "id": "qwen3.5-plus",
+        "name": "Qwen3.5 Plus (SG)",
+        "is_reasoning": true,
+        "description": "Alibaba's Qwen3.5 Plus model — Singapore international region",
+        "context_window": 1000000,
+        "max_output": 65536,
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 256000, "rate": 0.421},
+            {"max_tokens": 1000000, "rate": 0.526}
+          ],
+          "output_tiers": [
+            {"max_tokens": 256000, "rate": 2.524},
+            {"max_tokens": 1000000, "rate": 3.156}
+          ],
+          "output_pricing_mode": "input_dependent",
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "qwen3.5-flash",
+        "name": "Qwen3.5 Flash (SG)",
+        "is_reasoning": true,
+        "description": "Alibaba's Qwen3.5 Flash — Singapore international region",
+        "context_window": 1000000,
+        "max_output": 65536,
+        "pricing": {
+          "input_tiers": [
+            {"max_tokens": 256000, "rate": 0.053},
+            {"max_tokens": 1000000, "rate": 0.263}
+          ],
+          "output_tiers": [
+            {"max_tokens": 256000, "rate": 0.421},
+            {"max_tokens": 1000000, "rate": 2.103}
           ],
           "output_pricing_mode": "input_dependent",
           "unit": "per_1m_tokens"
@@ -465,12 +589,12 @@
         "id": "openai/gpt-oss-20b",
         "name": "GPT-OSS-20B (Groq)",
         "is_reasoning": true,
-        "description": "OpenAI's open-source 20B MoE reasoning model hosted on Groq (~1000 tps)",
+        "description": "OpenAI's open-source 20B MoE reasoning model hosted on Groq (~521 tps)",
         "context_window": 131072,
         "max_output": 65536,
         "pricing": {
           "input": 0.075,
-          "cached_input": 0.037,
+          "cached_input": 0.0375,
           "output": 0.30,
           "unit": "per_1m_tokens"
         }
@@ -486,6 +610,20 @@
           "input": 0.15,
           "cached_input": 0.075,
           "output": 0.60,
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "openai/gpt-oss-safeguard-20b",
+        "name": "GPT-OSS-Safeguard-20B (Groq)",
+        "is_reasoning": true,
+        "description": "OpenAI's safety reasoning model built on gpt-oss-20b, hosted on Groq (~784 tps)",
+        "context_window": 131072,
+        "max_output": 65536,
+        "pricing": {
+          "input": 0.075,
+          "cached_input": 0.037,
+          "output": 0.30,
           "unit": "per_1m_tokens"
         }
       }
@@ -536,11 +674,26 @@
         "id": "gpt-oss-120b",
         "name": "GPT-OSS-120B (Cerebras)",
         "is_reasoning": true,
-        "description": "OpenAI's open-source 120B MoE reasoning model hosted on Cerebras (~3000 tps)",
+        "description": "OpenAI's open-source 120B MoE reasoning model hosted on Cerebras (~353 tps)",
         "context_window": 131072,
-        "max_output": 40000,
+        "max_output": 41000,
         "pricing": {
           "input": 0.35,
+          "cached_input": 0.35,
+          "output": 0.75,
+          "unit": "per_1m_tokens"
+        }
+      },
+      {
+        "id": "gpt-oss-safeguard-20b",
+        "name": "GPT-OSS-Safeguard-20B (Cerebras)",
+        "is_reasoning": true,
+        "description": "OpenAI's safety reasoning model built on gpt-oss-20b, hosted on Cerebras",
+        "context_window": 131072,
+        "max_output": 41000,
+        "pricing": {
+          "input": 0.35,
+          "cached_input": 0.35,
           "output": 0.75,
           "unit": "per_1m_tokens"
         }
@@ -553,13 +706,13 @@
       "base_url": "https://api.openai.com/v1",
       "env_key": "OPENAI_API_KEY",
       "use_response_api": false,
-      "byok_eligible": false,
+      "byok_eligible": true,
       "display_name": "OpenAI"
     },
     "anthropic": {
       "sdk": "anthropic",
       "env_key": "ANTHROPIC_API_KEY",
-      "byok_eligible": false,
+      "byok_eligible": true,
       "display_name": "Anthropic"
     },
     "gemini": {
@@ -573,6 +726,7 @@
       "base_url": "http://{HOST_IP}:1234/v1",
       "env_key": "lm-studio",
       "dynamic_models": true,
+      "display_name": "LM Studio",
       "default_parameters": {
         "temperature": 0
       }
@@ -582,26 +736,29 @@
       "base_url": "http://{HOST_IP}:8000/v1",
       "env_key": null,
       "dynamic_models": true,
-      "use_response_api": true
+      "use_response_api": true,
+      "display_name": "vLLM"
     },
     "volcengine": {
       "sdk": "openai",
       "base_url": "https://ark.cn-beijing.volces.com/api/v3",
       "env_key": "VOLCENGINE_API_KEY",
-      "use_response_api": true
+      "use_response_api": true,
+      "display_name": "Doubao"
     },
     "openrouter": {
       "sdk": "deepseek",
       "base_url": "https://openrouter.ai/api/v1",
       "env_key": "OPENROUTER_API_KEY",
-      "byok_eligible": false,
+      "byok_eligible": true,
       "display_name": "OpenRouter"
     },
     "moonshot": {
       "sdk": "anthropic",
       "base_url": "https://api.kimi.com/coding",
       "env_key": "MOONSHOT_API_KEY",
-      "use_response_api": false
+      "use_response_api": false,
+      "display_name": "Moonshot (Kimi)"
     },
     "deepseek": {
       "sdk": "anthropic",
@@ -613,60 +770,82 @@
     "qwen": {
       "sdk": "openai",
       "base_url": "https://openrouter.ai/api/v1",
-      "env_key": "OPENROUTER_API_KEY"
+      "env_key": "OPENROUTER_API_KEY",
+      "display_name": "Qwen"
     },
     "alibaba": {
       "sdk": "openai",
       "base_url": "https://openrouter.ai/api/v1",
-      "env_key": "OPENROUTER_API_KEY"
+      "env_key": "OPENROUTER_API_KEY",
+      "display_name": "Alibaba Cloud"
     },
     "z-ai": {
       "sdk": "anthropic",
       "base_url": "https://api.z.ai/api/anthropic",
-      "env_key": "ZAI_API_KEY"
+      "env_key": "ZAI_API_KEY",
+      "byok_eligible": true,
+      "display_name": "Zhipu AI"
     },
     "z-ai-cn": {
       "sdk": "anthropic",
       "base_url": "https://open.bigmodel.cn/api/anthropic",
-      "env_key": "ZAI_CN_API_KEY"
+      "env_key": "ZAI_CN_API_KEY",
+      "byok_eligible": true,
+      "parent_provider": "z-ai"
     },
     "minimax": {
       "sdk": "anthropic",
       "base_url": "https://api.minimax.io/anthropic",
-      "env_key": "MINIMAX_API_KEY"
+      "env_key": "MINIMAX_API_KEY",
+      "byok_eligible": true,
+      "display_name": "MiniMax"
     },
     "doubao-anthropic": {
       "sdk": "anthropic",
       "base_url": "https://ark.cn-beijing.volces.com/api/compatible",
-      "env_key": "VOLCENGINE_API_KEY"
+      "env_key": "VOLCENGINE_API_KEY",
+      "parent_provider": "volcengine"
     },
     "doubao-coding": {
       "sdk": "anthropic",
       "base_url": "https://ark.cn-beijing.volces.com/api/coding",
-      "env_key": "VOLCENGINE_API_KEY"
+      "env_key": "VOLCENGINE_API_KEY",
+      "parent_provider": "volcengine"
     },
     "dashscope": {
       "sdk": "openai",
       "base_url": "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1",
       "env_key": "DASHSCOPE_API_KEY",
-      "use_response_api": true
+      "use_response_api": true,
+      "display_name": "DashScope (Qwen)"
+    },
+    "dashscope-sg": {
+      "sdk": "qwq",
+      "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      "env_key": "DASHSCOPE_API_KEY_INT",
+      "parent_provider": "dashscope",
+      "display_name": "DashScope (Qwen) (SG)"
     },
     "dashscope-coding": {
       "sdk": "anthropic",
       "base_url": "https://coding.dashscope.aliyuncs.com/apps/anthropic",
-      "env_key": "DASHSCOPE_API_KEY_CODING"
+      "env_key": "DASHSCOPE_API_KEY_CODING",
+      "parent_provider": "dashscope",
+      "display_name": "DashScope (Coding)"
     },
     "groq": {
       "sdk": "openai",
       "base_url": "https://api.groq.com/openai/v1",
       "env_key": "GROQ_API_KEY",
-      "use_response_api": true
+      "use_response_api": true,
+      "display_name": "Groq"
     },
     "cerebras": {
       "sdk": "openai",
       "base_url": "https://api.cerebras.ai/v1",
       "env_key": "CEREBRAS_API_KEY",
-      "use_response_api": false
+      "use_response_api": false,
+      "display_name": "Cerebras"
     },
     "codex-oauth": {
       "sdk": "codex",
@@ -675,6 +854,14 @@
       "use_response_api": true,
       "auth_type": "oauth",
       "display_name": "ChatGPT Codex"
+    },
+    "deepinfra": {
+      "sdk": "openai",
+      "base_url": "https://openrouter.ai/api/v1",
+      "env_key": "OPENROUTER_API_KEY",
+      "use_response_api": true,
+      "parent_provider": "openrouter",
+      "comment": "DeepInfra models accessed via OpenRouter with provider routing"
     }
   },
   "infrastructure_pricing": {
@@ -690,6 +877,19 @@
       "credits_per_use": 8,
       "search_type": "ai_search",
       "pricing_note": "0.06 RMB per call"
+    },
+    "SerperSearchTool": {
+      "credits_per_use": 1,
+      "search_type": "web_search",
+      "pricing_note": "$0.001 per query ($50/50k credits)"
+    },
+    "TavilyResearchMini": {
+      "credits_per_use": 880,
+      "search_type": "research_mini"
+    },
+    "TavilyResearchPro": {
+      "credits_per_use": 2000,
+      "search_type": "research_pro"
     }
   },
   "credit_conversion": {
