@@ -31,7 +31,7 @@ class GinlixDataClient:
         return {}
 
     # Maximum pages to follow when auto-paginating (safety bound).
-    _MAX_PAGES = 5
+    _MAX_PAGES = 10
 
     async def get_aggregates(
         self,
@@ -43,7 +43,7 @@ class GinlixDataClient:
         to_date: str | None = None,
         limit: int = 5000,
         user_id: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], bool]:
         """Fetch OHLCV bars for a single symbol, auto-paginating if needed.
 
         ``GET /api/v1/data/aggregates/{market}/{symbol}``
@@ -51,6 +51,9 @@ class GinlixDataClient:
         When the upstream response contains a ``next_cursor``, follows it
         automatically (up to ``_MAX_PAGES`` total requests) so the caller
         always receives the complete result set.
+
+        Returns ``(results, truncated)`` where *truncated* is ``True`` when
+        the page ceiling was hit while more data was available.
         """
         params: dict[str, Any] = {
             "timespan": timespan,
@@ -65,6 +68,7 @@ class GinlixDataClient:
         all_results: list[dict[str, Any]] = []
         headers = self._user_headers(user_id)
         url = f"/api/v1/data/aggregates/{market}/{symbol}"
+        truncated = False
 
         for page in range(self._MAX_PAGES):
             resp = await self.http.get(url, params=params, headers=headers)
@@ -83,8 +87,16 @@ class GinlixDataClient:
             )
             # Next page: carry same params but add cursor
             params["cursor"] = cursor
+        else:
+            # Loop exhausted without break — max pages hit with more data available
+            if cursor:
+                truncated = True
+                logger.warning(
+                    "get_aggregates %s %s: hit %d-page ceiling, data truncated",
+                    symbol, timespan, self._MAX_PAGES,
+                )
 
-        return all_results
+        return all_results, truncated
 
     async def get_news(
         self,

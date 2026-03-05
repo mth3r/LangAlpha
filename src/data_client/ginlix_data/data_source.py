@@ -116,7 +116,7 @@ class GinlixDataSource:
             "get_intraday %s %s from=%s to=%s limit=%d",
             api_symbol, interval, from_date, to_date, limit,
         )
-        raw = await self.client.get_aggregates(
+        raw, truncated = await self.client.get_aggregates(
             market=market,
             symbol=api_symbol,
             timespan=timespan,
@@ -133,7 +133,7 @@ class GinlixDataSource:
             "get_intraday %s %s → %d bars, first=%s last=%s",
             api_symbol, interval, len(bars), first_t, last_t,
         )
-        return FetchResult(bars=bars, truncated=False)
+        return FetchResult(bars=bars, truncated=truncated)
 
     async def get_daily(
         self,
@@ -149,7 +149,7 @@ class GinlixDataSource:
             from_date, to_date, self._DAILY_LOOKBACK_DAYS
         )
         limit = self._DEFAULT_LIMIT
-        raw = await self.client.get_aggregates(
+        raw, truncated = await self.client.get_aggregates(
             market=market,
             symbol=api_symbol,
             timespan="day",
@@ -159,7 +159,7 @@ class GinlixDataSource:
             limit=limit,
             user_id=user_id,
         )
-        return FetchResult(bars=[self._normalize(r) for r in raw], truncated=False)
+        return FetchResult(bars=[self._normalize(r) for r in raw], truncated=truncated)
 
     @staticmethod
     def _normalize(row: dict[str, Any]) -> dict[str, Any]:
