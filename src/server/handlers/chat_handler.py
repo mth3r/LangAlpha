@@ -761,7 +761,10 @@ async def astream_flash_workflow(
         is_checkpoint_replay = bool(request.checkpoint_id and not request.messages)
 
         # Persist query start (with attachment and context metadata for display in history)
+        effective_model = config.llm.flash if config else None
         query_metadata = {"msg_type": "flash"}
+        if effective_model:
+            query_metadata["llm_model"] = effective_model
         if request.additional_context:
             multimodal_ctxs = parse_multimodal_contexts(request.additional_context)
             if multimodal_ctxs:
@@ -1434,10 +1437,13 @@ async def astream_ptc_workflow(
         # Persist query start
         feedback_action = None
         query_content = user_input
+        effective_model = config.llm.name if config else None
         query_metadata = {
             "workspace_id": request.workspace_id,
             "msg_type": "ptc",
         }
+        if effective_model:
+            query_metadata["llm_model"] = effective_model
 
         # Extract attachment and context metadata for display in history
         if request.additional_context and not request.hitl_response:

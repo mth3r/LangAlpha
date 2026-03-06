@@ -131,7 +131,6 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
   const location = useLocation();
   const navigate = useNavigate();
   const { refreshUser, preferences } = useAuth();
-  const starredModels = preferences?.other_preference?.starred_models || [];
   const preferredModel = preferences?.other_preference?.preferred_model || null;
   const initialMessageSentRef = useRef(false);
   // Determine agent mode: flash workspaces use flash mode, otherwise ptc
@@ -350,6 +349,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
     handleRejectStartQuestion,
     tokenUsage,
     threadId: currentThreadId,
+    threadModel,
     isShared: threadIsShared,
     insertNotification,
     handleEditMessage,
@@ -964,24 +964,24 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
         // New thread - send immediately
         initialMessageSentRef.current = true;
         // Capture state values before clearing (navigate may update location ref)
-        const { initialMessage, planMode, additionalContext, attachmentMeta } = location.state;
+        const { initialMessage, planMode, additionalContext, attachmentMeta, model, reasoningEffort } = location.state;
         // Clear navigation state to prevent re-sending on re-renders
         navigate(location.pathname, { replace: true, state: {} });
         // Small delay to ensure component is fully mounted
         setTimeout(() => {
-          handleSendMessage(initialMessage, planMode || false, additionalContext || null, attachmentMeta || null);
+          handleSendMessage(initialMessage, planMode || false, additionalContext || null, attachmentMeta || null, { model, reasoningEffort });
         }, 100);
       } else if (!isLoadingHistory && !isLoading) {
         // Existing thread - wait for history to load, then send
         // This ensures we don't send duplicate messages
         initialMessageSentRef.current = true;
         // Capture state values before clearing (navigate may update location ref)
-        const { initialMessage, planMode, additionalContext, attachmentMeta } = location.state;
+        const { initialMessage, planMode, additionalContext, attachmentMeta, model, reasoningEffort } = location.state;
         // Clear navigation state to prevent re-sending on re-renders
         navigate(location.pathname, { replace: true, state: {} });
         // Small delay to ensure component is fully mounted
         setTimeout(() => {
-          handleSendMessage(initialMessage, planMode || false, additionalContext || null, attachmentMeta || null);
+          handleSendMessage(initialMessage, planMode || false, additionalContext || null, attachmentMeta || null, { model, reasoningEffort });
         }, 100);
       }
     }
@@ -1417,8 +1417,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
                       files={workspaceFiles}
                       tokenUsage={tokenUsage}
                       onAction={handleAction}
-                      starredModels={starredModels}
-                      initialModel={preferredModel}
+                      initialModel={threadModel || preferredModel}
                     />
                   </>
                 ) : activeAgent ? (

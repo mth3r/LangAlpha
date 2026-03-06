@@ -218,6 +218,13 @@
 .model-dropdown-item.active {
   background-color: var(--color-accent-soft);
 }
+.model-dropdown-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.model-dropdown-item.disabled:hover {
+  background-color: transparent;
+}
 
 .model-dropdown-separator {
   height: 1px;

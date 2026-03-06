@@ -549,6 +549,16 @@ export async function getSkills(mode = null) {
   return _skillsPromises[key];
 }
 
+// --- Model Metadata (eager prefetch at import time — resolved before ChatInput mounts) ---
+
+const _modelMetadataPromise = api.get('/api/v1/models')
+  .then(({ data }) => data.model_metadata || {})
+  .catch(() => ({}));
+
+export function getModelMetadata() {
+  return _modelMetadataPromise;
+}
+
 // --- File Upload ---
 
 // --- Feedback ---

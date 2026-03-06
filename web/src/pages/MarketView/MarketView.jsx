@@ -332,7 +332,7 @@ function MarketViewInner() {
     setChartImageDesc(parts.join('\n'));
   }, [selectedStock, selectedInterval, stockInfo, selectedStockDisplay, overviewData, displayPrice]);
 
-  const handleSendMessage = useCallback(async (message, planMode, attachments = []) => {
+  const handleSendMessage = useCallback(async (message, planMode, attachments = [], slashCommands = [], { model, reasoningEffort } = {}) => {
     // Build additional_context from chart image + file attachments
     const contexts = [];
     if (chartImage) {
@@ -390,6 +390,8 @@ function MarketViewInner() {
             planMode: planMode || false,
             additionalContext: imageContext,
             ...(attachmentMeta ? { attachmentMeta } : {}),
+            ...(model ? { model } : {}),
+            ...(reasoningEffort ? { reasoningEffort } : {}),
           },
         });
       } catch (error) {

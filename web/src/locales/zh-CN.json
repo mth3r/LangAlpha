@@ -315,7 +315,8 @@
       "reasoningEffort": "推理",
       "effortLow": "低",
       "effortMedium": "中",
-      "effortHigh": "高"
+      "effortHigh": "高",
+      "incompatibleSdk": "当前会话无法切换到此模型（提供商不同）"
     }
   },
   "context": {
@@ -437,6 +438,13 @@
     "periodChange": "区间涨跌",
     "avgVolume": "平均成交量",
     "volatility": "波动率",
+    "shareStructure": "股本结构",
+    "sharesOutstanding": "总股本",
+    "float": "流通股",
+    "shortInterest": "做空量",
+    "shortPctFloat": "做空占流通比",
+    "daysToCover": "空头回补天数",
+    "shortVolRatio": "做空成交占比",
     "nResults": "{{count}} 个结果",
     "nRatings": "{{count}} 个评级",
     "nMoreStocks": "还有 {{count}} 只",

@@ -2,12 +2,13 @@ import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, u
 import {
   Plus, ArrowUp, X, FileText, Loader2, Archive, Square,
   ScrollText, ChartCandlestick, Zap, FileStack, ChevronDown, FolderOpen, TextSelect,
-  Terminal, Bot, Shrink, HardDriveDownload, Check,
+  Terminal, Bot, Shrink, HardDriveDownload, Check, Brain, Flame,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { TokenUsageRing } from './token-usage-ring';
-import { getSkills } from '../../pages/ChatAgent/utils/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { getSkills, getModelMetadata } from '../../pages/ChatAgent/utils/api';
 import './chat-input.css';
 
 /* --- UTILS --- */
@@ -104,6 +105,23 @@ function getModelDisplayName(key) {
   return name;
 }
 
+/**
+ * Check if two models are compatible for mid-session switching.
+ * - Different SDKs → incompatible
+ * - openai/codex SDK → must be same provider (sub-provider)
+ * - Other SDKs (anthropic, gemini, etc.) → compatible if same SDK
+ */
+function areModelsCompatible(modelA, modelB, metadata) {
+  if (!modelA || !modelB) return true;
+  const a = metadata[modelA], b = metadata[modelB];
+  if (!a || !b) return true; // unknown models → allow
+  if (a.sdk !== b.sdk) return false;
+  if (a.sdk === 'openai' || a.sdk === 'codex') {
+    return a.provider === b.provider;
+  }
+  return true;
+}
+
 /* --- MAIN COMPONENT --- */
 
 /**
@@ -152,21 +170,33 @@ const ChatInput = forwardRef(function ChatInput({
   // Action commands (e.g. /summarize) — fired immediately on selection
   onAction = null,
   // Model selector
-  starredModels = [],
   initialModel = null,
 }, ref) {
   const { t } = useTranslation();
+  const { preferences } = useAuth();
+  const starredModels = preferences?.other_preference?.starred_models || [];
+  const preferredModel = preferences?.other_preference?.preferred_model || null;
   const [message, setMessage] = useState('');
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [planMode, setPlanMode] = useState(false);
 
   // Model selector state
-  const [selectedModel, setSelectedModel] = useState(initialModel);
+  const effectiveInitialModel = initialModel || preferredModel;
+  const [selectedModel, setSelectedModel] = useState(effectiveInitialModel);
   const [reasoningEffort, setReasoningEffort] = useState(null);
   const [showModelMenu, setShowModelMenu] = useState(false);
+  const [modelMetadata, setModelMetadata] = useState({});
   const modelMenuRef = useRef(null);
   const navigate = useNavigate();
+
+  // Sync selectedModel when initialModel or preferredModel changes
+  useEffect(() => {
+    if (effectiveInitialModel) setSelectedModel(effectiveInitialModel);
+  }, [effectiveInitialModel]);
+
+  // Fetch model metadata for compatibility checking (eager prefetch, resolves instantly after first load)
+  useEffect(() => { getModelMetadata().then(setModelMetadata).catch(() => {}); }, []);
 
   // @file mention state
   const [mentionedFiles, setMentionedFiles] = useState([]);
@@ -886,25 +916,30 @@ const ChatInput = forwardRef(function ChatInput({
             <div className="model-dropdown" ref={modelMenuRef}>
               {starredModels.length > 0 ? (
                 <>
-                  {starredModels.map((m) => (
-                    <div
-                      key={m}
-                      className={`model-dropdown-item ${m === selectedModel ? 'active' : ''}`}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setSelectedModel(m);
-                        setShowModelMenu(false);
-                      }}
-                    >
-                      <span>{getModelDisplayName(m)}</span>
-                      {m === selectedModel && <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--color-accent-primary)' }} />}
-                    </div>
-                  ))}
+                  {starredModels.map((m) => {
+                    const compatible = !initialModel || areModelsCompatible(selectedModel, m, modelMetadata);
+                    return (
+                      <div
+                        key={m}
+                        className={`model-dropdown-item ${m === selectedModel ? 'active' : ''} ${!compatible ? 'disabled' : ''}`}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          if (!compatible) return;
+                          setSelectedModel(m);
+                          setShowModelMenu(false);
+                        }}
+                        title={!compatible ? t('chat.modelSelector.incompatibleSdk') : undefined}
+                      >
+                        <span style={!compatible ? { opacity: 0.4 } : undefined}>{getModelDisplayName(m)}</span>
+                        {m === selectedModel && <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--color-accent-primary)' }} />}
+                      </div>
+                    );
+                  })}
                   <div className="model-dropdown-separator" />
                   <div className="model-effort-section">
                     <span className="model-effort-label">{t('chat.modelSelector.reasoningEffort')}</span>
                     <div className="model-effort-toggle">
-                      {[['low', t('chat.modelSelector.effortLow')], ['medium', t('chat.modelSelector.effortMedium')], ['high', t('chat.modelSelector.effortHigh')]].map(([level, label]) => (
+                      {[['low', Zap, t('chat.modelSelector.effortLow')], ['medium', Brain, t('chat.modelSelector.effortMedium')], ['high', Flame, t('chat.modelSelector.effortHigh')]].map(([level, Icon, label]) => (
                         <button
                           key={level}
                           className={`model-effort-btn ${level === reasoningEffort ? 'active' : ''}`}
@@ -912,8 +947,9 @@ const ChatInput = forwardRef(function ChatInput({
                             e.preventDefault();
                             setReasoningEffort(level === reasoningEffort ? null : level);
                           }}
+                          title={label}
                         >
-                          {label}
+                          <Icon className="h-3.5 w-3.5" />
                         </button>
                       ))}
                     </div>

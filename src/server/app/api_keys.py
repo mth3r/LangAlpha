@@ -263,5 +263,6 @@ async def list_models():
                 "models": model_list,
             }
             for provider, model_list in models.items()
-        }
+        },
+        "model_metadata": config.get_model_metadata(),
     }
