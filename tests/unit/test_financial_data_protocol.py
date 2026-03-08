@@ -283,7 +283,7 @@ class TestGetFinancialDataProviderFactory:
 
     def _reset_singleton(self):
         """Clear the module-level singleton so each test starts fresh."""
-        import src.data_client as mod
+        import src.data_client.registry as mod
         mod._financial_data_provider = None
 
     @pytest.mark.asyncio
@@ -292,8 +292,8 @@ class TestGetFinancialDataProviderFactory:
         mock_fmp_client = AsyncMock()
 
         with (
-            patch("src.data_client._fmp_available", return_value=True),
-            patch("src.data_client._ginlix_data_available", return_value=False),
+            patch("src.data_client.registry._fmp_available", return_value=True),
+            patch("src.data_client.registry._ginlix_data_available", return_value=False),
             patch("src.data_client.fmp.get_fmp_client", return_value=mock_fmp_client),
             patch("src.data_client.fmp.financial_source.FMPFinancialSource") as MockFMP,
         ):
@@ -312,8 +312,8 @@ class TestGetFinancialDataProviderFactory:
         mock_client = AsyncMock()
 
         with (
-            patch("src.data_client._fmp_available", return_value=False),
-            patch("src.data_client._ginlix_data_available", return_value=True),
+            patch("src.data_client.registry._fmp_available", return_value=False),
+            patch("src.data_client.registry._ginlix_data_available", return_value=True),
             patch(
                 "src.data_client.ginlix_data.get_ginlix_data_client",
                 return_value=mock_client,
@@ -338,8 +338,8 @@ class TestGetFinancialDataProviderFactory:
         mock_fmp_client = AsyncMock()
 
         with (
-            patch("src.data_client._fmp_available", return_value=True),
-            patch("src.data_client._ginlix_data_available", return_value=True),
+            patch("src.data_client.registry._fmp_available", return_value=True),
+            patch("src.data_client.registry._ginlix_data_available", return_value=True),
             patch("src.data_client.fmp.get_fmp_client", return_value=mock_fmp_client),
             patch("src.data_client.fmp.financial_source.FMPFinancialSource") as MockFMP,
             patch(
@@ -365,8 +365,8 @@ class TestGetFinancialDataProviderFactory:
         self._reset_singleton()
 
         with (
-            patch("src.data_client._fmp_available", return_value=False),
-            patch("src.data_client._ginlix_data_available", return_value=False),
+            patch("src.data_client.registry._fmp_available", return_value=False),
+            patch("src.data_client.registry._ginlix_data_available", return_value=False),
         ):
             from src.data_client import get_financial_data_provider
 
