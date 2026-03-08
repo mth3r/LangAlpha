@@ -55,6 +55,7 @@ from src.server.utils.skill_context import (
     build_skill_content,
 )
 from src.server.utils.multimodal_context import (
+    build_attachment_metadata,
     parse_multimodal_contexts,
     inject_multimodal_context,
 )
@@ -796,19 +797,9 @@ async def astream_flash_workflow(
         if request.additional_context:
             multimodal_ctxs = parse_multimodal_contexts(request.additional_context)
             if multimodal_ctxs:
-                att_meta = [
-                    {
-                        "name": ctx.description or "file",
-                        "type": "image"
-                        if not ctx.data.startswith("data:application/pdf")
-                        else "pdf",
-                        "size": len(ctx.data.split(",", 1)[1]) * 3 // 4
-                        if "," in ctx.data
-                        else 0,
-                    }
-                    for ctx in multimodal_ctxs
-                ]
-                query_metadata["attachments"] = att_meta
+                query_metadata["attachments"] = await build_attachment_metadata(
+                    multimodal_ctxs, thread_id
+                )
 
             # Persist lightweight additional_context (skip heavy multimodal data)
             serialized_ctx = []
@@ -1483,19 +1474,9 @@ async def astream_ptc_workflow(
         if request.additional_context and not request.hitl_response:
             multimodal_ctxs = parse_multimodal_contexts(request.additional_context)
             if multimodal_ctxs:
-                att_meta = [
-                    {
-                        "name": ctx.description or "file",
-                        "type": "image"
-                        if not ctx.data.startswith("data:application/pdf")
-                        else "pdf",
-                        "size": len(ctx.data.split(",", 1)[1]) * 3 // 4
-                        if "," in ctx.data
-                        else 0,
-                    }
-                    for ctx in multimodal_ctxs
-                ]
-                query_metadata["attachments"] = att_meta
+                query_metadata["attachments"] = await build_attachment_metadata(
+                    multimodal_ctxs, thread_id
+                )
 
             # Persist lightweight additional_context (skip heavy multimodal data)
             serialized_ctx = []
