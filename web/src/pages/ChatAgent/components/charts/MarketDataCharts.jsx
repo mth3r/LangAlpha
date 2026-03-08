@@ -59,6 +59,10 @@ const formatPct = (val) => {
 const toChartTime = (val) => {
   if (val == null) return val;
   if (typeof val === 'number') return utcMsToChartSec(val); // Unix ms → ET chart seconds
+  // Intraday datetime string "YYYY-MM-DD HH:MM:SS" → Unix seconds
+  if (val.includes(' ') || val.includes('T')) {
+    return Math.floor(new Date(val + 'Z').getTime() / 1000);
+  }
   return val; // daily date string, lightweight-charts handles it natively
 };
 
@@ -361,7 +365,7 @@ export function StockPriceChart({ data }) {
         )}
         <OpenInMarketLink symbol={data.symbol} />
       </div>
-      <div ref={containerRef} style={{ width: '100%', height: 360 }} />
+      <div ref={containerRef} className="[&_*]:outline-none" style={{ width: '100%', height: 360 }} />
       <StockStatsCard stats={data.stats} />
     </div>
   );
@@ -1195,7 +1199,8 @@ function MiniCandlestick({ ohlcv, height = 180 }) {
 
   // Detect if data is intraday (numeric timestamps are always intraday from our API)
   const firstBar = ohlcv?.[0];
-  const isIntraday = firstBar && (typeof (firstBar.time ?? firstBar.date) === 'number');
+  const firstTime = firstBar && (firstBar.time ?? firstBar.date);
+  const isIntraday = typeof firstTime === 'number' || (typeof firstTime === 'string' && (firstTime.includes(' ') || firstTime.includes('T')));
 
   useEffect(() => {
     if (!containerRef.current || !ohlcv?.length) return;
@@ -1258,5 +1263,5 @@ function MiniCandlestick({ ohlcv, height = 180 }) {
   }, [ohlcv, height, theme]);
 
   if (!ohlcv?.length) return null;
-  return <div ref={containerRef} style={{ width: '100%', height }} />;
+  return <div ref={containerRef} className="[&_*]:outline-none" style={{ width: '100%', height }} />;
 }

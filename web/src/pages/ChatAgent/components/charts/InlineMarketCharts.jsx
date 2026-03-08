@@ -62,6 +62,9 @@ const cardStyle = {
   padding: '12px 14px',
   cursor: 'pointer',
   transition: 'border-color 0.15s',
+  outline: 'none',
+  WebkitTapHighlightColor: 'transparent',
+  userSelect: 'none',
 };
 
 const ABBREVIATIONS = {
