@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .base import FetchResult, MarketDataSource
 
@@ -48,6 +49,33 @@ def symbol_market(symbol: str) -> str:
         return "us"
     suffix = symbol.rsplit(".", 1)[-1].upper()
     return _SUFFIX_MAP.get(suffix, "other")
+
+
+_REGION_TZ: dict[str, str] = {
+    "us": "America/New_York",
+    "hk": "Asia/Hong_Kong",
+    "cn": "Asia/Shanghai",
+    "uk": "Europe/London",
+    "jp": "Asia/Tokyo",
+    "ca": "America/Toronto",
+    "au": "Australia/Sydney",
+    "eu": "Europe/Berlin",
+    "kr": "Asia/Seoul",
+    "tw": "Asia/Taipei",
+    "sg": "Asia/Singapore",
+    "in": "Asia/Kolkata",
+}
+
+
+def symbol_timezone(symbol: str) -> ZoneInfo:
+    """Return exchange-local timezone for a symbol."""
+    region = symbol_market(symbol)
+    return ZoneInfo(_REGION_TZ.get(region, "America/New_York"))
+
+
+def is_us_symbol(symbol: str) -> bool:
+    """True if symbol is a US equity (bare ticker or .US suffix)."""
+    return symbol_market(symbol) == "us"
 
 
 @dataclass
