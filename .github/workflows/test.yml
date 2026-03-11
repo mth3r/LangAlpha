@@ -79,9 +79,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - run: npm install
-      - run: npx vitest run --reporter=verbose
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm vitest run --reporter=verbose
 
   frontend-e2e:
     runs-on: ubuntu-latest
@@ -93,10 +97,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - run: npm install
-      - run: npx playwright install chromium --with-deps
-      - run: npx playwright test
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium --with-deps
+      - run: pnpm exec playwright test
       - uses: actions/upload-artifact@v4
         if: always()
         with:

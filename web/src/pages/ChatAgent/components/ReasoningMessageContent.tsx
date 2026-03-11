@@ -1,0 +1,113 @@
+import React, { useState } from 'react';
+import { Brain, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import Markdown from './Markdown';
+
+interface ReasoningMessageContentProps {
+  reasoningContent: string;
+  isReasoning: boolean;
+  reasoningComplete: boolean;
+  reasoningTitle?: string | null;
+}
+
+/**
+ * ReasoningMessageContent Component
+ *
+ * Renders reasoning content from message_chunk events with content_type: reasoning.
+ *
+ * Features:
+ * - Shows an icon indicating reasoning status (loading when active, finished when complete)
+ * - Clickable icon to toggle visibility of reasoning content
+ * - Reasoning content is folded by default, can be expanded on click
+ */
+function ReasoningMessageContent({ reasoningContent, isReasoning, reasoningComplete, reasoningTitle }: ReasoningMessageContentProps): React.ReactElement | null {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Don't render if there's no reasoning content, reasoning hasn't started, and reasoning isn't complete
+  if (!reasoningContent && !isReasoning && !reasoningComplete) {
+    return null;
+  }
+
+  const handleToggle = (): void => {
+    setIsExpanded(!isExpanded);
+  };
+
+  return (
+    <div className="mt-2">
+      {/* Reasoning indicator button */}
+      <button
+        onClick={handleToggle}
+        className="transition-colors hover:bg-foreground/10"
+        style={{
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '14px',
+          lineHeight: '20px',
+          color: 'var(--Labels-Secondary)',
+          padding: '4px 12px',
+          borderRadius: '6px',
+          backgroundColor: isReasoning
+            ? 'var(--color-accent-soft)'
+            : 'transparent',
+          border: isReasoning
+            ? '1px solid var(--color-border-muted)'
+            : 'none',
+          width: '100%',
+        }}
+        title={isReasoning ? 'Reasoning in progress...' : 'View reasoning process'}
+      >
+        {/* Icon: Brain with loading spinner when active, static brain when complete */}
+        <div className="relative flex-shrink-0">
+          <Brain className="h-4 w-4" style={{ color: 'var(--Labels-Secondary)' }} />
+          {isReasoning && (
+            <Loader2
+              className="h-3 w-3 absolute -top-0.5 -right-0.5 animate-spin"
+              style={{ color: 'var(--Labels-Secondary)' }}
+            />
+          )}
+        </div>
+
+        {/* Label: when complete show "Reasoning"; when streaming and title present show "Reasoning: Title"; else "Reasoning..." or "Reasoning" */}
+        <span style={{ color: 'inherit' }} className="truncate min-w-0">
+          {reasoningComplete
+            ? 'Reasoning'
+            : reasoningTitle
+              ? `Reasoning: ${reasoningTitle}`
+              : isReasoning
+                ? 'Reasoning...'
+                : 'Reasoning'}
+        </span>
+
+        {/* Expand/collapse icon */}
+        <div
+          style={{
+            flexShrink: 0,
+            color: 'var(--Labels-Quaternary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </div>
+      </button>
+
+      {/* Reasoning content (shown when expanded) - vertical line on left, no box */}
+      {isExpanded && reasoningContent && (
+        <Markdown
+          variant="compact"
+          content={reasoningContent}
+          className="mt-2 pl-3 pr-0 py-1 text-xs"
+          style={{ borderLeft: '3px solid var(--color-accent-overlay)' }}
+        />
+      )}
+    </div>
+  );
+}
+
+export default ReasoningMessageContent;
