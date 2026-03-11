@@ -5,16 +5,82 @@
 
 import { normalizeAction } from './eventUtils';
 
+/** A loosely-typed message record used throughout the chat state. */
+type MessageRecord = Record<string, unknown>;
+
+/** React-style state setter for the messages array. */
+type SetMessages = (updater: (prev: MessageRecord[]) => MessageRecord[]) => void;
+
+/** Callback to update a subagent card by task ID. */
+type UpdateSubagentCard = (taskId: string, patch: Record<string, unknown>) => void;
+
+/** Per-task ref state created by getOrCreateTaskRefs. */
+interface TaskRefs {
+  contentOrderCounterRef: { current: number };
+  currentReasoningIdRef: { current: string | null };
+  currentToolCallIdRef: { current: string | null };
+  messages: MessageRecord[];
+  runIndex: number;
+}
+
+/** Shape of refs passed to main-agent streaming handlers. */
+interface StreamRefs {
+  contentOrderCounterRef: { current: number };
+  currentReasoningIdRef: { current: string | null };
+  currentToolCallIdRef: { current: string | null };
+  subagentStateRefs?: Record<string, TaskRefs>;
+  isReconnect?: boolean | number;
+  _toolCreatedAt?: Record<string, number>;
+  updateTodoListCard?: (data: Record<string, unknown>, isNew: boolean) => void;
+  isNewConversation?: boolean;
+  [key: string]: unknown;
+}
+
+/** Shape of a tool call object from the SSE event. */
+interface ToolCallRecord {
+  id?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Shape of a tool call chunk object. */
+interface ToolCallChunkRecord {
+  index?: number;
+  name?: string;
+  args?: string;
+  [key: string]: unknown;
+}
+
+/** Shape of a tool call result from the SSE event. */
+interface ToolCallResultRecord {
+  content?: unknown;
+  content_type?: string;
+  tool_call_id?: string;
+  artifact?: unknown;
+  [key: string]: unknown;
+}
+
+/** Shape of the todo update payload. */
+interface TodoPayload {
+  todos?: unknown[];
+  total?: number;
+  completed?: number;
+  in_progress?: number;
+  pending?: number;
+  [key: string]: unknown;
+}
+
 /**
  * Extracts the last markdown bold title (**...**) from reasoning content for the icon label.
  * Used only during live streaming; history always shows "Reasoning".
  * @param {string} content - Accumulated reasoning text
  * @returns {string|null} Last **title** inner text or null
  */
-function extractLastReasoningTitle(content) {
+function extractLastReasoningTitle(content: unknown): string | null {
   if (!content || typeof content !== 'string') return null;
   const matches = content.matchAll(/\*\*([^*]+)\*\*/g);
-  let last = null;
+  let last: string | null = null;
   for (const m of matches) last = m[1].trim();
   return last || null;
 }
@@ -26,7 +92,7 @@ function extractLastReasoningTitle(content) {
  * @param {string} taskId - Task ID (e.g., "task:k7Xm2p")
  * @returns {Object} The task refs ({ contentOrderCounterRef, currentReasoningIdRef, currentToolCallIdRef, messages })
  */
-export function getOrCreateTaskRefs(refs, taskId) {
+export function getOrCreateTaskRefs(refs: StreamRefs, taskId: string): TaskRefs {
   const subagentStateRefs = refs.subagentStateRefs || {};
   if (!subagentStateRefs[taskId]) {
     subagentStateRefs[taskId] = {
@@ -49,7 +115,13 @@ export function getOrCreateTaskRefs(refs, taskId) {
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleReasoningSignal({ assistantMessageId, signalContent, refs, setMessages, eventId }) {
+export function handleReasoningSignal({ assistantMessageId, signalContent, refs, setMessages, eventId }: {
+  assistantMessageId: string;
+  signalContent: string;
+  refs: StreamRefs;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   const { contentOrderCounterRef, currentReasoningIdRef } = refs;
 
   if (signalContent === 'start') {
@@ -58,12 +130,12 @@ export function handleReasoningSignal({ assistantMessageId, signalContent, refs,
     currentReasoningIdRef.current = reasoningId;
     const currentOrder = eventId != null ? eventId : ++contentOrderCounterRef.current;
 
-    setMessages((prev) =>
-      prev.map((msg) => {
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) => {
         if (msg.id !== assistantMessageId) return msg;
 
         const newSegments = [
-          ...(msg.contentSegments || []),
+          ...((msg.contentSegments as unknown[]) || []),
           {
             type: 'reasoning',
             reasoningId,
@@ -72,7 +144,7 @@ export function handleReasoningSignal({ assistantMessageId, signalContent, refs,
         ];
 
         const newReasoningProcesses = {
-          ...(msg.reasoningProcesses || {}),
+          ...((msg.reasoningProcesses as Record<string, unknown>) || {}),
           [reasoningId]: {
             content: '',
             isReasoning: true,
@@ -93,11 +165,11 @@ export function handleReasoningSignal({ assistantMessageId, signalContent, refs,
     // Reasoning process has completed - clear title so icon shows "Reasoning"
     if (currentReasoningIdRef.current) {
       const reasoningId = currentReasoningIdRef.current;
-      setMessages((prev) =>
-        prev.map((msg) => {
+      setMessages((prev: MessageRecord[]) =>
+        prev.map((msg: MessageRecord) => {
           if (msg.id !== assistantMessageId) return msg;
 
-          const reasoningProcesses = { ...(msg.reasoningProcesses || {}) };
+          const reasoningProcesses = { ...((msg.reasoningProcesses as Record<string, Record<string, unknown>>) || {}) };
           if (reasoningProcesses[reasoningId]) {
             reasoningProcesses[reasoningId] = {
               ...reasoningProcesses[reasoningId],
@@ -130,19 +202,24 @@ export function handleReasoningSignal({ assistantMessageId, signalContent, refs,
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleReasoningContent({ assistantMessageId, content, refs, setMessages }) {
+export function handleReasoningContent({ assistantMessageId, content, refs, setMessages }: {
+  assistantMessageId: string;
+  content: string;
+  refs: StreamRefs;
+  setMessages: SetMessages;
+}): boolean {
   const { currentReasoningIdRef } = refs;
 
   if (currentReasoningIdRef.current && content) {
     const reasoningId = currentReasoningIdRef.current;
-    setMessages((prev) =>
-      prev.map((msg) => {
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) => {
         if (msg.id !== assistantMessageId) return msg;
 
-        const reasoningProcesses = { ...(msg.reasoningProcesses || {}) };
+        const reasoningProcesses = { ...((msg.reasoningProcesses as Record<string, Record<string, unknown>>) || {}) };
         if (reasoningProcesses[reasoningId]) {
-          const newContent = (reasoningProcesses[reasoningId].content || '') + content;
-          const reasoningTitle = extractLastReasoningTitle(newContent) ?? reasoningProcesses[reasoningId].reasoningTitle ?? null;
+          const newContent = ((reasoningProcesses[reasoningId].content as string) || '') + content;
+          const reasoningTitle = extractLastReasoningTitle(newContent) ?? (reasoningProcesses[reasoningId].reasoningTitle as string | null) ?? null;
           reasoningProcesses[reasoningId] = {
             ...reasoningProcesses[reasoningId],
             content: newContent,
@@ -172,7 +249,14 @@ export function handleReasoningContent({ assistantMessageId, content, refs, setM
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleTextContent({ assistantMessageId, content, finishReason, refs, setMessages, eventId }) {
+export function handleTextContent({ assistantMessageId, content, finishReason, refs, setMessages, eventId }: {
+  assistantMessageId: string;
+  content: string;
+  finishReason: string | undefined;
+  refs: StreamRefs;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   const { contentOrderCounterRef } = refs;
 
   // Handle finish_reason
@@ -182,8 +266,8 @@ export function handleTextContent({ assistantMessageId, content, finishReason, r
       return false; // Let tool_calls handler process this
     } else if (!content) {
       // Metadata chunk with finish_reason but no content
-      setMessages((prev) =>
-        prev.map((msg) =>
+      setMessages((prev: MessageRecord[]) =>
+        prev.map((msg: MessageRecord) =>
           msg.id === assistantMessageId
             ? { ...msg, isStreaming: false }
             : msg
@@ -198,12 +282,12 @@ export function handleTextContent({ assistantMessageId, content, finishReason, r
   if (content) {
     const currentOrder = eventId != null ? eventId : ++contentOrderCounterRef.current;
 
-    setMessages((prev) =>
-      prev.map((msg) => {
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) => {
         if (msg.id !== assistantMessageId) return msg;
 
         const newSegments = [
-          ...(msg.contentSegments || []),
+          ...((msg.contentSegments as unknown[]) || []),
           {
             type: 'text',
             content,
@@ -211,7 +295,7 @@ export function handleTextContent({ assistantMessageId, content, finishReason, r
           },
         ];
 
-        const accumulatedText = (msg.content || '') + content;
+        const accumulatedText = ((msg.content as string) || '') + content;
 
         return {
           ...msg,
@@ -225,8 +309,8 @@ export function handleTextContent({ assistantMessageId, content, finishReason, r
     return true;
   } else if (finishReason) {
     // Message is complete (finish_reason present with no content means end of stream)
-    setMessages((prev) =>
-      prev.map((msg) =>
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) =>
         msg.id === assistantMessageId
           ? { ...msg, isStreaming: false }
           : msg
@@ -247,7 +331,14 @@ export function handleTextContent({ assistantMessageId, content, finishReason, r
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, refs, setMessages, eventId }) {
+export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, refs, setMessages, eventId }: {
+  assistantMessageId: string;
+  toolCalls: ToolCallRecord[];
+  finishReason: string | undefined;
+  refs: StreamRefs;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   const { contentOrderCounterRef } = refs;
 
   if (!toolCalls || !Array.isArray(toolCalls)) {
@@ -257,21 +348,21 @@ export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, r
   // Track creation times outside React state so handleToolCallResult can read them synchronously
   if (!refs._toolCreatedAt) refs._toolCreatedAt = {};
 
-  toolCalls.forEach((toolCall, toolIndex) => {
+  toolCalls.forEach((toolCall: ToolCallRecord, toolIndex: number) => {
     const toolCallId = toolCall.id;
 
     if (toolCallId) {
-      if (!refs.isReconnect && !refs._toolCreatedAt[toolCallId]) {
-        refs._toolCreatedAt[toolCallId] = Date.now();
+      if (!refs.isReconnect && !refs._toolCreatedAt![toolCallId]) {
+        refs._toolCreatedAt![toolCallId] = Date.now();
       }
-      setMessages((prev) =>
-        prev.map((msg) => {
+      setMessages((prev: MessageRecord[]) =>
+        prev.map((msg: MessageRecord) => {
           if (msg.id !== assistantMessageId) return msg;
 
-          const toolCallProcesses = { ...(msg.toolCallProcesses || {}) };
-          const contentSegments = [...(msg.contentSegments || [])];
+          const toolCallProcesses = { ...((msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {}) };
+          const contentSegments = [...((msg.contentSegments as Record<string, unknown>[]) || [])];
 
-          let currentOrder;
+          let currentOrder: number;
 
           if (!toolCallProcesses[toolCallId]) {
             currentOrder = eventId != null
@@ -294,7 +385,7 @@ export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, r
               order: currentOrder,
             };
           } else {
-            currentOrder = toolCallProcesses[toolCallId].order;
+            currentOrder = toolCallProcesses[toolCallId].order as number;
             toolCallProcesses[toolCallId] = {
               ...toolCallProcesses[toolCallId],
               toolName: toolCall.name,
@@ -305,14 +396,14 @@ export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, r
 
           // If this tool is the Task tool (subagent spawner), also create a subagent_task segment
           // Mirrors historyEventHandlers.js logic for consistency
-          const subagentTasks = { ...(msg.subagentTasks || {}) };
+          const subagentTasks = { ...((msg.subagentTasks as Record<string, Record<string, unknown>>) || {}) };
           const isTaskTool = toolCall.name === 'task' || toolCall.name === 'Task';
-          const action = normalizeAction(toolCall.args?.action || (toolCall.args?.task_id ? 'resume' : 'init'));
+          const action = normalizeAction((toolCall.args?.action as string) || (toolCall.args?.task_id ? 'resume' : 'init'));
           const isNewSpawn = action === 'init';
           if (isTaskTool && toolCallId && isNewSpawn) {
             const subagentId = toolCallId;
             const hasExistingSubagentSegment = contentSegments.some(
-              (s) => s.type === 'subagent_task' && s.subagentId === subagentId
+              (s: Record<string, unknown>) => s.type === 'subagent_task' && s.subagentId === subagentId
             );
 
             if (!hasExistingSubagentSegment) {
@@ -326,16 +417,16 @@ export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, r
             subagentTasks[subagentId] = {
               ...(subagentTasks[subagentId] || {}),
               subagentId,
-              description: toolCall.args?.description || '',
-              prompt: toolCall.args?.prompt || toolCall.args?.description || '',
-              type: toolCall.args?.subagent_type || 'general-purpose',
+              description: (toolCall.args?.description as string) || '',
+              prompt: (toolCall.args?.prompt as string) || (toolCall.args?.description as string) || '',
+              type: (toolCall.args?.subagent_type as string) || 'general-purpose',
               action: 'init',
               status: 'running',
             };
           } else if (isTaskTool && toolCallId && !isNewSpawn) {
             // Resume/follow-up call — show a new card with "resumed" indicator
             // Normalize to "task:xxx" format to match floating card keys
-            const rawTargetId = toolCall.args?.task_id || '';
+            const rawTargetId = (toolCall.args?.task_id as string) || '';
             const resumeTargetId = rawTargetId.startsWith('task:') ? rawTargetId : `task:${rawTargetId}`;
             contentSegments.push({
               type: 'subagent_task',
@@ -346,9 +437,9 @@ export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, r
             subagentTasks[toolCallId] = {
               subagentId: toolCallId,
               resumeTargetId,
-              description: toolCall.args?.description || '',
-              prompt: toolCall.args?.prompt || toolCall.args?.description || '',
-              type: toolCall.args?.subagent_type || 'general-purpose',
+              description: (toolCall.args?.description as string) || '',
+              prompt: (toolCall.args?.prompt as string) || (toolCall.args?.description as string) || '',
+              type: (toolCall.args?.subagent_type as string) || 'general-purpose',
               action,
               status: 'running',
             };
@@ -379,25 +470,31 @@ export function handleToolCalls({ assistantMessageId, toolCalls, finishReason, r
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleToolCallResult({ assistantMessageId, toolCallId, result, refs, setMessages }) {
+export function handleToolCallResult({ assistantMessageId, toolCallId, result, refs, setMessages }: {
+  assistantMessageId: string;
+  toolCallId: string;
+  result: ToolCallResultRecord;
+  refs: StreamRefs;
+  setMessages: SetMessages;
+}): boolean {
   const { contentOrderCounterRef, currentToolCallIdRef } = refs;
 
   if (!toolCallId) {
     return false;
   }
 
-  setMessages((prev) =>
-    prev.map((msg) => {
+  setMessages((prev: MessageRecord[]) =>
+    prev.map((msg: MessageRecord) => {
       if (msg.id !== assistantMessageId) return msg;
 
-      const toolCallProcesses = { ...(msg.toolCallProcesses || {}) };
+      const toolCallProcesses = { ...((msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {}) };
 
       // Tool call failed only if content starts with "ERROR" (backend convention)
-      const resultContent = result.content || '';
+      const resultContent = (result.content as string) || '';
       const isFailed = typeof resultContent === 'string' && resultContent.trim().startsWith('ERROR');
 
       // Track subagent task status updates
-      const subagentTasks = { ...(msg.subagentTasks || {}) };
+      const subagentTasks = { ...((msg.subagentTasks as Record<string, Record<string, unknown>>) || {}) };
 
       if (toolCallProcesses[toolCallId]) {
         toolCallProcesses[toolCallId] = {
@@ -453,7 +550,15 @@ export function handleToolCallResult({ assistantMessageId, toolCallId, result, r
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleTodoUpdate({ assistantMessageId, artifactType, artifactId, payload, refs, setMessages, eventId }) {
+export function handleTodoUpdate({ assistantMessageId, artifactType, artifactId, payload, refs, setMessages, eventId }: {
+  assistantMessageId: string;
+  artifactType: string;
+  artifactId: string;
+  payload: TodoPayload | null;
+  refs: StreamRefs;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   const { contentOrderCounterRef, updateTodoListCard, isNewConversation } = refs;
 
   if (process.env.NODE_ENV === 'development') {
@@ -502,18 +607,18 @@ export function handleTodoUpdate({ assistantMessageId, artifactType, artifactId,
     console.log('[handleTodoUpdate] Using baseTodoListId:', baseTodoListId, 'segmentId:', segmentId);
   }
 
-  setMessages((prev) => {
+  setMessages((prev: MessageRecord[]) => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('[handleTodoUpdate] Current messages:', prev.map(m => ({ id: m.id, role: m.role, hasSegments: !!m.contentSegments, hasTodoProcesses: !!m.todoListProcesses })));
+      console.log('[handleTodoUpdate] Current messages:', prev.map((m: MessageRecord) => ({ id: m.id, role: m.role, hasSegments: !!m.contentSegments, hasTodoProcesses: !!m.todoListProcesses })));
     }
-    const updated = prev.map((msg) => {
+    const updated = prev.map((msg: MessageRecord) => {
       if (msg.id !== assistantMessageId) return msg;
 
       if (process.env.NODE_ENV === 'development') {
         console.log('[handleTodoUpdate] Found matching message:', msg.id);
       }
-      const todoListProcesses = { ...(msg.todoListProcesses || {}) };
-      const contentSegments = [...(msg.contentSegments || [])];
+      const todoListProcesses = { ...((msg.todoListProcesses as Record<string, unknown>) || {}) };
+      const contentSegments = [...((msg.contentSegments as Record<string, unknown>[]) || [])];
 
       // Always create a new segment for each todo_update event to preserve chronological order
       const currentOrder = eventId != null ? eventId : ++contentOrderCounterRef.current;
@@ -544,7 +649,7 @@ export function handleTodoUpdate({ assistantMessageId, artifactType, artifactId,
         console.log('[handleTodoUpdate] Created new todo list process:', todoListProcesses[segmentId]);
       }
 
-      const updatedMsg = {
+      const updatedMsg: MessageRecord = {
         ...msg,
         contentSegments,
         todoListProcesses,
@@ -552,14 +657,14 @@ export function handleTodoUpdate({ assistantMessageId, artifactType, artifactId,
       if (process.env.NODE_ENV === 'development') {
         console.log('[handleTodoUpdate] Updated message:', {
           id: updatedMsg.id,
-          segmentsCount: updatedMsg.contentSegments?.length,
-          todoListIds: Object.keys(updatedMsg.todoListProcesses || {})
+          segmentsCount: (updatedMsg.contentSegments as unknown[])?.length,
+          todoListIds: Object.keys((updatedMsg.todoListProcesses as Record<string, unknown>) || {})
         });
       }
       return updatedMsg;
     });
     if (process.env.NODE_ENV === 'development') {
-      console.log('[handleTodoUpdate] Final messages after update:', updated.map(m => ({ id: m.id, segmentsCount: m.contentSegments?.length, todoListIds: Object.keys(m.todoListProcesses || {}) })));
+      console.log('[handleTodoUpdate] Final messages after update:', updated.map((m: MessageRecord) => ({ id: m.id, segmentsCount: (m.contentSegments as unknown[])?.length, todoListIds: Object.keys((m.todoListProcesses as Record<string, unknown>) || {}) })));
     }
     return updated;
   });
@@ -576,22 +681,26 @@ export function handleTodoUpdate({ assistantMessageId, artifactType, artifactId,
  * @param {Array} params.chunks - Array of tool_call_chunk objects
  * @param {Function} params.setMessages - State setter for messages
  */
-export function handleToolCallChunks({ assistantMessageId, chunks, setMessages }) {
+export function handleToolCallChunks({ assistantMessageId, chunks, setMessages }: {
+  assistantMessageId: string;
+  chunks: ToolCallChunkRecord[];
+  setMessages: SetMessages;
+}): void {
   if (!chunks || !Array.isArray(chunks)) return;
 
-  chunks.forEach((chunk) => {
+  chunks.forEach((chunk: ToolCallChunkRecord) => {
     const key = `${chunk.index ?? 0}`;
 
-    setMessages((prev) =>
-      prev.map((msg) => {
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) => {
         if (msg.id !== assistantMessageId) return msg;
-        const pending = { ...(msg.pendingToolCallChunks || {}) };
+        const pending = { ...((msg.pendingToolCallChunks as Record<string, Record<string, unknown>>) || {}) };
         const existing = pending[key] || { toolName: null, chunkCount: 0, argsLength: 0, firstSeenAt: Date.now() };
 
         pending[key] = {
           toolName: chunk.name || existing.toolName,
-          chunkCount: existing.chunkCount + 1,
-          argsLength: existing.argsLength + (chunk.args?.length || 0),
+          chunkCount: (existing.chunkCount as number) + 1,
+          argsLength: (existing.argsLength as number) + (chunk.args?.length || 0),
           firstSeenAt: existing.firstSeenAt,
         };
 
@@ -611,7 +720,7 @@ export function handleToolCallChunks({ assistantMessageId, chunks, setMessages }
  * @param {Object} event - Event object
  * @returns {boolean} True if event is from subagent
  */
-export function isSubagentEvent(event) {
+export function isSubagentEvent(event: Record<string, unknown> | null | undefined): boolean {
   const agent = event?.agent;
   if (!agent || typeof agent !== 'string') {
     return false;
@@ -632,15 +741,23 @@ export function isSubagentEvent(event) {
  * @param {Function} params.updateSubagentCard - Callback to update subagent card
  * @returns {boolean} True if event was handled
  */
-export function handleSubagentMessageChunk({ 
-  taskId, 
-  assistantMessageId, 
-  contentType, 
-  content, 
+export function handleSubagentMessageChunk({
+  taskId,
+  assistantMessageId,
+  contentType,
+  content,
   finishReason,
   refs,
-  updateSubagentCard 
-}) {
+  updateSubagentCard
+}: {
+  taskId: string;
+  assistantMessageId: string;
+  contentType: string;
+  content: string;
+  finishReason: string | undefined;
+  refs: StreamRefs;
+  updateSubagentCard: UpdateSubagentCard;
+}): boolean {
   if (!taskId || !assistantMessageId || !updateSubagentCard) {
     return false;
   }
@@ -655,7 +772,7 @@ export function handleSubagentMessageChunk({
     }
     // finish_reason: "stop" — subagent's model call is done
     const updatedMessages = [...taskRefs.messages];
-    const msgIdx = updatedMessages.findIndex(m => m.id === assistantMessageId);
+    const msgIdx = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
     if (msgIdx !== -1) {
       updatedMessages[msgIdx] = { ...updatedMessages[msgIdx], isStreaming: false };
       taskRefs.messages = updatedMessages;
@@ -675,8 +792,8 @@ export function handleSubagentMessageChunk({
 
       // Update subagent message
       const updatedMessages = [...taskRefs.messages];
-      let messageIndex = updatedMessages.findIndex(m => m.id === assistantMessageId);
-      
+      let messageIndex = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
+
       if (messageIndex === -1) {
         // Create new message
         updatedMessages.push({
@@ -692,7 +809,7 @@ export function handleSubagentMessageChunk({
 
       const msg = updatedMessages[messageIndex];
       msg.contentSegments = [
-        ...(msg.contentSegments || []),
+        ...((msg.contentSegments as unknown[]) || []),
         {
           type: 'reasoning',
           reasoningId,
@@ -700,7 +817,7 @@ export function handleSubagentMessageChunk({
         },
       ];
       msg.reasoningProcesses = {
-        ...(msg.reasoningProcesses || {}),
+        ...((msg.reasoningProcesses as Record<string, unknown>) || {}),
         [reasoningId]: {
           content: '',
           isReasoning: true,
@@ -720,11 +837,11 @@ export function handleSubagentMessageChunk({
       if (currentReasoningIdRef.current) {
         const reasoningId = currentReasoningIdRef.current;
         const updatedMessages = [...taskRefs.messages];
-        const messageIndex = updatedMessages.findIndex(m => m.id === assistantMessageId);
-        
+        const messageIndex = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
+
         if (messageIndex !== -1) {
           const msg = updatedMessages[messageIndex];
-          const reasoningProcesses = { ...(msg.reasoningProcesses || {}) };
+          const reasoningProcesses = { ...((msg.reasoningProcesses as Record<string, Record<string, unknown>>) || {}) };
           if (reasoningProcesses[reasoningId]) {
             reasoningProcesses[reasoningId] = {
               ...reasoningProcesses[reasoningId],
@@ -748,8 +865,8 @@ export function handleSubagentMessageChunk({
   if (contentType === 'reasoning' && content && currentReasoningIdRef.current) {
     const reasoningId = currentReasoningIdRef.current;
     const updatedMessages = [...taskRefs.messages];
-    let messageIndex = updatedMessages.findIndex(m => m.id === assistantMessageId);
-    
+    let messageIndex = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
+
     // Create message if it doesn't exist (edge case: reasoning content arrives before start signal)
     if (messageIndex === -1) {
       updatedMessages.push({
@@ -764,23 +881,23 @@ export function handleSubagentMessageChunk({
     }
 
     const msg = updatedMessages[messageIndex];
-    const reasoningProcesses = { ...(msg.reasoningProcesses || {}) };
+    const reasoningProcesses = { ...((msg.reasoningProcesses as Record<string, Record<string, unknown>>) || {}) };
 
     // Create reasoning process if it doesn't exist (edge case: reasoning content arrives before start signal)
     if (!reasoningProcesses[reasoningId]) {
       // Need to add the reasoning segment to contentSegments as well
       contentOrderCounterRef.current++;
       const currentOrder = contentOrderCounterRef.current;
-      
+
       msg.contentSegments = [
-        ...(msg.contentSegments || []),
+        ...((msg.contentSegments as unknown[]) || []),
         {
           type: 'reasoning',
           reasoningId,
           order: currentOrder,
         },
       ];
-      
+
       reasoningProcesses[reasoningId] = {
         content: '',
         isReasoning: true,
@@ -788,11 +905,11 @@ export function handleSubagentMessageChunk({
         order: currentOrder,
       };
     }
-    
+
     // Update reasoning content - accumulate the content
-    const existingContent = reasoningProcesses[reasoningId]?.content || '';
+    const existingContent = (reasoningProcesses[reasoningId]?.content as string) || '';
     const newContent = existingContent + content;
-    
+
     if (process.env.NODE_ENV === 'development') {
       console.log('[handleSubagentMessageChunk] Updating reasoning content:', {
         taskId,
@@ -802,15 +919,15 @@ export function handleSubagentMessageChunk({
         newContentLength: newContent.length,
       });
     }
-    
-    const reasoningTitle = extractLastReasoningTitle(newContent) ?? reasoningProcesses[reasoningId].reasoningTitle ?? null;
+
+    const reasoningTitle = extractLastReasoningTitle(newContent) ?? (reasoningProcesses[reasoningId].reasoningTitle as string | null) ?? null;
     reasoningProcesses[reasoningId] = {
       ...reasoningProcesses[reasoningId],
       content: newContent,
       isReasoning: true,
       reasoningTitle,
     };
-    
+
     msg.reasoningProcesses = reasoningProcesses;
     taskRefs.messages = updatedMessages;
     updateSubagentCard(taskId, { messages: updatedMessages });
@@ -823,8 +940,8 @@ export function handleSubagentMessageChunk({
     const currentOrder = contentOrderCounterRef.current;
 
     const updatedMessages = [...taskRefs.messages];
-    let messageIndex = updatedMessages.findIndex(m => m.id === assistantMessageId);
-    
+    let messageIndex = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
+
     if (messageIndex === -1) {
       updatedMessages.push({
         id: assistantMessageId,
@@ -840,14 +957,14 @@ export function handleSubagentMessageChunk({
 
     const msg = updatedMessages[messageIndex];
     msg.contentSegments = [
-      ...(msg.contentSegments || []),
+      ...((msg.contentSegments as unknown[]) || []),
       {
         type: 'text',
         content,
         order: currentOrder,
       },
     ];
-    msg.content = (msg.content || '') + content;
+    msg.content = ((msg.content as string) || '') + content;
     msg.contentType = 'text';
     msg.isStreaming = true;
 
@@ -871,7 +988,13 @@ export function handleSubagentMessageChunk({
  * @param {Function} params.updateSubagentCard - Callback to update subagent card
  * @returns {boolean} True if event was handled
  */
-export function handleSubagentToolCallChunks({ taskId, assistantMessageId, chunks, refs, updateSubagentCard }) {
+export function handleSubagentToolCallChunks({ taskId, assistantMessageId, chunks, refs, updateSubagentCard }: {
+  taskId: string;
+  assistantMessageId: string;
+  chunks: ToolCallChunkRecord[];
+  refs: StreamRefs;
+  updateSubagentCard: UpdateSubagentCard;
+}): boolean {
   if (!taskId || !assistantMessageId || !chunks || !Array.isArray(chunks) || !updateSubagentCard) {
     return false;
   }
@@ -879,7 +1002,7 @@ export function handleSubagentToolCallChunks({ taskId, assistantMessageId, chunk
   const taskRefs = getOrCreateTaskRefs(refs, taskId);
   const updatedMessages = [...taskRefs.messages];
 
-  let messageIndex = updatedMessages.findIndex(m => m.id === assistantMessageId);
+  let messageIndex = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
   if (messageIndex === -1) {
     updatedMessages.push({
       id: assistantMessageId,
@@ -894,15 +1017,15 @@ export function handleSubagentToolCallChunks({ taskId, assistantMessageId, chunk
   }
 
   const msg = { ...updatedMessages[messageIndex] };
-  const pending = { ...(msg.pendingToolCallChunks || {}) };
+  const pending = { ...((msg.pendingToolCallChunks as Record<string, Record<string, unknown>>) || {}) };
 
-  chunks.forEach((chunk) => {
+  chunks.forEach((chunk: ToolCallChunkRecord) => {
     const key = `${chunk.index ?? 0}`;
     const existing = pending[key] || { toolName: null, chunkCount: 0, argsLength: 0, firstSeenAt: Date.now() };
     pending[key] = {
       toolName: chunk.name || existing.toolName,
-      chunkCount: existing.chunkCount + 1,
-      argsLength: existing.argsLength + (chunk.args?.length || 0),
+      chunkCount: (existing.chunkCount as number) + 1,
+      argsLength: (existing.argsLength as number) + (chunk.args?.length || 0),
       firstSeenAt: existing.firstSeenAt,
     };
   });
@@ -925,7 +1048,13 @@ export function handleSubagentToolCallChunks({ taskId, assistantMessageId, chunk
  * @param {Function} params.updateSubagentCard - Callback to update subagent card
  * @returns {boolean} True if event was handled
  */
-export function handleSubagentToolCalls({ taskId, assistantMessageId, toolCalls, refs, updateSubagentCard }) {
+export function handleSubagentToolCalls({ taskId, assistantMessageId, toolCalls, refs, updateSubagentCard }: {
+  taskId: string;
+  assistantMessageId: string;
+  toolCalls: ToolCallRecord[];
+  refs: StreamRefs;
+  updateSubagentCard: UpdateSubagentCard;
+}): boolean {
   if (!taskId || !assistantMessageId || !toolCalls || !Array.isArray(toolCalls) || !updateSubagentCard) {
     return false;
   }
@@ -938,16 +1067,16 @@ export function handleSubagentToolCalls({ taskId, assistantMessageId, toolCalls,
       taskId,
       assistantMessageId,
       toolCallsCount: toolCalls.length,
-      toolCallIds: toolCalls.map(tc => tc.id),
+      toolCallIds: toolCalls.map((tc: ToolCallRecord) => tc.id),
     });
   }
 
-  toolCalls.forEach((toolCall) => {
+  toolCalls.forEach((toolCall: ToolCallRecord) => {
     const toolCallId = toolCall.id;
     if (toolCallId) {
       const updatedMessages = [...taskRefs.messages];
-      let messageIndex = updatedMessages.findIndex(m => m.id === assistantMessageId);
-      
+      let messageIndex = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
+
       if (messageIndex === -1) {
         updatedMessages.push({
           id: assistantMessageId,
@@ -961,8 +1090,8 @@ export function handleSubagentToolCalls({ taskId, assistantMessageId, toolCalls,
       }
 
       const msg = updatedMessages[messageIndex];
-      const toolCallProcesses = { ...(msg.toolCallProcesses || {}) };
-      const contentSegments = [...(msg.contentSegments || [])];
+      const toolCallProcesses = { ...((msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {}) };
+      const contentSegments = [...((msg.contentSegments as Record<string, unknown>[]) || [])];
 
       if (!toolCallProcesses[toolCallId]) {
         contentOrderCounterRef.current++;
@@ -982,7 +1111,7 @@ export function handleSubagentToolCalls({ taskId, assistantMessageId, toolCalls,
           isComplete: false,
           order: currentOrder,
         };
-        
+
         if (process.env.NODE_ENV === 'development') {
           console.log('[handleSubagentToolCalls] Created new tool call:', {
             taskId,
@@ -1032,7 +1161,14 @@ export function handleSubagentToolCalls({ taskId, assistantMessageId, toolCalls,
  * @param {Function} params.updateSubagentCard - Callback to update subagent card
  * @returns {boolean} True if event was handled
  */
-export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolCallId, result, refs, updateSubagentCard }) {
+export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolCallId, result, refs, updateSubagentCard }: {
+  taskId: string;
+  assistantMessageId: string;
+  toolCallId: string;
+  result: ToolCallResultRecord;
+  refs: StreamRefs;
+  updateSubagentCard: UpdateSubagentCard;
+}): boolean {
   if (!taskId || !toolCallId || !updateSubagentCard) {
     return false;
   }
@@ -1041,37 +1177,37 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
   const { contentOrderCounterRef } = taskRefs;
 
   const updatedMessages = [...taskRefs.messages];
-  
+
   // Find the message that contains this tool call
   // tool_call_result events have a different event.id than tool_calls events,
   // so we need to search by tool_call_id instead of message ID
   let messageIndex = -1;
-  let targetMessage = null;
-  
+  let targetMessage: MessageRecord | null = null;
+
   if (process.env.NODE_ENV === 'development') {
     console.log('[handleSubagentToolCallResult] Searching for tool call:', {
       taskId,
       toolCallId,
       assistantMessageId,
-      existingMessages: updatedMessages.map(m => ({
+      existingMessages: updatedMessages.map((m: MessageRecord) => ({
         id: m.id,
-        toolCallIds: Object.keys(m.toolCallProcesses || {}),
+        toolCallIds: Object.keys((m.toolCallProcesses as Record<string, unknown>) || {}),
       })),
     });
   }
-  
+
   // First, try to find message by assistantMessageId (if provided and matches)
   if (assistantMessageId) {
-    messageIndex = updatedMessages.findIndex(m => m.id === assistantMessageId);
+    messageIndex = updatedMessages.findIndex((m: MessageRecord) => m.id === assistantMessageId);
     if (messageIndex !== -1) {
       targetMessage = updatedMessages[messageIndex];
       // Verify this message actually has the tool call
-      if (!targetMessage.toolCallProcesses?.[toolCallId]) {
+      if (!(targetMessage.toolCallProcesses as Record<string, unknown>)?.[toolCallId]) {
         if (process.env.NODE_ENV === 'development') {
           console.warn('[handleSubagentToolCallResult] Message found but tool call not in it:', {
             messageId: assistantMessageId,
             toolCallId,
-            availableToolCalls: Object.keys(targetMessage.toolCallProcesses || {}),
+            availableToolCalls: Object.keys((targetMessage.toolCallProcesses as Record<string, unknown>) || {}),
           });
         }
         messageIndex = -1;
@@ -1079,12 +1215,12 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
       }
     }
   }
-  
+
   // If not found by message ID, search for message containing this tool call
   if (messageIndex === -1) {
     for (let i = 0; i < updatedMessages.length; i++) {
       const msg = updatedMessages[i];
-      if (msg.toolCallProcesses?.[toolCallId]) {
+      if ((msg.toolCallProcesses as Record<string, unknown>)?.[toolCallId]) {
         messageIndex = i;
         targetMessage = msg;
         if (process.env.NODE_ENV === 'development') {
@@ -1097,13 +1233,13 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
       }
     }
   }
-  
+
   if (messageIndex === -1) {
     // Tool call doesn't exist yet - create new message with tool call result
     // This can happen if tool_call_result arrives before tool_calls
     contentOrderCounterRef.current++;
     const currentOrder = contentOrderCounterRef.current;
-    
+
     updatedMessages.push({
       id: assistantMessageId || `subagent-msg-${Date.now()}`,
       role: 'assistant',
@@ -1125,12 +1261,12 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
           },
           isInProgress: false,
           isComplete: true,
-          isFailed: typeof result.content === 'string' && (result.content || '').trim().startsWith('ERROR'),
+          isFailed: typeof result.content === 'string' && ((result.content as string) || '').trim().startsWith('ERROR'),
           order: currentOrder,
         },
       },
     });
-    
+
     if (process.env.NODE_ENV === 'development') {
       console.warn('[handleSubagentToolCallResult] Tool call not found, created new message:', {
         taskId,
@@ -1141,12 +1277,12 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
   } else {
     // Update existing tool call with result
     const msg = updatedMessages[messageIndex];
-    const toolCallProcesses = { ...(msg.toolCallProcesses || {}) };
-    
+    const toolCallProcesses = { ...((msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {}) };
+
     // Tool call failed only if content starts with "ERROR"
-    const resultContent = result.content || '';
+    const resultContent = (result.content as string) || '';
     const isFailed = typeof resultContent === 'string' && resultContent.trim().startsWith('ERROR');
-    
+
     if (toolCallProcesses[toolCallId]) {
       toolCallProcesses[toolCallId] = {
         ...toolCallProcesses[toolCallId],
@@ -1165,7 +1301,7 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
       contentOrderCounterRef.current++;
       const currentOrder = contentOrderCounterRef.current;
 
-      const contentSegments = [...(msg.contentSegments || [])];
+      const contentSegments = [...((msg.contentSegments as Record<string, unknown>[]) || [])];
       contentSegments.push({
         type: 'tool_call',
         toolCallId,
@@ -1189,58 +1325,58 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
 
       msg.contentSegments = contentSegments;
     }
-    
+
     msg.toolCallProcesses = toolCallProcesses;
   }
 
   taskRefs.messages = updatedMessages;
-  
+
   // Detect if the tool call that just completed was a failure
   // We need to check the tool call process that was just updated
   let justCompletedToolFailed = false;
   let justCompletedToolName = '';
-  
+
   // Find the tool call that just completed (it should be in updatedMessages now)
   for (const msg of updatedMessages) {
-    const toolCallProcesses = msg.toolCallProcesses || {};
+    const toolCallProcesses = (msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {};
     const completedToolCall = toolCallProcesses[toolCallId];
     if (completedToolCall && completedToolCall.isComplete) {
       // This is the tool call that just completed
-      justCompletedToolFailed = completedToolCall.isFailed || false;
-      justCompletedToolName = completedToolCall.toolName || '';
+      justCompletedToolFailed = (completedToolCall.isFailed as boolean) || false;
+      justCompletedToolName = (completedToolCall.toolName as string) || '';
       break;
     }
   }
-  
+
   // Update subagent card: clear currentTool when tool call completes
   // Priority:
   // 1. If the tool that just completed failed, clear currentTool immediately
   // 2. Otherwise, check if there are any other in-progress tool calls
   let hasInProgressTool = false;
   let currentToolName = '';
-  
+
   if (!justCompletedToolFailed) {
     // Only check for in-progress tools if the completed tool didn't fail
     // If it failed, we want to clear currentTool immediately
     for (const msg of updatedMessages) {
-      const toolCallProcesses = msg.toolCallProcesses || {};
+      const toolCallProcesses = (msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {};
       for (const [tcId, tcProcess] of Object.entries(toolCallProcesses)) {
         if (tcProcess.isInProgress && !tcProcess.isComplete) {
           hasInProgressTool = true;
-          currentToolName = tcProcess.toolName || '';
+          currentToolName = (tcProcess.toolName as string) || '';
           break;
         }
       }
       if (hasInProgressTool) break;
     }
   }
-  
+
   // Determine final currentTool value:
   // - If tool just failed, clear it immediately
   // - If there's an in-progress tool, show it
   // - Otherwise, clear it
   const finalCurrentTool = justCompletedToolFailed ? '' : (hasInProgressTool ? currentToolName : '');
-  
+
   if (process.env.NODE_ENV === 'development' && justCompletedToolFailed) {
     console.log('[handleSubagentToolCallResult] Tool call failed, clearing currentTool immediately:', {
       taskId,
@@ -1249,7 +1385,7 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
       reason: 'Tool call failed, clearing currentTool immediately',
     });
   }
-  
+
   // Update currentTool: clear if tool failed, otherwise use in-progress tool if any
   updateSubagentCard(taskId, {
     messages: updatedMessages,
@@ -1272,7 +1408,12 @@ export function handleSubagentToolCallResult({ taskId, assistantMessageId, toolC
  * @param {Function} params.updateSubagentCard - Callback to update subagent card
  * @returns {boolean} True if event was handled
  */
-export function handleTaskMessageQueued({ taskId, content, refs, updateSubagentCard }) {
+export function handleTaskMessageQueued({ taskId, content, refs, updateSubagentCard }: {
+  taskId: string;
+  content: string;
+  refs: StreamRefs;
+  updateSubagentCard: UpdateSubagentCard;
+}): boolean {
   if (!taskId || !content || !updateSubagentCard) {
     return false;
   }
@@ -1291,7 +1432,7 @@ export function handleTaskMessageQueued({ taskId, content, refs, updateSubagentC
 
   // Confirm an optimistic pending message if it matches, otherwise insert new one
   const pendingIdx = updatedMessages.findIndex(
-    m => m.role === 'user' && m.isPending && m.content === content
+    (m: MessageRecord) => m.role === 'user' && m.isPending && m.content === content
   );
   if (pendingIdx !== -1) {
     updatedMessages[pendingIdx] = { ...updatedMessages[pendingIdx], isPending: false };

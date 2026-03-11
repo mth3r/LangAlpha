@@ -310,7 +310,7 @@ export const updateWatchlistItem = watchlistItemsApi.updateWatchlistItem;
  * @deprecated Use listWatchlists() and listWatchlistItems() instead
  * This function is kept for backward compatibility but should not be used
  */
-export async function getWatchlistItems(): Promise<Record<string, unknown>> {
+export async function getWatchlistItems(): Promise<unknown> {
   return watchlistItemsApi.listWatchlistItems('default');
 }
 
@@ -320,8 +320,8 @@ export async function getWatchlistItems(): Promise<Record<string, unknown>> {
  * @param {string} watchlistId - The watchlist ID (UUID or 'default')
  * @returns {Promise<Object>} Created watchlist item
  */
-export async function addWatchlistItem(itemData: Record<string, unknown>, watchlistId: string = 'default'): Promise<Record<string, unknown>> {
-  return watchlistItemsApi.addWatchlistItem(watchlistId, itemData);
+export async function addWatchlistItem(itemData: Record<string, unknown>, watchlistId: string = 'default'): Promise<unknown> {
+  return watchlistItemsApi.addWatchlistItem(watchlistId, itemData as unknown as watchlistItemsApi.AddWatchlistItemPayload);
 }
 
 /**

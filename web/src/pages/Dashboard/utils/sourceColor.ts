@@ -2,7 +2,13 @@
  * Derive a deterministic hue-based color from a source/publisher name.
  * Used for source badge backgrounds in news feed cards.
  */
-export function getSourceColor(name) {
+
+export interface SourceColorResult {
+  bg: string;
+  color: string;
+}
+
+export function getSourceColor(name: string | null | undefined): SourceColorResult {
   if (!name) return { bg: 'var(--color-bg-tag)', color: 'var(--color-text-secondary)' };
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);

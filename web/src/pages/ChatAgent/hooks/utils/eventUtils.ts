@@ -6,7 +6,7 @@
  * Normalize old action values to new ones for backward compatibility.
  * Old persisted events may use 'spawned', 'message_queued', 'resumed'.
  */
-export function normalizeAction(raw) {
+export function normalizeAction(raw: string | undefined): string {
   if (raw === 'spawned') return 'init';
   if (raw === 'message_queued') return 'update';
   if (raw === 'resumed') return 'resume';

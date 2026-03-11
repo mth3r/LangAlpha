@@ -7,15 +7,30 @@ export const ACCEPTED_PDF_TYPES = ['application/pdf'];
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 export const MAX_FILES = 5;
 
+export interface Attachment {
+  file: File;
+  dataUrl: string;
+  type: string;
+}
+
+export interface ImageContext {
+  type: string;
+  data: string;
+  description: string;
+}
+
+export interface FileValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
 /**
  * Convert a File to a base64 data URL
- * @param {File} file
- * @returns {Promise<string>} data URL string
  */
-export function readFileAsDataUrl(file) {
+export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
     reader.readAsDataURL(file);
   });
@@ -23,10 +38,8 @@ export function readFileAsDataUrl(file) {
 
 /**
  * Convert attachments array to ImageContext format for additional_context
- * @param {Array<{file: File, dataUrl: string, type: string}>} attachments
- * @returns {Array<{type: string, data: string, description: string}>}
  */
-export function attachmentsToImageContexts(attachments) {
+export function attachmentsToImageContexts(attachments: Attachment[]): ImageContext[] {
   return attachments.map((a) => ({
     type: 'image',
     data: a.dataUrl,
@@ -36,10 +49,8 @@ export function attachmentsToImageContexts(attachments) {
 
 /**
  * Validate a file for upload
- * @param {File} file
- * @returns {{ valid: boolean, error?: string }}
  */
-export function validateFile(file) {
+export function validateFile(file: File): FileValidationResult {
   const allAccepted = [...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_PDF_TYPES];
   if (!allAccepted.includes(file.type)) {
     return { valid: false, error: `Unsupported file type: ${file.type || 'unknown'}` };

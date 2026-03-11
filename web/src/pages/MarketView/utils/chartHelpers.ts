@@ -1,9 +1,37 @@
+export interface OHLCDataPoint {
+  time: number;
+  close: number;
+  [key: string]: unknown;
+}
+
+export interface TimeValuePoint {
+  time: number;
+  value: number;
+}
+
+export interface RSIState {
+  avgGain: number;
+  avgLoss: number;
+  lastClose: number;
+  period: number;
+}
+
+export interface RSIResult {
+  data: TimeValuePoint[];
+  state: RSIState | null;
+}
+
+export interface RSIIncrementalResult {
+  value: number;
+  state: RSIState;
+}
+
 /**
  * Sliding-window Simple Moving Average — O(n)
  */
-export function calculateMA(data, period) {
+export function calculateMA(data: OHLCDataPoint[], period: number): TimeValuePoint[] {
   if (data.length < period) return [];
-  const result = [];
+  const result: TimeValuePoint[] = [];
   let sum = 0;
   for (let i = 0; i < period; i++) {
     sum += data[i].close;
@@ -24,9 +52,9 @@ export function calculateMA(data, period) {
  * Returns { data: [{ time, value }], state: { avgGain, avgLoss, lastClose, period } }
  * so live ticks can continue incrementally via updateRSIIncremental().
  */
-export function calculateRSI(data, period = 14) {
+export function calculateRSI(data: OHLCDataPoint[], period: number = 14): RSIResult {
   if (data.length < period + 1) return { data: [], state: null };
-  const result = [];
+  const result: TimeValuePoint[] = [];
 
   // Calculate price changes
   let avgGain = 0;
@@ -66,11 +94,11 @@ export function calculateRSI(data, period = 14) {
 
 /**
  * O(1) incremental RSI update for a single new bar.
- * @param {{ avgGain, avgLoss, lastClose, period }} prevState — from calculateRSI().state or a prior call
- * @param {number} newClose — the new bar's close price
- * @returns {{ value: number, state: { avgGain, avgLoss, lastClose, period } }}
+ * @param prevState — from calculateRSI().state or a prior call
+ * @param newClose — the new bar's close price
+ * @returns { value, state } for chaining
  */
-export function updateRSIIncremental(prevState, newClose) {
+export function updateRSIIncremental(prevState: RSIState, newClose: number): RSIIncrementalResult {
   const { avgGain: prevAvgGain, avgLoss: prevAvgLoss, lastClose, period } = prevState;
   const change = newClose - lastClose;
   const gain = change > 0 ? change : 0;

@@ -1,6 +1,6 @@
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function formatHour(h) {
+function formatHour(h: string): string {
   const hour = parseInt(h, 10);
   if (hour === 0) return '12:00 AM';
   if (hour < 12) return `${hour}:00 AM`;
@@ -8,7 +8,7 @@ function formatHour(h) {
   return `${hour - 12}:00 PM`;
 }
 
-function formatMinuteHour(min, hour) {
+function formatMinuteHour(min: string, hour: string): string {
   const h = parseInt(hour, 10);
   const m = parseInt(min, 10).toString().padStart(2, '0');
   if (h === 0) return `12:${m} AM`;
@@ -17,7 +17,7 @@ function formatMinuteHour(min, hour) {
   return `${h - 12}:${m} PM`;
 }
 
-function parseDayRange(dayField) {
+function parseDayRange(dayField: string): string {
   if (dayField === '1-5') return 'Mon\u2013Fri';
   if (dayField === '0,6' || dayField === '6,0') return 'Sat\u2013Sun';
   const parts = dayField.split(',');
@@ -27,7 +27,7 @@ function parseDayRange(dayField) {
   return dayField;
 }
 
-export function cronToHuman(expression) {
+export function cronToHuman(expression: string): string {
   if (!expression) return '';
 
   const parts = expression.trim().split(/\s+/);

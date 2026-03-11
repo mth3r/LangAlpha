@@ -5,6 +5,72 @@
 
 import { normalizeAction } from './eventUtils';
 
+/** A loosely-typed message record used throughout the chat state. */
+type MessageRecord = Record<string, unknown>;
+
+/** React-style state setter for the messages array. */
+type SetMessages = (updater: (prev: MessageRecord[]) => MessageRecord[]) => void;
+
+/** Per-pair mutable state tracked during history replay. */
+interface PairState {
+  contentOrderCounter: number;
+  reasoningId: string | null;
+  toolCallId: string | null;
+}
+
+/** Shape of an SSE history event. */
+interface HistoryEvent {
+  agent?: string;
+  content?: string;
+  timestamp?: string | number;
+  metadata?: Record<string, unknown>;
+  messages?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+/** Shape of a tool call object from the SSE event. */
+interface ToolCallRecord {
+  id?: string;
+  name?: string;
+  args?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** Shape of a tool call result from the SSE event. */
+interface ToolCallResultRecord {
+  content?: unknown;
+  content_type?: string;
+  tool_call_id?: string;
+  artifact?: unknown;
+  [key: string]: unknown;
+}
+
+/** Shape of the todo update payload. */
+interface TodoPayload {
+  todos?: unknown[];
+  total?: number;
+  completed?: number;
+  in_progress?: number;
+  pending?: number;
+  [key: string]: unknown;
+}
+
+/** Refs passed to history user message handler. */
+interface HistoryUserMessageRefs {
+  recentlySentTracker: { isRecentlySent: (content: string) => boolean };
+  currentMessageRef: { current: string | null };
+  newMessagesStartIndexRef: { current: number };
+  historyMessagesRef: { current: Set<string> };
+  [key: string]: unknown;
+}
+
+/** Refs passed to history queued message handler. */
+interface HistoryQueuedMessageRefs {
+  newMessagesStartIndexRef: { current: number };
+  historyMessagesRef: { current: Set<string> };
+  [key: string]: unknown;
+}
+
 /**
  * Helper to check if an event is from a subagent.
  * Backend convention: agent field uses "task:{task_id}" format (e.g., "task:pkyRHQ").
@@ -12,7 +78,7 @@ import { normalizeAction } from './eventUtils';
  * @param {Object} event - The history event
  * @returns {boolean} True if event is from subagent
  */
-export function isSubagentHistoryEvent(event) {
+export function isSubagentHistoryEvent(event: HistoryEvent | null | undefined): boolean {
   const agent = event?.agent;
   if (!agent || typeof agent !== 'string') {
     return false;
@@ -40,7 +106,15 @@ export function handleHistoryUserMessage({
   refs,
   messages,
   setMessages,
-}) {
+}: {
+  event: HistoryEvent;
+  pairIndex: number;
+  assistantMessagesByPair: Map<number, string>;
+  pairStateByPair: Map<number, PairState>;
+  refs: HistoryUserMessageRefs;
+  messages: MessageRecord[];
+  setMessages: SetMessages;
+}): boolean {
   const { recentlySentTracker, currentMessageRef, newMessagesStartIndexRef, historyMessagesRef } = refs;
 
   // Check if this is a new pair (not already processed)
@@ -80,22 +154,22 @@ export function handleHistoryUserMessage({
     // Create user message bubble (skip for empty content, e.g. HITL resume pairs)
     if (messageContent) {
       const currentUserMessageId = `history-user-${pairIndex}-${Date.now()}`;
-      const userMessage = {
+      const userMessage: MessageRecord = {
         id: currentUserMessageId,
         role: 'user',
         content: event.content,
         contentType: 'text',
-        timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
+        timestamp: event.timestamp ? new Date(event.timestamp as string | number) : new Date(),
         isStreaming: false,
         isHistory: true,
       };
 
       // Restore attachment metadata from persisted query metadata
-      if (event.metadata?.attachments?.length > 0) {
-        userMessage.attachments = event.metadata.attachments;
+      if ((event.metadata?.attachments as unknown[] | undefined)?.length as number > 0) {
+        userMessage.attachments = event.metadata!.attachments;
       }
 
-      setMessages((prev) => {
+      setMessages((prev: MessageRecord[]) => {
         const insertIndex = newMessagesStartIndexRef.current;
         const newMessages = [
           ...prev.slice(0, insertIndex),
@@ -124,12 +198,12 @@ export function handleHistoryUserMessage({
     const currentAssistantMessageId = `history-assistant-${pairIndex}-${Date.now()}`;
     assistantMessagesByPair.set(pairIndex, currentAssistantMessageId);
 
-    const assistantMessage = {
+    const assistantMessage: MessageRecord = {
       id: currentAssistantMessageId,
       role: 'assistant',
       content: '',
       contentType: 'text',
-      timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
+      timestamp: event.timestamp ? new Date(event.timestamp as string | number) : new Date(),
       isStreaming: false,
       isHistory: true,
       contentSegments: [],
@@ -137,7 +211,7 @@ export function handleHistoryUserMessage({
       toolCallProcesses: {},
     };
 
-    setMessages((prev) => {
+    setMessages((prev: MessageRecord[]) => {
       const insertIndex = newMessagesStartIndexRef.current;
       const newMessages = [
         ...prev.slice(0, insertIndex),
@@ -165,18 +239,25 @@ export function handleHistoryUserMessage({
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleHistoryReasoningSignal({ assistantMessageId, signalContent, pairIndex, pairState, setMessages, eventId }) {
+export function handleHistoryReasoningSignal({ assistantMessageId, signalContent, pairIndex, pairState, setMessages, eventId }: {
+  assistantMessageId: string;
+  signalContent: string;
+  pairIndex: number;
+  pairState: PairState;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   if (signalContent === 'start') {
     const reasoningId = `history-reasoning-${pairIndex}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     pairState.reasoningId = reasoningId;
     const currentOrder = eventId != null ? eventId : ++pairState.contentOrderCounter;
 
-    setMessages((prev) =>
-      prev.map((msg) => {
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) => {
         if (msg.id !== assistantMessageId) return msg;
 
         const newSegments = [
-          ...(msg.contentSegments || []),
+          ...((msg.contentSegments as unknown[]) || []),
           {
             type: 'reasoning',
             reasoningId,
@@ -185,7 +266,7 @@ export function handleHistoryReasoningSignal({ assistantMessageId, signalContent
         ];
 
         const newReasoningProcesses = {
-          ...(msg.reasoningProcesses || {}),
+          ...((msg.reasoningProcesses as Record<string, unknown>) || {}),
           [reasoningId]: {
             content: '',
             isReasoning: false, // History: already complete
@@ -206,11 +287,11 @@ export function handleHistoryReasoningSignal({ assistantMessageId, signalContent
   } else if (signalContent === 'complete') {
     if (pairState.reasoningId) {
       const reasoningId = pairState.reasoningId;
-      setMessages((prev) =>
-        prev.map((msg) => {
+      setMessages((prev: MessageRecord[]) =>
+        prev.map((msg: MessageRecord) => {
           if (msg.id !== assistantMessageId) return msg;
 
-          const reasoningProcesses = { ...(msg.reasoningProcesses || {}) };
+          const reasoningProcesses = { ...((msg.reasoningProcesses as Record<string, Record<string, unknown>>) || {}) };
           if (reasoningProcesses[reasoningId]) {
             reasoningProcesses[reasoningId] = {
               ...reasoningProcesses[reasoningId],
@@ -242,18 +323,23 @@ export function handleHistoryReasoningSignal({ assistantMessageId, signalContent
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleHistoryReasoningContent({ assistantMessageId, content, pairState, setMessages }) {
+export function handleHistoryReasoningContent({ assistantMessageId, content, pairState, setMessages }: {
+  assistantMessageId: string;
+  content: string;
+  pairState: PairState;
+  setMessages: SetMessages;
+}): boolean {
   if (content && pairState.reasoningId) {
     const reasoningId = pairState.reasoningId;
-    setMessages((prev) =>
-      prev.map((msg) => {
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) => {
         if (msg.id !== assistantMessageId) return msg;
 
-        const reasoningProcesses = { ...(msg.reasoningProcesses || {}) };
+        const reasoningProcesses = { ...((msg.reasoningProcesses as Record<string, Record<string, unknown>>) || {}) };
         if (reasoningProcesses[reasoningId]) {
           reasoningProcesses[reasoningId] = {
             ...reasoningProcesses[reasoningId],
-            content: (reasoningProcesses[reasoningId].content || '') + content,
+            content: ((reasoningProcesses[reasoningId].content as string) || '') + content,
             isReasoning: false,
             reasoningComplete: true,
             _completedAt: 1,
@@ -281,16 +367,23 @@ export function handleHistoryReasoningContent({ assistantMessageId, content, pai
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleHistoryTextContent({ assistantMessageId, content, finishReason, pairState, setMessages, eventId }) {
+export function handleHistoryTextContent({ assistantMessageId, content, finishReason, pairState, setMessages, eventId }: {
+  assistantMessageId: string;
+  content: string;
+  finishReason: string | undefined;
+  pairState: PairState;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   if (content) {
     const currentOrder = eventId != null ? eventId : ++pairState.contentOrderCounter;
 
-    setMessages((prev) =>
-      prev.map((msg) => {
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) => {
         if (msg.id !== assistantMessageId) return msg;
 
         const newSegments = [
-          ...(msg.contentSegments || []),
+          ...((msg.contentSegments as unknown[]) || []),
           {
             type: 'text',
             content,
@@ -298,7 +391,7 @@ export function handleHistoryTextContent({ assistantMessageId, content, finishRe
           },
         ];
 
-        const accumulatedText = (msg.content || '') + content;
+        const accumulatedText = ((msg.content as string) || '') + content;
 
         return {
           ...msg,
@@ -310,8 +403,8 @@ export function handleHistoryTextContent({ assistantMessageId, content, finishRe
     );
     return true;
   } else if (finishReason) {
-    setMessages((prev) =>
-      prev.map((msg) =>
+    setMessages((prev: MessageRecord[]) =>
+      prev.map((msg: MessageRecord) =>
         msg.id === assistantMessageId
           ? { ...msg, isStreaming: false }
           : msg
@@ -331,24 +424,30 @@ export function handleHistoryTextContent({ assistantMessageId, content, finishRe
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleHistoryToolCalls({ assistantMessageId, toolCalls, pairState, setMessages, eventId }) {
+export function handleHistoryToolCalls({ assistantMessageId, toolCalls, pairState, setMessages, eventId }: {
+  assistantMessageId: string;
+  toolCalls: ToolCallRecord[];
+  pairState: PairState;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   if (!toolCalls || !Array.isArray(toolCalls)) {
     return false;
   }
 
-  toolCalls.forEach((toolCall, toolIndex) => {
+  toolCalls.forEach((toolCall: ToolCallRecord, toolIndex: number) => {
     const toolCallId = toolCall.id;
 
     if (toolCallId) {
       const currentOrder = eventId != null ? eventId + toolIndex * 0.01 : ++pairState.contentOrderCounter;
 
-      setMessages((prev) =>
-        prev.map((msg) => {
+      setMessages((prev: MessageRecord[]) =>
+        prev.map((msg: MessageRecord) => {
           if (msg.id !== assistantMessageId) return msg;
 
-          const toolCallProcesses = { ...(msg.toolCallProcesses || {}) };
-          const contentSegments = [...(msg.contentSegments || [])];
-          const subagentTasks = { ...(msg.subagentTasks || {}) };
+          const toolCallProcesses = { ...((msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {}) };
+          const contentSegments = [...((msg.contentSegments as Record<string, unknown>[]) || [])];
+          const subagentTasks = { ...((msg.subagentTasks as Record<string, Record<string, unknown>>) || {}) };
 
           // Standard tool_call segment/process
           if (!toolCallProcesses[toolCallId]) {
@@ -377,13 +476,13 @@ export function handleHistoryToolCalls({ assistantMessageId, toolCalls, pairStat
           // If this tool is the Task tool (subagent spawner), also create a subagent_task segment
           // Backend uses PascalCase "Task"; accept both for compatibility
           const isTaskTool = toolCall.name === 'task' || toolCall.name === 'Task';
-          const action = normalizeAction(toolCall.args?.action || (toolCall.args?.task_id ? 'resume' : 'init'));
+          const action = normalizeAction((toolCall.args?.action as string) || (toolCall.args?.task_id ? 'resume' : 'init'));
           const isNewSpawn = action === 'init';
           if (isTaskTool && toolCallId && isNewSpawn) {
             const subagentId = toolCallId;
             // Only add the segment once per subagentId
             const hasExistingSubagentSegment = contentSegments.some(
-              (s) => s.type === 'subagent_task' && s.subagentId === subagentId
+              (s: Record<string, unknown>) => s.type === 'subagent_task' && s.subagentId === subagentId
             );
 
             if (!hasExistingSubagentSegment) {
@@ -398,16 +497,16 @@ export function handleHistoryToolCalls({ assistantMessageId, toolCalls, pairStat
             subagentTasks[subagentId] = {
               ...(subagentTasks[subagentId] || {}),
               subagentId,
-              description: toolCall.args?.description || '',
-              prompt: toolCall.args?.prompt || toolCall.args?.description || '',
-              type: toolCall.args?.subagent_type || 'general-purpose',
+              description: (toolCall.args?.description as string) || '',
+              prompt: (toolCall.args?.prompt as string) || (toolCall.args?.description as string) || '',
+              type: (toolCall.args?.subagent_type as string) || 'general-purpose',
               action: 'init',
               status: 'running',
             };
           } else if (isTaskTool && toolCallId && !isNewSpawn) {
             // Resume/follow-up call — show a new card with "resumed" indicator
             // Normalize to "task:xxx" format to match floating card keys
-            const rawTargetId = toolCall.args?.task_id || '';
+            const rawTargetId = (toolCall.args?.task_id as string) || '';
             const resumeTargetId = rawTargetId.startsWith('task:') ? rawTargetId : `task:${rawTargetId}`;
             contentSegments.push({
               type: 'subagent_task',
@@ -418,9 +517,9 @@ export function handleHistoryToolCalls({ assistantMessageId, toolCalls, pairStat
             subagentTasks[toolCallId] = {
               subagentId: toolCallId,
               resumeTargetId,
-              description: toolCall.args?.description || '',
-              prompt: toolCall.args?.prompt || toolCall.args?.description || '',
-              type: toolCall.args?.subagent_type || 'general-purpose',
+              description: (toolCall.args?.description as string) || '',
+              prompt: (toolCall.args?.prompt as string) || (toolCall.args?.description as string) || '',
+              type: (toolCall.args?.subagent_type as string) || 'general-purpose',
               action,
               status: 'running',
             };
@@ -450,20 +549,26 @@ export function handleHistoryToolCalls({ assistantMessageId, toolCalls, pairStat
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleHistoryToolCallResult({ assistantMessageId, toolCallId, result, pairState, setMessages }) {
+export function handleHistoryToolCallResult({ assistantMessageId, toolCallId, result, pairState, setMessages }: {
+  assistantMessageId: string;
+  toolCallId: string;
+  result: ToolCallResultRecord;
+  pairState: PairState;
+  setMessages: SetMessages;
+}): boolean {
   if (!toolCallId) {
     return false;
   }
 
-  setMessages((prev) =>
-    prev.map((msg) => {
+  setMessages((prev: MessageRecord[]) =>
+    prev.map((msg: MessageRecord) => {
       if (msg.id !== assistantMessageId) return msg;
 
-      const toolCallProcesses = { ...(msg.toolCallProcesses || {}) };
-      const subagentTasks = { ...(msg.subagentTasks || {}) };
+      const toolCallProcesses = { ...((msg.toolCallProcesses as Record<string, Record<string, unknown>>) || {}) };
+      const subagentTasks = { ...((msg.subagentTasks as Record<string, Record<string, unknown>>) || {}) };
 
       // Tool call failed only if content starts with "ERROR" (backend convention)
-      const resultContent = result.content || '';
+      const resultContent = (result.content as string) || '';
       const isFailed = typeof resultContent === 'string' && resultContent.trim().startsWith('ERROR');
 
       if (toolCallProcesses[toolCallId]) {
@@ -527,25 +632,32 @@ export function handleHistoryQueuedMessageInjected({
   pairStateByPair,
   refs,
   setMessages,
-}) {
+}: {
+  event: HistoryEvent;
+  pairIndex: number;
+  assistantMessagesByPair: Map<number, string>;
+  pairStateByPair: Map<number, PairState>;
+  refs: HistoryQueuedMessageRefs;
+  setMessages: SetMessages;
+}): void {
   const { newMessagesStartIndexRef, historyMessagesRef } = refs;
-  const queuedMessages = event.messages || [];
+  const queuedMessages = (event.messages || []) as Array<Record<string, unknown>>;
 
   // Create user message bubble(s) for each queued message
   for (const qMsg of queuedMessages) {
     if (!qMsg.content) continue;
     const userMsgId = `history-queued-user-${pairIndex}-${Date.now()}`;
-    const userMessage = {
+    const userMessage: MessageRecord = {
       id: userMsgId,
       role: 'user',
       content: qMsg.content,
       contentType: 'text',
-      timestamp: qMsg.timestamp ? new Date(qMsg.timestamp * 1000) : new Date(),
+      timestamp: qMsg.timestamp ? new Date((qMsg.timestamp as number) * 1000) : new Date(),
       isStreaming: false,
       isHistory: true,
       queueDelivered: true,
     };
-    setMessages((prev) => {
+    setMessages((prev: MessageRecord[]) => {
       const idx = newMessagesStartIndexRef.current;
       const next = [...prev.slice(0, idx), userMessage, ...prev.slice(idx)];
       historyMessagesRef.current.add(userMsgId);
@@ -565,7 +677,7 @@ export function handleHistoryQueuedMessageInjected({
     toolCallId: null,
   });
 
-  const assistantMessage = {
+  const assistantMessage: MessageRecord = {
     id: newAssistantId,
     role: 'assistant',
     content: '',
@@ -577,7 +689,7 @@ export function handleHistoryQueuedMessageInjected({
     reasoningProcesses: {},
     toolCallProcesses: {},
   };
-  setMessages((prev) => {
+  setMessages((prev: MessageRecord[]) => {
     const idx = newMessagesStartIndexRef.current;
     const next = [...prev.slice(0, idx), assistantMessage, ...prev.slice(idx)];
     historyMessagesRef.current.add(newAssistantId);
@@ -597,7 +709,15 @@ export function handleHistoryQueuedMessageInjected({
  * @param {Function} params.setMessages - State setter for messages
  * @returns {boolean} True if event was handled
  */
-export function handleHistoryTodoUpdate({ assistantMessageId, artifactType, artifactId, payload, pairState, setMessages, eventId }) {
+export function handleHistoryTodoUpdate({ assistantMessageId, artifactType, artifactId, payload, pairState, setMessages, eventId }: {
+  assistantMessageId: string;
+  artifactType: string;
+  artifactId: string;
+  payload: TodoPayload | null;
+  pairState: PairState;
+  setMessages: SetMessages;
+  eventId?: number | null;
+}): boolean {
   // Only handle todo_update artifacts
   if (artifactType !== 'todo_update' || !payload) {
     return false;
@@ -620,18 +740,18 @@ export function handleHistoryTodoUpdate({ assistantMessageId, artifactType, arti
 
   // Use backend event ID when available for consistent ordering across live/reconnect/replay
   const currentOrder = eventId != null ? eventId : ++pairState.contentOrderCounter;
-  
+
   console.log('[handleHistoryTodoUpdate] Creating segment with order:', currentOrder, 'for message:', assistantMessageId);
 
-  setMessages((prev) => {
-    const updated = prev.map((msg) => {
+  setMessages((prev: MessageRecord[]) => {
+    const updated = prev.map((msg: MessageRecord) => {
       if (msg.id !== assistantMessageId) return msg;
 
-      const todoListProcesses = { ...(msg.todoListProcesses || {}) };
-      const contentSegments = [...(msg.contentSegments || [])];
+      const todoListProcesses = { ...((msg.todoListProcesses as Record<string, unknown>) || {}) };
+      const contentSegments = [...((msg.contentSegments as Record<string, unknown>[]) || [])];
 
       // Check if this segment already exists (prevent duplicates from React batching)
-      const segmentExists = contentSegments.some(s => s.todoListId === segmentId);
+      const segmentExists = contentSegments.some((s: Record<string, unknown>) => s.todoListId === segmentId);
       if (segmentExists) {
         console.warn('[handleHistoryTodoUpdate] Segment already exists, skipping:', segmentId);
         return msg;
@@ -670,14 +790,14 @@ export function handleHistoryTodoUpdate({ assistantMessageId, artifactType, arti
         todoListProcesses,
       };
     });
-    
-    console.log('[handleHistoryTodoUpdate] Updated messages, checking segments:', 
-      updated.map(m => m.id === assistantMessageId ? {
+
+    console.log('[handleHistoryTodoUpdate] Updated messages, checking segments:',
+      updated.map((m: MessageRecord) => m.id === assistantMessageId ? {
         id: m.id,
-        segments: m.contentSegments?.map(s => ({ type: s.type, order: s.order })) || []
+        segments: ((m.contentSegments as Record<string, unknown>[]) || []).map((s: Record<string, unknown>) => ({ type: s.type, order: s.order }))
       } : null).filter(Boolean)
     );
-    
+
     return updated;
   });
 

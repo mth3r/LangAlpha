@@ -1,6 +1,6 @@
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'narrow' });
 
-const UNITS = [
+const UNITS: ReadonlyArray<{ unit: Intl.RelativeTimeFormatUnit; ms: number }> = [
   { unit: 'year', ms: 365.25 * 24 * 60 * 60 * 1000 },
   { unit: 'month', ms: 30.44 * 24 * 60 * 60 * 1000 },
   { unit: 'day', ms: 24 * 60 * 60 * 1000 },
@@ -9,7 +9,7 @@ const UNITS = [
   { unit: 'second', ms: 1000 },
 ];
 
-export function formatRelativeTime(date) {
+export function formatRelativeTime(date: string | Date | null | undefined): string {
   if (!date) return '\u2014';
   const d = typeof date === 'string' ? new Date(date) : date;
   const diff = d.getTime() - Date.now();
@@ -31,13 +31,13 @@ const dtf = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 });
 
-export function formatDateTime(date) {
+export function formatDateTime(date: string | Date | null | undefined): string {
   if (!date) return '\u2014';
   const d = typeof date === 'string' ? new Date(date) : date;
   return dtf.format(d);
 }
 
-export function formatDuration(startDate, endDate) {
+export function formatDuration(startDate: string | Date | null | undefined, endDate: string | Date | null | undefined): string {
   if (!startDate || !endDate) return '\u2014';
   const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
   const end = typeof endDate === 'string' ? new Date(endDate) : endDate;

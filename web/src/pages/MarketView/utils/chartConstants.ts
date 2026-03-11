@@ -6,8 +6,32 @@ export const CHART_TEXT = '#666666';
 /** @deprecated Use getChartTheme(theme).grid instead */
 export const CHART_GRID = '#1A1A1A';
 
+export interface ChartThemeColors {
+  bg: string;
+  text: string;
+  grid: string;
+  upColor: string;
+  downColor: string;
+  volumeUp: string;
+  volumeDown: string;
+  extBgPre: string;
+  extBgPost: string;
+  extVolumeUp: string;
+  extVolumeDown: string;
+  watermark: string;
+  rsiLine: string;
+  rsiTop: string;
+  rsiBottom: string;
+  baselineUp: string;
+  baselineUpFill1: string;
+  baselineUpFill2: string;
+  baselineDown: string;
+  baselineDownFill1: string;
+  baselineDownFill2: string;
+}
+
 // Light theme overrides
-export const CHART_THEME = {
+export const CHART_THEME: Record<'dark' | 'light', ChartThemeColors> = {
   dark: {
     bg: '#000000',
     text: '#666666',
@@ -56,11 +80,16 @@ export const CHART_THEME = {
   },
 };
 
-export function getChartTheme(theme) {
+export function getChartTheme(theme: 'dark' | 'light'): ChartThemeColors {
   return CHART_THEME[theme] || CHART_THEME.dark;
 }
 
-export const INTERVALS = [
+export interface IntervalConfig {
+  key: string;
+  label: string;
+}
+
+export const INTERVALS: IntervalConfig[] = [
   { key: '1s',    label: '1s'  },
   { key: '1min',  label: '1m'  },
   { key: '5min',  label: '5m'  },
@@ -75,13 +104,13 @@ export const INTERVALS = [
 export const PRIMARY_INTERVAL_KEYS = new Set(['1s', '1min', '1day']);
 
 // Days of history per interval for initial load (0 = full history)
-export const INITIAL_LOAD_DAYS = {
+export const INITIAL_LOAD_DAYS: Record<string, number> = {
   '1s': 0, '1min': 7, '5min': 30, '15min': 60, '30min': 120,
   '1hour': 180, '4hour': 365, '1day': 0,
 };
 
 // Days to prepend on scroll-left per interval
-export const SCROLL_CHUNK_DAYS = {
+export const SCROLL_CHUNK_DAYS: Record<string, number> = {
   '1s': 0, '1min': 5, '5min': 20, '15min': 30, '30min': 60,
   '1hour': 120, '4hour': 180, '1day': 365,
 };
@@ -93,13 +122,13 @@ export const RANGE_CHANGE_DEBOUNCE_MS = 300;
 
 // Stage 1 (fast) initial load — days to fetch for immediate render.
 // Intervals not listed here skip staged loading entirely.
-export const STAGE1_LOAD_DAYS = {
+export const STAGE1_LOAD_DAYS: Record<string, number> = {
   '1s': 0,    // 1s: stage 1 = no date range (today's data from backend)
   '1min': 2,  // 1min: stage 1 = 2 days (fast render)
 };
 
 // Stage 2 (background backfill) — additional days to fetch silently after stage 1.
-export const STAGE2_BACKFILL_DAYS = {
+export const STAGE2_BACKFILL_DAYS: Record<string, number> = {
   '1s': 1,    // backfill 1 prior day
   '1min': 5,  // backfill remaining 5 days (total = 2 + 5 = 7 = INITIAL_LOAD_DAYS)
 };
@@ -111,7 +140,13 @@ export const PREFETCH_ENABLED_INTERVALS = new Set(['1s']);
 export const PREFETCH_THRESHOLD = 150;
 
 // --- MA / RSI / Volume configuration ---
-export const MA_CONFIGS = [
+export interface MAConfig {
+  period: number;
+  color: string;
+  label: string;
+}
+
+export const MA_CONFIGS: MAConfig[] = [
   { period: 5,   color: '#22d3ee', label: 'MA5'   },  // cyan
   { period: 10,  color: '#34d399', label: 'MA10'  },  // green
   { period: 20,  color: '#fbbf24', label: 'MA20'  },  // yellow
@@ -119,24 +154,24 @@ export const MA_CONFIGS = [
   { period: 100, color: '#a78bfa', label: 'MA100' },  // purple
   { period: 200, color: '#f59e0b', label: 'MA200' },  // orange
 ];
-export const DEFAULT_ENABLED_MA = [20, 50];
-export const RSI_PERIODS = [7, 14, 21];
+export const DEFAULT_ENABLED_MA: number[] = [20, 50];
+export const RSI_PERIODS: number[] = [7, 14, 21];
 
 // Approximate trading bars per day per interval (extended hours: 4AM-8PM = 16h)
-export const BARS_PER_DAY = {
+export const BARS_PER_DAY: Record<string, number> = {
   '1s': 57600, '1min': 960, '5min': 192, '15min': 64, '30min': 32,
   '1hour': 16, '4hour': 4, '1day': 1,
 };
 
 // Ideal visible bar count per interval (legacy, used by scroll-load heuristics)
-export const AUTO_FIT_BARS = {
+export const AUTO_FIT_BARS: Record<string, number> = {
   '1s': 300, '1min': 390, '5min': 390, '15min': 200,
   '30min': 200, '1hour': 180, '4hour': 180, '1day': 180,
 };
 
 // Target bar spacing (pixels) per interval for readable candlestick charts.
 // Container width determines how many bars are visible at this spacing.
-export const TARGET_BAR_SPACING = {
+export const TARGET_BAR_SPACING: Record<string, number> = {
   '1s': 5,     // Dense: overview of rapid ticks
   '1min': 8,   // Sweet spot for intraday monitoring
   '5min': 8,
@@ -148,13 +183,13 @@ export const TARGET_BAR_SPACING = {
 };
 
 // --- Overlay constants ---
-export const OVERLAY_COLORS = {
+export const OVERLAY_COLORS: Record<string, string> = {
   earnings: '#10b981',
   grades: '#22d3ee',
   priceTargets: '#a78bfa',
 };
 
-export const OVERLAY_LABELS = {
+export const OVERLAY_LABELS: Record<string, string> = {
   earnings: 'Earn',
   grades: 'Grade',
   priceTargets: 'PT',
@@ -165,13 +200,15 @@ export const EXT_COLOR_PRE = '#fbbf24';   // amber — pre-market
 export const EXT_COLOR_POST = '#3b82f6';  // blue  — after-hours
 export const EXTENDED_HOURS_INTERVALS = new Set(['1s', '1min', '5min', '15min', '30min', '1hour']);
 
+export type ExtendedHoursType = 'pre' | 'post';
+
 /**
  * Check if a unix timestamp (seconds) falls outside regular market hours.
  * Times are ET wall-clock stored as UTC (the 'Z' trick).
  * Regular session: 9:30 – 16:00 ET.
  * Returns 'pre' (pre-market), 'post' (after-hours), or null (regular).
  */
-export function getExtendedHoursType(timeSec) {
+export function getExtendedHoursType(timeSec: number): ExtendedHoursType | null {
   const d = new Date(timeSec * 1000);
   const mins = d.getUTCHours() * 60 + d.getUTCMinutes();
   if (mins < 570) return 'pre';   // before 9:30
@@ -180,27 +217,38 @@ export function getExtendedHoursType(timeSec) {
 }
 
 /** @deprecated Use getExtendedHoursType(t) !== null */
-export function isExtendedHours(timeSec) {
+export function isExtendedHours(timeSec: number): boolean {
   return getExtendedHoursType(timeSec) !== null;
+}
+
+export interface ExtendedHoursRegion {
+  start: number;
+  end: number;
+  type: ExtendedHoursType;
+}
+
+export interface ChartDataPoint {
+  time: number;
+  [key: string]: unknown;
 }
 
 /**
  * Compute contiguous extended-hours time regions from chart data.
  * Returns [{start, end, type}] where type is 'pre' or 'post'.
  */
-export function computeExtendedHoursRegions(data) {
+export function computeExtendedHoursRegions(data: ChartDataPoint[]): ExtendedHoursRegion[] {
   if (!data || data.length === 0) return [];
-  const regions = [];
-  let regionStart = null;
-  let regionType = null;
-  let prevTime = null;
+  const regions: ExtendedHoursRegion[] = [];
+  let regionStart: number | null = null;
+  let regionType: ExtendedHoursType | null = null;
+  let prevTime: number | null = null;
   for (const d of data) {
     const ext = getExtendedHoursType(d.time);
     if (ext) {
       if (regionStart === null || ext !== regionType) {
-        // Close previous region if type changed (e.g. pre → post across gap)
+        // Close previous region if type changed (e.g. pre -> post across gap)
         if (regionStart !== null) {
-          regions.push({ start: regionStart, end: prevTime, type: regionType });
+          regions.push({ start: regionStart, end: prevTime!, type: regionType! });
         }
         regionStart = d.time;
         regionType = ext;
@@ -208,14 +256,14 @@ export function computeExtendedHoursRegions(data) {
       prevTime = d.time;
     } else {
       if (regionStart !== null) {
-        regions.push({ start: regionStart, end: prevTime, type: regionType });
+        regions.push({ start: regionStart, end: prevTime!, type: regionType! });
         regionStart = null;
         regionType = null;
       }
     }
   }
   if (regionStart !== null) {
-    regions.push({ start: regionStart, end: prevTime, type: regionType });
+    regions.push({ start: regionStart, end: prevTime!, type: regionType! });
   }
   return regions;
 }
@@ -224,7 +272,7 @@ export function computeExtendedHoursRegions(data) {
 export const FOREIGN_EXCHANGES = new Set(['HK', 'SS', 'SZ', 'L', 'T', 'TO', 'AX', 'DE', 'PA', 'MC']);
 
 /** Returns true for US-listed equities (not indexes, not foreign stocks). */
-export function isUSEquity(sym) {
+export function isUSEquity(sym: string | null | undefined): boolean {
   if (!sym) return true;
   if (sym.startsWith('^')) return false;
   const dotIdx = sym.lastIndexOf('.');
@@ -234,6 +282,6 @@ export function isUSEquity(sym) {
 }
 
 /** 1s interval is only supported for US equities. */
-export function supports1sInterval(sym) {
+export function supports1sInterval(sym: string | null | undefined): boolean {
   return isUSEquity(sym);
 }

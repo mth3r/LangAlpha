@@ -5,11 +5,16 @@
  * - "Error calling model 'gemini-3-pro-preview' (Bad Request): 400 Bad Request. {'message': '...', 'status': 'Bad Request'}"
  * - "Error calling model 'gpt-4' (RateLimitError): You exceeded your current quota..."
  * - Plain text error messages
- *
- * @param {string} raw - The raw error message string
- * @returns {{ title: string, detail: string|null, model: string|null, statusCode: number|null }}
  */
-export function parseErrorMessage(raw) {
+
+export interface ParsedError {
+  title: string;
+  detail: string | null;
+  model: string | null;
+  statusCode: number | null;
+}
+
+export function parseErrorMessage(raw: string): ParsedError {
   if (!raw || typeof raw !== 'string') {
     return { title: 'An error occurred', detail: null, model: null, statusCode: null };
   }
@@ -75,10 +80,10 @@ export function parseErrorMessage(raw) {
 /**
  * Attempts to extract a human-readable error message from nested JSON/dict strings.
  */
-function extractNestedErrorMessage(raw) {
+function extractNestedErrorMessage(raw: string): string | null {
   // Try to find JSON-like structure: {"error": {"message": "..."}}
   // These may appear with literal \n or python dict notation
-  const patterns = [
+  const patterns: RegExp[] = [
     // JSON "message" field inside "error" object
     /"message"\s*:\s*"([^"]+)"/,
     // Python-style 'message': 'text'
@@ -107,10 +112,10 @@ function extractNestedErrorMessage(raw) {
 /**
  * Extracts the error type from the parenthesized section of the error message.
  */
-function extractErrorType(raw) {
+function extractErrorType(raw: string): string | null {
   const match = raw.match(/\(([^)]+)\)\s*:/);
   if (match) {
-    // Convert camelCase/PascalCase to readable: "BadRequest" → "Bad Request"
+    // Convert camelCase/PascalCase to readable: "BadRequest" -> "Bad Request"
     return match[1].replace(/([a-z])([A-Z])/g, '$1 $2');
   }
   return null;

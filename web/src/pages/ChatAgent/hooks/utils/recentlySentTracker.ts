@@ -5,20 +5,28 @@
 
 const RETENTION_TIME_MS = 5 * 60 * 1000; // 5 minutes
 
+interface TrackedMessage {
+  content: string;
+  timestamp: Date;
+  id: string;
+}
+
+export interface RecentlySentTracker {
+  track: (content: string, timestamp: Date, id: string) => void;
+  isRecentlySent: (content: string) => boolean;
+  clear: () => void;
+}
+
 /**
  * Creates a tracker for recently sent messages
- * @returns {Object} Tracker object with methods
  */
-export function createRecentlySentTracker() {
-  const messages = new Map();
+export function createRecentlySentTracker(): RecentlySentTracker {
+  const messages = new Map<string, TrackedMessage>();
 
   /**
    * Tracks a recently sent message
-   * @param {string} content - Message content (trimmed)
-   * @param {Date} timestamp - Message timestamp
-   * @param {string} id - Message ID
    */
-  function track(content, timestamp, id) {
+  function track(content: string, timestamp: Date, id: string): void {
     const messageKey = `${content}-${Date.now()}`;
     messages.set(messageKey, {
       content: content.trim(),
@@ -30,10 +38,8 @@ export function createRecentlySentTracker() {
 
   /**
    * Checks if a message content was recently sent
-   * @param {string} content - Message content to check
-   * @returns {boolean} True if message was recently sent
    */
-  function isRecentlySent(content) {
+  function isRecentlySent(content: string): boolean {
     cleanup();
     return Array.from(messages.values()).some(
       (msg) => msg.content === content.trim()
@@ -43,14 +49,14 @@ export function createRecentlySentTracker() {
   /**
    * Clears all tracked messages
    */
-  function clear() {
+  function clear(): void {
     messages.clear();
   }
 
   /**
    * Removes old entries (older than retention time)
    */
-  function cleanup() {
+  function cleanup(): void {
     const cutoffTime = Date.now() - RETENTION_TIME_MS;
     for (const [key, msg] of messages.entries()) {
       if (msg.timestamp.getTime() < cutoffTime) {

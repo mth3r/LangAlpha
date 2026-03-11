@@ -10,10 +10,8 @@ const THREAD_ID_STORAGE_PREFIX = 'workspace_thread_id_';
 
 /**
  * Gets the stored thread ID for a workspace from localStorage
- * @param {string} workspaceId - The workspace ID
- * @returns {string} The stored thread ID or '__default__' if not found
  */
-export function getStoredThreadId(workspaceId) {
+export function getStoredThreadId(workspaceId: string): string {
   if (!workspaceId) return '__default__';
   try {
     const stored = localStorage.getItem(`${THREAD_ID_STORAGE_PREFIX}${workspaceId}`);
@@ -26,10 +24,8 @@ export function getStoredThreadId(workspaceId) {
 
 /**
  * Stores the thread ID for a workspace in localStorage
- * @param {string} workspaceId - The workspace ID
- * @param {string} threadId - The thread ID to store
  */
-export function setStoredThreadId(workspaceId, threadId) {
+export function setStoredThreadId(workspaceId: string, threadId: string): void {
   if (!workspaceId || !threadId || threadId === '__default__') return;
   try {
     localStorage.setItem(`${THREAD_ID_STORAGE_PREFIX}${workspaceId}`, threadId);
@@ -41,9 +37,8 @@ export function setStoredThreadId(workspaceId, threadId) {
 /**
  * Removes the stored thread ID for a workspace from localStorage
  * Used when a workspace is deleted or thread is invalidated
- * @param {string} workspaceId - The workspace ID
  */
-export function removeStoredThreadId(workspaceId) {
+export function removeStoredThreadId(workspaceId: string): void {
   if (!workspaceId) return;
   try {
     localStorage.removeItem(`${THREAD_ID_STORAGE_PREFIX}${workspaceId}`);

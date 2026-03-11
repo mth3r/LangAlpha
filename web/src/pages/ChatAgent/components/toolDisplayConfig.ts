@@ -1,10 +1,52 @@
+import type { LucideIcon } from 'lucide-react';
 import {
   TrendingUp, Building2, BarChart3, PieChart, Search, Globe,
   FilePlus, FileText, FilePen, FolderSearch, SquareChevronRight, Wrench,
   Newspaper, Brain, User, FileBarChart, Clock, ClipboardList, Zap, Settings, Terminal,
 } from 'lucide-react';
 
-export const TOOL_DISPLAY_CONFIG = {
+/** Translation function signature compatible with i18next's t() */
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+interface ToolDisplayEntry {
+  displayName: string;
+  i18nKey: string;
+  icon: LucideIcon;
+}
+
+interface ToolCallArgs {
+  symbol?: string;
+  query?: string;
+  pattern?: string;
+  url?: string;
+  file_path?: string;
+  filePath?: string;
+  description?: string;
+  name?: string;
+  action?: string;
+  [key: string]: unknown;
+}
+
+interface ToolCall {
+  args?: ToolCallArgs;
+  [key: string]: unknown;
+}
+
+interface TruncatedResultParsed {
+  isTruncated: true;
+  filePath: string | null;
+  preview: string;
+}
+
+interface NotTruncatedResult {
+  isTruncated: false;
+  filePath?: undefined;
+  preview?: undefined;
+}
+
+type ParseTruncatedResult = TruncatedResultParsed | NotTruncatedResult;
+
+export const TOOL_DISPLAY_CONFIG: Record<string, ToolDisplayEntry> = {
   // Market Data
   get_stock_daily_prices:   { displayName: 'Stock Prices',         i18nKey: 'stockPrices',         icon: TrendingUp },
   get_company_overview:     { displayName: 'Company Overview',     i18nKey: 'companyOverview',     icon: Building2 },
@@ -48,19 +90,19 @@ export const TOOL_DISPLAY_CONFIG = {
   manage_automation:        { displayName: 'Manage Automation',    i18nKey: 'manageAutomation',    icon: Settings },
 };
 
-export function getDisplayName(rawToolName, t) {
+export function getDisplayName(rawToolName: string, t?: TFn): string {
   const config = TOOL_DISPLAY_CONFIG[rawToolName];
   if (t && config?.i18nKey) return t(`toolArtifact.tool.${config.i18nKey}`);
   return config?.displayName || rawToolName;
 }
 
-export function getToolIcon(rawToolName) {
+export function getToolIcon(rawToolName: string): LucideIcon {
   return TOOL_DISPLAY_CONFIG[rawToolName]?.icon || Wrench;
 }
 
-export function getInProgressText(rawToolName, toolCall, t) {
+export function getInProgressText(rawToolName: string, toolCall: ToolCall | undefined, t?: TFn): string {
   const args = toolCall?.args;
-  const tr = t ? (key, opts) => t(`toolArtifact.inProgress.${key}`, opts) : null;
+  const tr = t ? (key: string, opts?: Record<string, unknown>) => t(`toolArtifact.inProgress.${key}`, opts) : null;
   switch (rawToolName) {
     case 'get_stock_daily_prices':
       return args?.symbol
@@ -156,7 +198,7 @@ export function getInProgressText(rawToolName, toolCall, t) {
  * Extracts a short completed-state summary from tool call args.
  * Used in both live zone (completed but not yet in accordion) and accordion rows.
  */
-export function getCompletedSummary(toolName, toolCall) {
+export function getCompletedSummary(toolName: string, toolCall: ToolCall | undefined): string | null {
   const args = toolCall?.args;
   if (!args) return null;
   if (args.description) return args.description;
@@ -172,12 +214,12 @@ export function getCompletedSummary(toolName, toolCall) {
   }
   if (args.file_path || args.filePath) {
     const fp = args.file_path || args.filePath;
-    return fp.split('/').pop() || null;
+    return fp!.split('/').pop() || null;
   }
   return null;
 }
 
-function formatByteSize(bytes, t) {
+function formatByteSize(bytes: number, t?: TFn): string | null {
   if (bytes < 100) return null;
   if (bytes < 1000) {
     return t ? t('toolArtifact.nChars', { count: bytes }) : `~${bytes} chars`;
@@ -186,10 +228,10 @@ function formatByteSize(bytes, t) {
   return t ? t('toolArtifact.nKB', { size }) : `~${size} KB`;
 }
 
-export function getPreparingText(toolName, argsLength, t) {
+export function getPreparingText(toolName: string, argsLength: number, t?: TFn): string {
   const size = formatByteSize(argsLength, t);
   const sizeLabel = size ? ` (${size})` : '';
-  const tr = t ? (key, opts) => t(`toolArtifact.preparing.${key}`, opts) : null;
+  const tr = t ? (key: string, opts?: Record<string, unknown>) => t(`toolArtifact.preparing.${key}`, opts) : null;
 
   switch (toolName) {
     case 'Write':
@@ -215,7 +257,7 @@ export function getPreparingText(toolName, argsLength, t) {
  * Detects if a tool result was truncated due to size and saved to filesystem.
  * Returns { isTruncated, filePath, preview } or { isTruncated: false }.
  */
-export function parseTruncatedResult(content) {
+export function parseTruncatedResult(content: string | null | undefined): ParseTruncatedResult {
   if (!content || typeof content !== 'string') return { isTruncated: false };
 
   if (!content.startsWith('Tool result too large')) return { isTruncated: false };
@@ -236,7 +278,7 @@ export function parseTruncatedResult(content) {
  * Matches lines like "     1\t..." or "  123\t..." and removes the prefix.
  * Only strips if the majority of lines match the pattern (to avoid false positives).
  */
-export function stripLineNumbers(content) {
+export function stripLineNumbers(content: string | null | undefined): string | null | undefined {
   if (!content || typeof content !== 'string') return content;
 
   const lines = content.split('\n');

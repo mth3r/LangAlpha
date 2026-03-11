@@ -3,9 +3,27 @@
  * Use watchlistId "default" for the user's default watchlist.
  * GET/POST /api/v1/users/me/watchlists/:id/items, PUT/DELETE .../items/:itemId
  */
+import type { AxiosError } from 'axios';
 import { api } from '@/api/client';
 
-export async function listWatchlistItems(watchlistId) {
+export interface AddWatchlistItemPayload {
+  symbol: string;
+  instrument_type: string;
+  exchange?: string;
+  name?: string;
+  notes?: string;
+  alert_settings?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateWatchlistItemPayload {
+  name?: string;
+  notes?: string;
+  alert_settings?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export async function listWatchlistItems(watchlistId: string | null | undefined): Promise<unknown> {
   const id = watchlistId == null || watchlistId === '' ? 'default' : watchlistId;
   const { data } = await api.get(
     `/api/v1/users/me/watchlists/${encodeURIComponent(id)}/items`
@@ -13,11 +31,7 @@ export async function listWatchlistItems(watchlistId) {
   return data;
 }
 
-/**
- * @param {string} watchlistId - "default" or UUID
- * @param {object} payload - { symbol, instrument_type, exchange?, name?, notes?, alert_settings?, metadata? }
- */
-export async function addWatchlistItem(watchlistId, payload) {
+export async function addWatchlistItem(watchlistId: string | null | undefined, payload: AddWatchlistItemPayload): Promise<unknown> {
   const id = watchlistId == null || watchlistId === '' ? 'default' : watchlistId;
   try {
     const { data } = await api.post(
@@ -26,22 +40,18 @@ export async function addWatchlistItem(watchlistId, payload) {
     );
     return data;
   } catch (e) {
+    const err = e as AxiosError;
     console.error(
       '[api] addWatchlistItem failed:',
-      e.response?.status,
-      e.response?.data,
-      e.message
+      err.response?.status,
+      err.response?.data,
+      err.message
     );
     throw e;
   }
 }
 
-/**
- * @param {string} watchlistId - "default" or UUID
- * @param {string} itemId - watchlist_item_id
- * @param {object} payload - { name?, notes?, alert_settings?, metadata? }
- */
-export async function updateWatchlistItem(watchlistId, itemId, payload) {
+export async function updateWatchlistItem(watchlistId: string | null | undefined, itemId: string, payload: UpdateWatchlistItemPayload): Promise<unknown> {
   const id = watchlistId == null || watchlistId === '' ? 'default' : watchlistId;
   const { data } = await api.put(
     `/api/v1/users/me/watchlists/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
@@ -50,7 +60,7 @@ export async function updateWatchlistItem(watchlistId, itemId, payload) {
   return data;
 }
 
-export async function deleteWatchlistItem(watchlistId, itemId) {
+export async function deleteWatchlistItem(watchlistId: string | null | undefined, itemId: string): Promise<void> {
   const id = watchlistId == null || watchlistId === '' ? 'default' : watchlistId;
   await api.delete(
     `/api/v1/users/me/watchlists/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`
