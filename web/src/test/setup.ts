@@ -1,9 +1,10 @@
+/// <reference types="vitest/globals" />
 import '@testing-library/jest-dom';
 
 // Mock window.matchMedia for antd/framer-motion
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: (query) => ({
+  value: (query: string) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -11,26 +12,22 @@ Object.defineProperty(window, 'matchMedia', {
     removeListener: () => {},
     addEventListener: () => {},
     removeEventListener: () => {},
-    dispatchEvent: () => {},
+    dispatchEvent: () => false,
   }),
 });
 
 // Mock IntersectionObserver
 class IntersectionObserverMock {
-  constructor() {
-    this.observe = vi.fn();
-    this.unobserve = vi.fn();
-    this.disconnect = vi.fn();
-  }
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
 }
-window.IntersectionObserver = IntersectionObserverMock;
+window.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver;
 
 // Mock ResizeObserver
 class ResizeObserverMock {
-  constructor() {
-    this.observe = vi.fn();
-    this.unobserve = vi.fn();
-    this.disconnect = vi.fn();
-  }
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
 }
-window.ResizeObserver = ResizeObserverMock;
+window.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;

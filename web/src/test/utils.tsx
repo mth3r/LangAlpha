@@ -1,5 +1,5 @@
-import React from 'react';
-import { render, renderHook } from '@testing-library/react';
+import React, { type ReactElement, type ReactNode } from 'react';
+import { render, renderHook, type RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -12,8 +12,8 @@ function createTestQueryClient() {
   });
 }
 
-function createWrapper(queryClient, route = '/') {
-  return function Wrapper({ children }) {
+function createWrapper(queryClient: QueryClient, route = '/') {
+  return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[route]}>
@@ -24,13 +24,18 @@ function createWrapper(queryClient, route = '/') {
   };
 }
 
-export function renderWithProviders(ui, { route = '/', queryClient, ...options } = {}) {
+interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper'> {
+  route?: string;
+  queryClient?: QueryClient;
+}
+
+export function renderWithProviders(ui: ReactElement, { route = '/', queryClient, ...options }: RenderWithProvidersOptions = {}) {
   const client = queryClient || createTestQueryClient();
   const Wrapper = createWrapper(client, route);
   return { ...render(ui, { wrapper: Wrapper, ...options }), queryClient: client };
 }
 
-export function renderHookWithProviders(hook, { route = '/', queryClient, ...options } = {}) {
+export function renderHookWithProviders<TResult>(hook: () => TResult, { route = '/', queryClient, ...options }: RenderWithProvidersOptions = {}) {
   const client = queryClient || createTestQueryClient();
   const wrapper = createWrapper(client, route);
   return { ...renderHook(hook, { wrapper, ...options }), queryClient: client };
