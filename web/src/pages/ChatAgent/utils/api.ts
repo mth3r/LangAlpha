@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 const baseURL = api.defaults.baseURL;
 
 /** Get Bearer auth headers for raw fetch() calls (SSE streams). */
-async function getAuthHeaders() {
+async function getAuthHeaders(): Promise<Record<string, string>> {
   if (!supabase) return {};
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -17,26 +17,26 @@ async function getAuthHeaders() {
 
 // --- Workspaces ---
 
-export async function getWorkspaces(limit = 20, offset = 0, sortBy = 'custom') {
+export async function getWorkspaces(limit: number = 20, offset: number = 0, sortBy: string = 'custom') {
   const { data } = await api.get('/api/v1/workspaces', {
     params: { limit, offset, sort_by: sortBy },
   });
   return data;
 }
 
-export async function createWorkspace(name, description = '', config = {}) {
+export async function createWorkspace(name: string, description: string = '', config: Record<string, unknown> = {}) {
   const { data } = await api.post('/api/v1/workspaces', { name, description, config });
   return data;
 }
 
-export async function deleteWorkspace(workspaceId) {
+export async function deleteWorkspace(workspaceId: string) {
   if (!workspaceId) throw new Error('Workspace ID is required');
   const id = String(workspaceId).trim();
   if (!id) throw new Error('Workspace ID cannot be empty');
   await api.delete(`/api/v1/workspaces/${id}`);
 }
 
-export async function getWorkspace(workspaceId) {
+export async function getWorkspace(workspaceId: string) {
   if (!workspaceId) throw new Error('Workspace ID is required');
   const { data } = await api.get(`/api/v1/workspaces/${workspaceId}`);
   return data;
@@ -52,13 +52,13 @@ export async function getFlashWorkspace() {
   return data;
 }
 
-export async function updateWorkspace(workspaceId, updates) {
+export async function updateWorkspace(workspaceId: string, updates: Record<string, unknown>) {
   if (!workspaceId) throw new Error('Workspace ID is required');
   const { data } = await api.put(`/api/v1/workspaces/${workspaceId}`, updates);
   return data;
 }
 
-export async function reorderWorkspaces(items) {
+export async function reorderWorkspaces(items: Array<{ workspace_id: string; position: number }>) {
   if (!items?.length) throw new Error('Reorder items are required');
   await api.post('/api/v1/workspaces/reorder', { items });
 }
@@ -70,7 +70,7 @@ export async function reorderWorkspaces(items) {
  * @param {string} threadId - The thread ID
  * @returns {Promise<Object>} Thread object with workspace_id, thread_id, title, etc.
  */
-export async function getThread(threadId) {
+export async function getThread(threadId: string) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.get(`/api/v1/threads/${threadId}`);
   return data;
@@ -83,7 +83,7 @@ export async function getThread(threadId) {
  * @param {number} offset - Pagination offset (default: 0)
  * @returns {Promise<Object>} Response with threads array, total, limit, offset
  */
-export async function getWorkspaceThreads(workspaceId, limit = 20, offset = 0) {
+export async function getWorkspaceThreads(workspaceId: string, limit: number = 20, offset: number = 0) {
   if (!workspaceId) throw new Error('Workspace ID is required');
   const { data } = await api.get('/api/v1/threads', {
     params: { workspace_id: workspaceId, limit, offset },
@@ -96,7 +96,7 @@ export async function getWorkspaceThreads(workspaceId, limit = 20, offset = 0) {
  * @param {string} threadId - The thread ID to delete
  * @returns {Promise<Object>} Response with success, thread_id, and message
  */
-export async function deleteThread(threadId) {
+export async function deleteThread(threadId: string) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.delete(`/api/v1/threads/${threadId}`);
   return data;
@@ -108,7 +108,7 @@ export async function deleteThread(threadId) {
  * @param {string} title - New thread title (max 255 chars, can be null to clear)
  * @returns {Promise<Object>} Updated thread object
  */
-export async function updateThreadTitle(threadId, title) {
+export async function updateThreadTitle(threadId: string, title: string | null) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.patch(`/api/v1/threads/${threadId}`, { title });
   return data;
@@ -116,17 +116,22 @@ export async function updateThreadTitle(threadId, title) {
 
 // --- Streaming (fetch + ReadableStream; axios not used) ---
 
-async function streamFetch(url, opts, onEvent) {
+async function streamFetch(
+  url: string,
+  opts: RequestInit,
+  onEvent: (event: Record<string, unknown>) => void
+) {
   const res = await fetch(`${baseURL}${url}`, opts);
   if (!res.ok) {
     // Handle 429 (rate limit) with structured detail
     if (res.status === 429) {
-      let detail = {};
+      let detail: Record<string, unknown> = {};
       try { detail = await res.json(); } catch { /* ignore */ }
-      const err = new Error(detail?.detail?.message || 'Rate limit exceeded');
+      const err: Error & { status?: number; rateLimitInfo?: Record<string, unknown>; retryAfter?: number | null } =
+        new Error((detail?.detail as Record<string, unknown>)?.message as string || 'Rate limit exceeded');
       err.status = 429;
-      err.rateLimitInfo = detail?.detail || {};
-      err.retryAfter = parseInt(res.headers.get('Retry-After'), 10) || null;
+      err.rateLimitInfo = (detail?.detail as Record<string, unknown>) || {};
+      err.retryAfter = parseInt(res.headers.get('Retry-After') as string, 10) || null;
       throw err;
     }
     // Handle 404 specifically for history replay (expected for new threads)
@@ -136,11 +141,11 @@ async function streamFetch(url, opts, onEvent) {
     throw new Error(`HTTP error! status: ${res.status}`);
   }
 
-  const reader = res.body.getReader();
+  const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let ev = {};
-  const processLine = (line) => {
+  let ev: { id?: string; event?: string } = {};
+  const processLine = (line: string) => {
     if (line.startsWith('id: ')) ev.id = line.slice(4).trim();
     else if (line.startsWith('event: ')) ev.event = line.slice(7).trim();
     else if (line.startsWith('data: ')) {
@@ -149,7 +154,7 @@ async function streamFetch(url, opts, onEvent) {
         if (ev.event) d.event = ev.event;
         if (ev.id != null) d._eventId = parseInt(ev.id, 10) || ev.id;
         onEvent(d);
-      } catch (e) {
+      } catch (e: unknown) {
         console.warn('[api] SSE parse error', e, line);
       }
       ev = {};
@@ -168,9 +173,9 @@ async function streamFetch(url, opts, onEvent) {
     }
     // Process any remaining buffer
     buffer.split('\n').forEach(processLine);
-  } catch (error) {
+  } catch (error: unknown) {
     // Handle incomplete chunked encoding or other stream errors
-    if (error.name === 'TypeError' && error.message.includes('network')) {
+    if (error instanceof Error && error.name === 'TypeError' && error.message.includes('network')) {
       console.warn('[api] Stream interrupted (network error):', error.message);
       disconnected = true;
     } else {
@@ -180,34 +185,34 @@ async function streamFetch(url, opts, onEvent) {
   return { disconnected };
 }
 
-export async function replayThreadHistory(threadId, onEvent = () => {}) {
+export async function replayThreadHistory(threadId: string, onEvent: (event: Record<string, unknown>) => void = () => {}) {
   if (!threadId) throw new Error('Thread ID is required');
   const authHeaders = await getAuthHeaders();
   await streamFetch(`/api/v1/threads/${threadId}/messages/replay`, { method: 'GET', headers: { ...authHeaders } }, onEvent);
 }
 
 export async function sendChatMessageStream(
-  message,
-  workspaceId,
-  threadId = null,
-  messageHistory = [],
-  planMode = false,
-  onEvent = () => {},
-  additionalContext = null,
-  agentMode = 'ptc',
-  locale = 'en-US',
-  timezone = 'America/New_York',
-  checkpointId = null,
-  forkFromTurn = null,
-  llmModel = null,
-  reasoningEffort = null,
-  fastMode = null
+  message: string,
+  workspaceId: string,
+  threadId: string | null = null,
+  messageHistory: Array<{ role: string; content: string }> = [],
+  planMode: boolean = false,
+  onEvent: (event: Record<string, unknown>) => void = () => {},
+  additionalContext: string | null = null,
+  agentMode: string = 'ptc',
+  locale: string = 'en-US',
+  timezone: string = 'America/New_York',
+  checkpointId: string | null = null,
+  forkFromTurn: number | null = null,
+  llmModel: string | null = null,
+  reasoningEffort: string | null = null,
+  fastMode: boolean | null = null
 ) {
   // For checkpoint replay (regenerate/retry), send empty messages
   const messages = checkpointId && !message
     ? []
     : [...messageHistory, { role: 'user', content: message }];
-  const body = {
+  const body: Record<string, unknown> = {
     workspace_id: workspaceId,
     messages,
     agent_mode: agentMode,
@@ -253,7 +258,7 @@ export async function sendChatMessageStream(
  * @param {string} threadId - The thread ID to check
  * @returns {Promise<Object>} Workflow status with can_reconnect, status, etc.
  */
-export async function getWorkflowStatus(threadId) {
+export async function getWorkflowStatus(threadId: string) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.get(`/api/v1/threads/${threadId}/status`);
   return data;
@@ -265,7 +270,11 @@ export async function getWorkflowStatus(threadId) {
  * @param {number|null} lastEventId - Last received event ID for deduplication
  * @param {Function} onEvent - Callback for each SSE event
  */
-export async function reconnectToWorkflowStream(threadId, lastEventId = null, onEvent = () => {}) {
+export async function reconnectToWorkflowStream(
+  threadId: string,
+  lastEventId: number | null = null,
+  onEvent: (event: Record<string, unknown>) => void = () => {}
+) {
   if (!threadId) throw new Error('Thread ID is required');
   const queryParam = lastEventId != null ? `?last_event_id=${lastEventId}` : '';
   const authHeaders = await getAuthHeaders();
@@ -282,7 +291,7 @@ export async function reconnectToWorkflowStream(threadId, lastEventId = null, on
  * @param {string} threadId - The thread ID
  * @returns {Promise<{thread_id: string, turns: Array<{turn_index: number, edit_checkpoint_id: string|null, regenerate_checkpoint_id: string}>, retry_checkpoint_id: string|null}>}
  */
-export async function fetchThreadTurns(threadId) {
+export async function fetchThreadTurns(threadId: string) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.get(`/api/v1/threads/${threadId}/turns`);
   return data;
@@ -296,7 +305,12 @@ export async function fetchThreadTurns(threadId) {
  * @param {Function} onEvent - Callback for each SSE event
  * @param {AbortSignal} signal - AbortController signal for cancellation
  */
-export async function streamSubagentTaskEvents(threadId, taskId, onEvent, signal) {
+export async function streamSubagentTaskEvents(
+  threadId: string,
+  taskId: string,
+  onEvent: (event: Record<string, unknown>) => void,
+  signal: AbortSignal
+) {
   if (!threadId) throw new Error('Thread ID is required');
   if (!taskId) throw new Error('Task ID is required');
   const authHeaders = await getAuthHeaders();
@@ -314,7 +328,7 @@ export async function streamSubagentTaskEvents(threadId, taskId, onEvent, signal
  * @param {string} content - The instruction to send
  * @returns {Promise<Object>} { success, tool_call_id, display_id, queue_position }
  */
-export async function sendSubagentMessage(threadId, taskId, content) {
+export async function sendSubagentMessage(threadId: string, taskId: string, content: string) {
   if (!threadId) throw new Error('Thread ID is required');
   if (!taskId) throw new Error('Task ID is required');
   const { data } = await api.post(
@@ -329,7 +343,7 @@ export async function sendSubagentMessage(threadId, taskId, content) {
  * @param {string} threadId - The thread ID to interrupt
  * @returns {Promise<Object>} Response data
  */
-export async function softInterruptWorkflow(threadId) {
+export async function softInterruptWorkflow(threadId: string) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.post(`/api/v1/threads/${threadId}/interrupt`);
   return data;
@@ -340,7 +354,11 @@ export async function softInterruptWorkflow(threadId) {
  * @param {string} workspaceId
  * @param {string} dirPath - e.g. "results"
  */
-export async function listWorkspaceFiles(workspaceId, dirPath = 'results', { autoStart = false, includeSystem = false } = {}) {
+export async function listWorkspaceFiles(
+  workspaceId: string,
+  dirPath: string = 'results',
+  { autoStart = false, includeSystem = false }: { autoStart?: boolean; includeSystem?: boolean } = {}
+) {
   const { data } = await api.get(`/api/v1/workspaces/${workspaceId}/files`, {
     params: { path: dirPath, include_system: includeSystem, auto_start: autoStart, wait_for_sandbox: autoStart },
   });
@@ -352,7 +370,7 @@ export async function listWorkspaceFiles(workspaceId, dirPath = 'results', { aut
  * @param {string} workspaceId
  * @param {string} filePath - e.g. "results/report.md"
  */
-export async function readWorkspaceFile(workspaceId, filePath) {
+export async function readWorkspaceFile(workspaceId: string, filePath: string) {
   const { data } = await api.get(`/api/v1/workspaces/${workspaceId}/files/read`, {
     params: { path: filePath },
   });
@@ -365,12 +383,12 @@ export async function readWorkspaceFile(workspaceId, filePath) {
  * @param {string} filePath
  * @returns {Promise<string>} Blob URL for the file
  */
-export async function downloadWorkspaceFile(workspaceId, filePath) {
+export async function downloadWorkspaceFile(workspaceId: string, filePath: string) {
   const response = await api.get(`/api/v1/workspaces/${workspaceId}/files/download`, {
     params: { path: filePath },
     responseType: 'blob',
   });
-  return URL.createObjectURL(response.data);
+  return URL.createObjectURL(response.data as Blob);
 }
 
 /**
@@ -379,12 +397,12 @@ export async function downloadWorkspaceFile(workspaceId, filePath) {
  * @param {string} filePath
  * @returns {Promise<ArrayBuffer>}
  */
-export async function downloadWorkspaceFileAsArrayBuffer(workspaceId, filePath) {
+export async function downloadWorkspaceFileAsArrayBuffer(workspaceId: string, filePath: string) {
   const response = await api.get(`/api/v1/workspaces/${workspaceId}/files/download`, {
     params: { path: filePath },
     responseType: 'arraybuffer',
   });
-  return response.data;
+  return response.data as ArrayBuffer;
 }
 
 /**
@@ -392,7 +410,7 @@ export async function downloadWorkspaceFileAsArrayBuffer(workspaceId, filePath) 
  * @param {string} workspaceId
  * @param {string} filePath
  */
-export async function triggerFileDownload(workspaceId, filePath) {
+export async function triggerFileDownload(workspaceId: string, filePath: string) {
   const blobUrl = await downloadWorkspaceFile(workspaceId, filePath);
   const fileName = filePath.split('/').pop() || 'download';
   const a = document.createElement('a');
@@ -414,8 +432,15 @@ export async function triggerFileDownload(workspaceId, filePath) {
  * @param {Function} onEvent - Callback for each SSE event
  * @param {boolean} planMode - Whether plan mode is active (to preserve SubmitPlan tool)
  */
-export async function sendHitlResponse(workspaceId, threadId, hitlResponse, onEvent = () => {}, planMode = false, modelOptions = {}) {
-  const body = {
+export async function sendHitlResponse(
+  workspaceId: string,
+  threadId: string,
+  hitlResponse: Record<string, unknown>,
+  onEvent: (event: Record<string, unknown>) => void = () => {},
+  planMode: boolean = false,
+  modelOptions: { model?: string; reasoningEffort?: string; fastMode?: boolean } = {}
+) {
+  const body: Record<string, unknown> = {
     workspace_id: workspaceId,
     messages: [],
     hitl_response: hitlResponse,
@@ -445,7 +470,7 @@ export async function sendHitlResponse(workspaceId, threadId, hitlResponse, onEv
  * @param {string} workspaceId
  * @returns {Promise<Object>} { synced, skipped, deleted, errors, total_size }
  */
-export async function backupWorkspaceFiles(workspaceId) {
+export async function backupWorkspaceFiles(workspaceId: string) {
   const { data } = await api.post(`/api/v1/workspaces/${workspaceId}/files/backup`);
   return data;
 }
@@ -455,7 +480,7 @@ export async function backupWorkspaceFiles(workspaceId) {
  * @param {string} workspaceId
  * @returns {Promise<Object>} { persisted_files: {path: hash}, total_size }
  */
-export async function getBackupStatus(workspaceId) {
+export async function getBackupStatus(workspaceId: string) {
   const { data } = await api.get(`/api/v1/workspaces/${workspaceId}/files/backup-status`);
   return data;
 }
@@ -467,7 +492,7 @@ export async function getBackupStatus(workspaceId) {
  * @param {string} content - File content to write
  * @returns {Promise<Object>} { workspace_id, path, size }
  */
-export async function writeWorkspaceFile(workspaceId, filePath, content) {
+export async function writeWorkspaceFile(workspaceId: string, filePath: string, content: string) {
   const { data } = await api.put(`/api/v1/workspaces/${workspaceId}/files/write`,
     { content },
     { params: { path: filePath } }
@@ -481,14 +506,14 @@ export async function writeWorkspaceFile(workspaceId, filePath, content) {
  * @param {string} filePath
  * @returns {Promise<Object>} { workspace_id, path, content, mime }
  */
-export async function readWorkspaceFileFull(workspaceId, filePath) {
+export async function readWorkspaceFileFull(workspaceId: string, filePath: string) {
   const { data } = await api.get(`/api/v1/workspaces/${workspaceId}/files/read`, {
     params: { path: filePath, unlimited: true },
   });
   return data;
 }
 
-export async function deleteWorkspaceFiles(workspaceId, paths) {
+export async function deleteWorkspaceFiles(workspaceId: string, paths: string[]) {
   const { data } = await api.delete(`/api/v1/workspaces/${workspaceId}/files`, {
     data: { paths },
   });
@@ -497,17 +522,17 @@ export async function deleteWorkspaceFiles(workspaceId, paths) {
 
 // --- Sandbox ---
 
-export async function getSandboxStats(workspaceId) {
+export async function getSandboxStats(workspaceId: string) {
   const { data } = await api.get(`/api/v1/workspaces/${workspaceId}/sandbox/stats`);
   return data;
 }
 
-export async function installSandboxPackages(workspaceId, packages) {
+export async function installSandboxPackages(workspaceId: string, packages: string[]) {
   const { data } = await api.post(`/api/v1/workspaces/${workspaceId}/sandbox/packages`, { packages });
   return data;
 }
 
-export async function refreshWorkspace(workspaceId) {
+export async function refreshWorkspace(workspaceId: string) {
   const { data } = await api.post(`/api/v1/workspaces/${workspaceId}/refresh`);
   return data;
 }
@@ -519,7 +544,7 @@ export async function refreshWorkspace(workspaceId) {
  * @param {string} threadId
  * @returns {Promise<Object>} { is_shared, share_token, share_url, permissions }
  */
-export async function getThreadShareStatus(threadId) {
+export async function getThreadShareStatus(threadId: string) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.get(`/api/v1/threads/${threadId}/share`);
   return data;
@@ -531,7 +556,7 @@ export async function getThreadShareStatus(threadId) {
  * @param {Object} body - { is_shared: bool, permissions?: { allow_files?: bool, allow_download?: bool } }
  * @returns {Promise<Object>} { is_shared, share_token, share_url, permissions }
  */
-export async function updateThreadSharing(threadId, body) {
+export async function updateThreadSharing(threadId: string, body: Record<string, unknown>) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.post(`/api/v1/threads/${threadId}/share`, body);
   return data;
@@ -539,7 +564,7 @@ export async function updateThreadSharing(threadId, body) {
 
 // --- Summarization ---
 
-export async function summarizeThread(threadId, keepMessages = 5) {
+export async function summarizeThread(threadId: string, keepMessages: number = 5) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.post(`/api/v1/threads/${threadId}/summarize`, null, {
     params: { keep_messages: keepMessages },
@@ -547,7 +572,7 @@ export async function summarizeThread(threadId, keepMessages = 5) {
   return data;
 }
 
-export async function offloadThread(threadId) {
+export async function offloadThread(threadId: string) {
   if (!threadId) throw new Error('Thread ID is required');
   const { data } = await api.post(`/api/v1/threads/${threadId}/offload`);
   return data;
@@ -555,11 +580,11 @@ export async function offloadThread(threadId) {
 
 // --- Skills ---
 
-const _skillsPromises = {};  // module-level cache keyed by mode
+const _skillsPromises: Record<string, Promise<unknown[]>> = {};  // module-level cache keyed by mode
 
-export async function getSkills(mode = null) {
+export async function getSkills(mode: string | null = null) {
   const key = mode || '_all';
-  if (_skillsPromises[key]) return _skillsPromises[key];
+  if (key in _skillsPromises) return _skillsPromises[key];
   _skillsPromises[key] = api.get('/api/v1/skills', { params: mode ? { mode } : {} })
     .then(({ data }) => data.skills || [])
     .catch(() => { delete _skillsPromises[key]; return []; });
@@ -568,7 +593,7 @@ export async function getSkills(mode = null) {
 
 // --- Model Metadata (eager prefetch at import time — resolved before ChatInput mounts) ---
 
-const _modelMetadataPromise = api.get('/api/v1/models')
+const _modelMetadataPromise: Promise<Record<string, unknown>> = api.get('/api/v1/models')
   .then(({ data }) => data.model_metadata || {})
   .catch(() => ({}));
 
@@ -580,7 +605,14 @@ export function getModelMetadata() {
 
 // --- Feedback ---
 
-export async function submitFeedback(threadId, turnIndex, rating, issueCategories = null, comment = null, consentHumanReview = false) {
+export async function submitFeedback(
+  threadId: string,
+  turnIndex: number,
+  rating: string,
+  issueCategories: string[] | null = null,
+  comment: string | null = null,
+  consentHumanReview: boolean = false
+) {
   const { data } = await api.post(`/api/v1/threads/${threadId}/feedback`, {
     turn_index: turnIndex,
     rating,
@@ -591,21 +623,26 @@ export async function submitFeedback(threadId, turnIndex, rating, issueCategorie
   return data;
 }
 
-export async function removeFeedback(threadId, turnIndex) {
+export async function removeFeedback(threadId: string, turnIndex: number) {
   const { data } = await api.delete(`/api/v1/threads/${threadId}/feedback`, {
     params: { turn_index: turnIndex },
   });
   return data;
 }
 
-export async function getThreadFeedback(threadId) {
+export async function getThreadFeedback(threadId: string) {
   const { data } = await api.get(`/api/v1/threads/${threadId}/feedback`);
   return data;
 }
 
 // --- File uploads ---
 
-export async function uploadWorkspaceFile(workspaceId, file, destPath = null, onProgress = null) {
+export async function uploadWorkspaceFile(
+  workspaceId: string,
+  file: File,
+  destPath: string | null = null,
+  onProgress: ((percent: number) => void) | null = null
+) {
   const formData = new FormData();
   formData.append('file', file);
   const params = destPath ? { path: destPath } : {};

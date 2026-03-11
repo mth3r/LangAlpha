@@ -3,39 +3,92 @@
  * All requests are unauthenticated — no Bearer token needed.
  */
 
-const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const baseURL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+// ---------------------------------------------------------------------------
+// Response types
+// ---------------------------------------------------------------------------
+
+export interface SharedThreadMetadata {
+  thread_id: string;
+  title: string;
+  msg_type: string;
+  created_at: string;
+  updated_at: string;
+  workspace_name: string;
+  permissions: Record<string, unknown>;
+}
+
+export interface SharedFileEntry {
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+}
+
+export interface SharedFileListResponse {
+  path: string;
+  files: SharedFileEntry[];
+  source: string;
+}
+
+export interface SharedFileReadResponse {
+  path: string;
+  content: string;
+  mime: string;
+  offset: number;
+  limit: number;
+  truncated: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// SSE event type
+// ---------------------------------------------------------------------------
+
+/** A single parsed SSE event from the replay stream. */
+export type SSEEvent = Record<string, unknown>;
+
+// ---------------------------------------------------------------------------
+// Download mode
+// ---------------------------------------------------------------------------
+
+export type DownloadMode = 'download' | 'blob' | 'arraybuffer';
+
+// ---------------------------------------------------------------------------
+// API functions
+// ---------------------------------------------------------------------------
 
 /**
  * Fetch metadata for a shared thread.
- * @param {string} shareToken
- * @returns {Promise<Object>} { thread_id, title, msg_type, created_at, updated_at, workspace_name, permissions }
  */
-export async function getSharedThread(shareToken) {
+export async function getSharedThread(shareToken: string): Promise<SharedThreadMetadata> {
   const res = await fetch(`${baseURL}/api/v1/public/shared/${shareToken}`);
   if (!res.ok) throw new Error(`Shared thread not found (${res.status})`);
-  return res.json();
+  return res.json() as Promise<SharedThreadMetadata>;
 }
 
 /**
  * Replay a shared thread's conversation as SSE events.
- * @param {string} shareToken
- * @param {Function} onEvent - Callback for each parsed SSE event
  */
-export async function replaySharedThread(shareToken, onEvent = () => {}) {
+export async function replaySharedThread(
+  shareToken: string,
+  onEvent: (event: SSEEvent) => void = () => {},
+): Promise<void> {
   const res = await fetch(`${baseURL}/api/v1/public/shared/${shareToken}/replay`);
   if (!res.ok) throw new Error(`Failed to replay shared thread (${res.status})`);
 
-  const reader = res.body.getReader();
+  const reader = (res.body as ReadableStream<Uint8Array>).getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let ev = {};
+  let ev: { id?: string; event?: string } = {};
 
-  const processLine = (line) => {
-    if (line.startsWith('id: ')) ev.id = line.slice(4).trim();
-    else if (line.startsWith('event: ')) ev.event = line.slice(7).trim();
-    else if (line.startsWith('data: ')) {
+  const processLine = (line: string): void => {
+    if (line.startsWith('id: ')) {
+      ev.id = line.slice(4).trim();
+    } else if (line.startsWith('event: ')) {
+      ev.event = line.slice(7).trim();
+    } else if (line.startsWith('data: ')) {
       try {
-        const d = JSON.parse(line.slice(6));
+        const d: SSEEvent = JSON.parse(line.slice(6));
         if (ev.event) d.event = ev.event;
         if (ev.id != null) d._eventId = parseInt(ev.id, 10) || ev.id;
         onEvent(d);
@@ -43,7 +96,9 @@ export async function replaySharedThread(shareToken, onEvent = () => {}) {
         console.warn('[shared-api] SSE parse error', e, line);
       }
       ev = {};
-    } else if (line.trim() === '') ev = {};
+    } else if (line.trim() === '') {
+      ev = {};
+    }
   };
 
   while (true) {
@@ -59,42 +114,43 @@ export async function replaySharedThread(shareToken, onEvent = () => {}) {
 
 /**
  * List files in a shared thread's workspace.
- * @param {string} shareToken
- * @param {string} path - Directory path (default ".")
- * @returns {Promise<Object>} { path, files: string[], source }
  */
-export async function getSharedFiles(shareToken, path = '.') {
+export async function getSharedFiles(
+  shareToken: string,
+  path: string = '.',
+): Promise<SharedFileListResponse> {
   const params = new URLSearchParams({ path });
   const res = await fetch(`${baseURL}/api/v1/public/shared/${shareToken}/files?${params}`);
   if (!res.ok) {
     if (res.status === 403) throw new Error('File access not permitted');
     throw new Error(`Failed to list shared files (${res.status})`);
   }
-  return res.json();
+  return res.json() as Promise<SharedFileListResponse>;
 }
 
 /**
  * Read a text file from a shared thread's workspace.
- * @param {string} shareToken
- * @param {string} path - File path
- * @returns {Promise<Object>} { path, content, mime, offset, limit, truncated }
  */
-export async function readSharedFile(shareToken, path) {
+export async function readSharedFile(
+  shareToken: string,
+  path: string,
+): Promise<SharedFileReadResponse> {
   const params = new URLSearchParams({ path });
   const res = await fetch(`${baseURL}/api/v1/public/shared/${shareToken}/files/read?${params}`);
   if (!res.ok) {
     if (res.status === 403) throw new Error('File access not permitted');
     throw new Error(`Failed to read shared file (${res.status})`);
   }
-  return res.json();
+  return res.json() as Promise<SharedFileReadResponse>;
 }
 
 /**
  * Download a raw file from a shared thread's workspace (browser download).
- * @param {string} shareToken
- * @param {string} path - File path
  */
-export async function downloadSharedFile(shareToken, path) {
+export async function downloadSharedFile(
+  shareToken: string,
+  path: string,
+): Promise<void> {
   const params = new URLSearchParams({ path });
   const res = await fetch(`${baseURL}/api/v1/public/shared/${shareToken}/files/download?${params}`);
   if (!res.ok) {
@@ -115,12 +171,19 @@ export async function downloadSharedFile(shareToken, path) {
 
 /**
  * Download a shared file in different modes (needed for FilePanel's rich viewers).
- * @param {string} shareToken
- * @param {string} path - File path
- * @param {'download' | 'blob' | 'arraybuffer'} mode
- * @returns {Promise<void | string | ArrayBuffer>} blob URL, ArrayBuffer, or triggers download
+ *
+ * - `'blob'`        returns an object URL string
+ * - `'arraybuffer'` returns an ArrayBuffer
+ * - `'download'`    triggers a browser save dialog (returns void)
  */
-export async function downloadSharedFileAs(shareToken, path, mode = 'download') {
+export async function downloadSharedFileAs(shareToken: string, path: string, mode: 'blob'): Promise<string>;
+export async function downloadSharedFileAs(shareToken: string, path: string, mode: 'arraybuffer'): Promise<ArrayBuffer>;
+export async function downloadSharedFileAs(shareToken: string, path: string, mode?: 'download'): Promise<void>;
+export async function downloadSharedFileAs(
+  shareToken: string,
+  path: string,
+  mode: DownloadMode = 'download',
+): Promise<string | ArrayBuffer | void> {
   const params = new URLSearchParams({ path });
   const res = await fetch(`${baseURL}/api/v1/public/shared/${shareToken}/files/download?${params}`);
   if (!res.ok) {
