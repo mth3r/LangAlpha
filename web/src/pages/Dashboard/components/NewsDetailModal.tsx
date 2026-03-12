@@ -442,7 +442,7 @@ function NewsDetailModal({ newsId, onClose }: NewsDetailModalProps) {
         onClose={onClose}
         sizing="fixed"
         height="92vh"
-        style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + 16px)' }}
+        style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + env(safe-area-inset-bottom, 0px) + 16px)' }}
       >
         {body}
       </MobileBottomSheet>

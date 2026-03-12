@@ -1633,7 +1633,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
           open
           onClose={handleCloseDetailPanel}
           sizing="fixed"
-          style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + 16px)' }}
+          style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + env(safe-area-inset-bottom, 0px) + 16px)' }}
         >
           <Suspense fallback={null}>
             <DetailPanel
