@@ -1,10 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef } from 'react';
 import ChatInput, { type ChatInputHandle } from '../../../components/ui/chat-input';
 import { useChatInput } from '../hooks/useChatInput';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useOnClickOutside } from '@/hooks/useOnClickOutside';
-import LangAlphaFab from '@/components/ui/langalpha-fab';
+import { MobileFabChat } from '@/components/ui/mobile-fab-chat';
 
 const SUGGESTION_CHIPS: string[] = [
   "Summarize Apple's earnings",
@@ -33,10 +31,6 @@ function ChatInputCard() {
   const chatInputRef = useRef<ChatInputHandle>(null);
   const isMobile = useIsMobile();
   const [chatExpanded, setChatExpanded] = useState(false);
-  const expandedRef = useRef<HTMLDivElement>(null);
-
-  const collapseFab = useCallback(() => setChatExpanded(false), []);
-  useOnClickOutside(expandedRef, collapseFab, isMobile && chatExpanded);
 
   const handleMobileSend = (...args: Parameters<typeof handleSend>) => {
     handleSend(...args);
@@ -45,36 +39,27 @@ function ChatInputCard() {
 
   if (isMobile) {
     return (
-      <AnimatePresence mode="wait">
-        {!chatExpanded ? (
-          <LangAlphaFab key="fab" onClick={() => setChatExpanded(true)} />
-        ) : (
-          <motion.div
-            key="input"
-            ref={expandedRef}
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed left-0 right-0 z-40 px-3"
-            style={{ bottom: 'calc(var(--bottom-tab-height, 0px) + 8px)' }}
-          >
-            <div className="dashboard-floating-chat">
-              <ChatInput
-                ref={chatInputRef}
-                onSend={handleMobileSend}
-                disabled={isLoading}
-                mode={mode}
-                onModeChange={setMode}
-                workspaces={workspaces}
-                selectedWorkspaceId={selectedWorkspaceId}
-                onWorkspaceChange={setSelectedWorkspaceId}
-                placeholder="Ask AI about market trends..."
-              />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <MobileFabChat
+        expanded={chatExpanded}
+        onExpand={() => setChatExpanded(true)}
+        onCollapse={() => setChatExpanded(false)}
+        className="fixed left-0 right-0 z-40 px-3"
+        style={{ bottom: 'calc(var(--bottom-tab-height, 0px) + 8px)' }}
+      >
+        <div className="dashboard-floating-chat">
+          <ChatInput
+            ref={chatInputRef}
+            onSend={handleMobileSend}
+            disabled={isLoading}
+            mode={mode}
+            onModeChange={setMode}
+            workspaces={workspaces}
+            selectedWorkspaceId={selectedWorkspaceId}
+            onWorkspaceChange={setSelectedWorkspaceId}
+            placeholder="Ask AI about market trends..."
+          />
+        </div>
+      </MobileFabChat>
     );
   }
 

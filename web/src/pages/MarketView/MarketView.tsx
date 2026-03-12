@@ -16,9 +16,9 @@ import { useMarketChat } from './hooks/useMarketChat';
 import { getWorkspaces } from '../ChatAgent/utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, RefreshCw, List, Info } from 'lucide-react';
-import LangAlphaFab from '@/components/ui/langalpha-fab';
-import { useOnClickOutside } from '@/hooks/useOnClickOutside';
 import CompanyOverviewPanel from './components/CompanyOverviewPanel';
+import { MobileBottomSheet } from '../../components/ui/mobile-bottom-sheet';
+import { MobileFabChat } from '../../components/ui/mobile-fab-chat';
 import { MarketDataWSProvider, useMarketDataWSContext } from './contexts/MarketDataWSContext';
 
 import { loadPref, savePref } from './utils/prefs';
@@ -130,9 +130,8 @@ function MarketViewInner() {
   const [chartImage, setChartImage] = useState<string | null>(null);       // base64 data URL
   const [chartImageDesc, setChartImageDesc] = useState<string | null>(null); // text description for LLM
   const [showOverview, setShowOverview] = useState<boolean>(false);
-  const [mobileTab, setMobileTab] = useState<'watchlist' | 'chat' | 'details' | null>(null);
+  const [mobileTab, setMobileTab] = useState<'watchlist' | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
-  const chatExpandedRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
   const [prefillMessage, setPrefillMessage] = useState<string>('');
@@ -150,9 +149,6 @@ function MarketViewInner() {
   // Persist user preferences to localStorage (dedicated effects — no other side effects)
   useEffect(() => { savePref('symbol', selectedStock); }, [selectedStock]);
   useEffect(() => { savePref('interval', selectedInterval); }, [selectedInterval]);
-
-  const collapseFab = useCallback(() => setChatExpanded(false), []);
-  useOnClickOutside(chatExpandedRef, collapseFab, isMobile && chatExpanded);
 
   // Auto-downgrade 1s → 1m when the current symbol doesn't support 1s
   useEffect(() => {
@@ -477,37 +473,28 @@ function MarketViewInner() {
           </div>
 
           {/* Floating chat input — FAB on mobile, expands on tap */}
-          <AnimatePresence mode="wait">
-            {!chatExpanded ? (
-              <LangAlphaFab key="fab" onClick={() => setChatExpanded(true)} />
-            ) : (
-              <motion.div
-                key="chat-input"
-                ref={chatExpandedRef}
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="market-mobile-chat-float"
-              >
-                <ChatInput
-                  onSend={(...args: any[]) => { (handleSendMessage as any)(...args); setChatExpanded(false); }}
-                  isLoading={isLoading}
-                  mode={mode}
-                  onModeChange={setMode as any}
-                  workspaces={workspaces as any}
-                  selectedWorkspaceId={selectedWorkspaceId}
-                  onWorkspaceChange={setSelectedWorkspaceId}
-                  onCaptureChart={handleCaptureChartForContext}
-                  chartImage={chartImage}
-                  onRemoveChartImage={() => { setChartImage(null); setChartImageDesc(null); }}
-                  prefillMessage={prefillMessage}
-                  onClearPrefill={() => setPrefillMessage('')}
-                  placeholder="Ask about this stock..."
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <MobileFabChat
+            expanded={chatExpanded}
+            onExpand={() => setChatExpanded(true)}
+            onCollapse={() => setChatExpanded(false)}
+            className="market-mobile-chat-float"
+          >
+            <ChatInput
+              onSend={(...args: any[]) => { (handleSendMessage as any)(...args); setChatExpanded(false); }}
+              isLoading={isLoading}
+              mode={mode}
+              onModeChange={setMode as any}
+              workspaces={workspaces as any}
+              selectedWorkspaceId={selectedWorkspaceId}
+              onWorkspaceChange={setSelectedWorkspaceId}
+              onCaptureChart={handleCaptureChartForContext}
+              chartImage={chartImage}
+              onRemoveChartImage={() => { setChartImage(null); setChartImageDesc(null); }}
+              prefillMessage={prefillMessage}
+              onClearPrefill={() => setPrefillMessage('')}
+              placeholder="Ask about this stock..."
+            />
+          </MobileFabChat>
 
           {/* Watchlist — left drawer overlay */}
           <AnimatePresence>
@@ -549,53 +536,20 @@ function MarketViewInner() {
           </AnimatePresence>
 
           {/* Company Overview — bottom drawer sheet */}
-          <AnimatePresence>
-            {showOverview && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="fixed inset-0 z-40"
-                  style={{ backgroundColor: 'var(--color-bg-overlay)' }}
-                  onClick={() => setShowOverview(false)}
-                />
-                <motion.div
-                  initial={{ y: '100%' }}
-                  animate={{ y: 0 }}
-                  exit={{ y: '100%' }}
-                  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-                  className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t flex flex-col"
-                  style={{
-                    backgroundColor: 'var(--color-bg-card)',
-                    borderColor: 'var(--color-border-muted)',
-                    height: '80vh',
-                  }}
-                >
-                  {/* Drag handle */}
-                  <div className="flex justify-center pt-3 pb-2">
-                    <div
-                      className="w-10 h-1 rounded-full"
-                      style={{ backgroundColor: 'var(--color-border-default)' }}
-                    />
-                  </div>
-                  <div
-                    className="overflow-y-auto px-4 flex-1"
-                    style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + 16px)' }}
-                  >
-                    <CompanyOverviewPanel
-                      symbol={selectedStock}
-                      visible={true}
-                      onClose={() => setShowOverview(false)}
-                      data={overviewData as OverviewData | null}
-                      loading={overviewLoading}
-                    />
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
+          <MobileBottomSheet
+            open={showOverview}
+            onClose={() => setShowOverview(false)}
+            sizing="fixed"
+            style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + 16px)' }}
+          >
+            <CompanyOverviewPanel
+              symbol={selectedStock}
+              visible={true}
+              onClose={() => setShowOverview(false)}
+              data={overviewData as OverviewData | null}
+              loading={overviewLoading}
+            />
+          </MobileBottomSheet>
         </div>
       ) : (
         <>
