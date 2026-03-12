@@ -608,7 +608,7 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
           <div className="w-full max-w-[768px] mx-auto flex flex-col gap-8">
 
             {/* Workspace Header */}
-            <div className="w-full flex flex-col items-center mt-[8vh] enter-fade-up enter-fade-up-d1">
+            <div className="w-full flex flex-col items-center mt-2 md:mt-[8vh] enter-fade-up enter-fade-up-d1">
               <div
                 className="flex items-center justify-center transition-colors cursor-pointer"
                 onClick={!isFlash ? () => setShowSandboxPanel(true) : undefined}

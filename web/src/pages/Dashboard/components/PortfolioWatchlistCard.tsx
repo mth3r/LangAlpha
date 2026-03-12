@@ -360,10 +360,10 @@ function PortfolioWatchlistCard({
         <h2 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
           {activeTab === 'watchlist' ? 'Watchlist' : 'Portfolio'}
         </h2>
-        <div className="flex rounded-lg p-1" style={{ backgroundColor: 'var(--color-bg-tag)' }}>
+        <div className="flex rounded-xl p-1" style={{ backgroundColor: 'var(--color-bg-tag)' }}>
           <button
             onClick={() => setActiveTab('watchlist')}
-            className="px-3 py-1 text-xs font-medium rounded-md transition-all"
+            className="px-3 py-1 text-xs font-medium rounded-lg transition-all"
             style={{
               backgroundColor: activeTab === 'watchlist' ? 'var(--color-bg-elevated)' : 'transparent',
               color: activeTab === 'watchlist' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
@@ -373,7 +373,7 @@ function PortfolioWatchlistCard({
           </button>
           <button
             onClick={() => setActiveTab('portfolio')}
-            className="px-3 py-1 text-xs font-medium rounded-md transition-all"
+            className="px-3 py-1 text-xs font-medium rounded-lg transition-all"
             style={{
               backgroundColor: activeTab === 'portfolio' ? 'var(--color-bg-elevated)' : 'transparent',
               color: activeTab === 'portfolio' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
