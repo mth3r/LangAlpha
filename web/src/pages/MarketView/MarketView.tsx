@@ -540,7 +540,7 @@ function MarketViewInner() {
             open={showOverview}
             onClose={() => setShowOverview(false)}
             sizing="fixed"
-            style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + env(safe-area-inset-bottom, 0px) + 16px)' }}
+            style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + 16px)' }}
           >
             <CompanyOverviewPanel
               symbol={selectedStock}

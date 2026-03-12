@@ -6,7 +6,7 @@
 /* ---------- Semantic color tokens (hex/rgba for inline use) ---------- */
 :root {
   --sidebar-width: 80px;
-  --bottom-tab-height: 78px; /* 62px pill + 8px top pad + 8px bottom pad */
+  --bottom-tab-height: calc(78px + env(safe-area-inset-bottom, 0px));
 
   --color-bg-page: #000000;
   --color-bg-card: #0A0A0A;
