@@ -1,12 +1,27 @@
-import React, { Suspense, useCallback, useState, useEffect } from 'react';
+import React, { Suspense, useCallback, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { queryKeys } from '../../lib/queryKeys';
 import { getWorkspaceThreads, getThread } from './utils/api';
+import { getChatSession, clearChatSession } from './hooks/utils/chatSessionRestore';
 import ChatView from './components/ChatView';
 import './ChatAgent.css';
+
+// View depth for direction-aware transitions: gallery(0) → threads(1) → chat(2)
+function getViewDepth(threadId?: string, workspaceId?: string): number {
+  if (threadId) return 2;
+  if (workspaceId) return 1;
+  return 0;
+}
+
+const desktopFadeVariants = {
+  enter: { opacity: 0 },
+  center: { opacity: 1 },
+  exit: { opacity: 0 },
+};
 
 const WorkspaceGallery = React.lazy(() => import('./components/WorkspaceGallery'));
 const ThreadGallery = React.lazy(() => import('./components/ThreadGallery'));
@@ -39,7 +54,55 @@ function ChatAgent(): React.ReactElement | null {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const state = location.state as LocationState | null;
+
+  // Detect browser-initiated navigation (iOS swipe-back, Android back button).
+  // When popstate triggers navigation, iOS Safari already shows its own page
+  // transition animation. Setting direction=0 tells our variants to skip animation
+  // so we don't get a double-transition flicker.
+  const popstateNavRef = useRef(false);
+  useEffect(() => {
+    const onPopState = () => { popstateNavRef.current = true; };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // Track navigation direction synchronously (must be computed during render
+  // so AnimatePresence popLayout mode gets the correct custom prop immediately)
+  const prevDepthRef = useRef(getViewDepth(threadId, urlWorkspaceId));
+  const navDirectionRef = useRef(1);
+  const currentDepth = getViewDepth(threadId, urlWorkspaceId);
+  if (currentDepth !== prevDepthRef.current) {
+    navDirectionRef.current = currentDepth > prevDepthRef.current ? 1 : -1;
+    prevDepthRef.current = currentDepth;
+  }
+  // On mobile, use direction=0 for popstate navigations to skip our animations
+  const isPopstateNav = isMobile && popstateNavRef.current;
+  if (popstateNavRef.current) popstateNavRef.current = false;
+  const navDirection = isPopstateNav ? 0 : navDirectionRef.current;
+
+  // Session restore: when landing at /chat (gallery) with a saved session,
+  // navigate to the deep route. This creates the natural history stack:
+  // [previous page] → /chat → /chat/:workspaceId or /chat/t/:threadId
+  // so Safari's back gesture goes to WorkspaceGallery, not the previous page.
+  // Read session synchronously (before WorkspaceGallery mounts and clears it).
+  const pendingSessionRef = useRef<ReturnType<typeof getChatSession>>(undefined as any);
+  if (pendingSessionRef.current === undefined) {
+    pendingSessionRef.current = (!urlWorkspaceId && !threadId) ? getChatSession() : null;
+  }
+  useEffect(() => {
+    const session = pendingSessionRef.current;
+    pendingSessionRef.current = null;
+    if (!session) return;
+    if (session.threadId) {
+      navigate(`/chat/t/${session.threadId}`, {
+        state: { workspaceId: session.workspaceId },
+      });
+    } else {
+      navigate(`/chat/${session.workspaceId}`);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resolve workspaceId: URL param (thread gallery) > location state (navigated from app) > API lookup
   const [resolvedWorkspaceId, setResolvedWorkspaceId] = useState<string | null>(
@@ -196,14 +259,23 @@ function ChatAgent(): React.ReactElement | null {
     );
   }
 
+  // On mobile, skip AnimatePresence entirely — iOS/Android provide their own
+  // back-gesture page transitions, and layering framer-motion on top causes flicker.
+  // Tap-based forward navigation is instant (acceptable on mobile).
+  if (isMobile) {
+    return <div style={{ height: '100%' }}>{content}</div>;
+  }
+
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="wait" custom={navDirection}>
       <motion.div
         key={viewKey}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+        custom={navDirection}
+        variants={desktopFadeVariants}
+        initial="enter"
+        animate="center"
+        exit="exit"
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         style={{ height: '100%' }}
       >
         {content}

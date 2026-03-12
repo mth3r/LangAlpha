@@ -26,8 +26,9 @@ import { WorkspaceProvider } from '../contexts/WorkspaceContext';
 import SubagentStatusBar from './SubagentStatusBar';
 import TodoDrawer from './TodoDrawer';
 import { parseErrorMessage } from '../utils/parseErrorMessage';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import { MobileBottomSheet } from '@/components/ui/mobile-bottom-sheet';
+
 
 const FilePanel = React.lazy(() => import('./FilePanel'));
 const DetailPanel = React.lazy(() => import('./DetailPanel'));
@@ -255,6 +256,7 @@ function SubagentStatusIndicator({ status, currentTool, toolCalls = 0, messages 
 function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspaceName }: ChatViewProps): React.ReactElement | null {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const containerRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const subagentScrollAreaRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -799,12 +801,77 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
   }, [rightPanelWidth]);
 
   // Open a file in the right panel from chat tool calls
+  // --- Mobile back-button integration for panels ---
+  // Push a sentinel history entry when a panel opens so that the browser back
+  // gesture closes the panel instead of navigating away from ChatView.
+  //
+  // Key: we use raw pushState (not React Router's navigate) and CLONE the
+  // current history.state so React Router's idx/key tracking stays intact.
+  // When the sentinel is popped, RR sees delta=0 and bails out — no re-render,
+  // no route change, no flicker. Only our popstate handler fires to close the panel.
+  //
+  // Programmatic history.back() (explicit close) does NOT trigger iOS's visual
+  // page transition — only the edge swipe gesture does.
+  const panelHistoryPushedRef = useRef(false);
+
+  const pushPanelHistory = useCallback(() => {
+    if (!isMobile || panelHistoryPushedRef.current) return;
+    panelHistoryPushedRef.current = true;
+    window.history.pushState(
+      { ...window.history.state, _panelSentinel: true },
+      '',
+      window.location.href,
+    );
+  }, [isMobile]);
+
+  const popPanelHistory = useCallback(() => {
+    if (!isMobile || !panelHistoryPushedRef.current) return;
+    panelHistoryPushedRef.current = false;
+    window.history.back();
+  }, [isMobile]);
+
+  // Listen for popstate — close panel if our sentinel was popped by back gesture
+  useEffect(() => {
+    if (!isMobile) return;
+    const onPopState = () => {
+      if (panelHistoryPushedRef.current) {
+        panelHistoryPushedRef.current = false;
+        setRightPanelType(null);
+        setDetailToolCall(null);
+        setDetailPlanData(null);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isMobile]);
+
+  // Clean up sentinel on unmount (e.g. navigating away with panel still open).
+  // Use replaceState to silently neutralize the sentinel instead of history.back(),
+  // which would fire a popstate after our listener is already cleaned up and could
+  // cause React Router to navigate backward unexpectedly.
+  useEffect(() => {
+    return () => {
+      if (panelHistoryPushedRef.current) {
+        panelHistoryPushedRef.current = false;
+        const state = window.history.state;
+        if (state?._panelSentinel) {
+          window.history.replaceState(
+            { ...state, _panelSentinel: undefined },
+            '',
+            window.location.href,
+          );
+        }
+      }
+    };
+  }, []);
+
   const handleOpenFileFromChat = useCallback((filePath: string) => {
     setRightPanelWidth(clampPanelWidth(850));
     setRightPanelType('file');
     setFilePanelTargetDir(null);
     setFilePanelTargetFile(filePath);
-  }, [clampPanelWidth]);
+    pushPanelHistory();
+  }, [clampPanelWidth, pushPanelHistory]);
 
   // Open file panel filtered to a specific directory
   const handleOpenDirFromChat = useCallback((dirPath: string) => {
@@ -812,7 +879,8 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
     setRightPanelType('file');
     setFilePanelTargetFile(null);
     setFilePanelTargetDir(dirPath);
-  }, [clampPanelWidth]);
+    pushPanelHistory();
+  }, [clampPanelWidth, pushPanelHistory]);
 
   // Determine detail panel width based on content type
   const getDetailPanelWidth = useCallback((toolCallProcess: ToolCallProcessRecord | null) => {
@@ -842,7 +910,8 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
     setDetailPlanData(null);
     setRightPanelWidth(getDetailPanelWidth(toolCallProcess));
     setRightPanelType('detail');
-  }, [getDetailPanelWidth]);
+    pushPanelHistory();
+  }, [getDetailPanelWidth, pushPanelHistory]);
 
   // Open plan detail in right panel
   const handlePlanDetailClick = useCallback((planData: PlanData) => {
@@ -850,24 +919,28 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
     setDetailToolCall(null);
     setRightPanelWidth(clampPanelWidth(550));
     setRightPanelType('detail');
-  }, [clampPanelWidth]);
+    pushPanelHistory();
+  }, [clampPanelWidth, pushPanelHistory]);
 
   // Close detail panel (shared by MobileBottomSheet + DetailPanel onClose)
   const handleCloseDetailPanel = useCallback(() => {
     setRightPanelType(null);
     setDetailToolCall(null);
     setDetailPlanData(null);
-  }, []);
+    popPanelHistory();
+  }, [popPanelHistory]);
 
   // Toggle file panel
   const handleToggleFilePanel = useCallback(() => {
     if (rightPanelType === 'file') {
       setRightPanelType(null);
+      popPanelHistory();
     } else {
       setRightPanelWidth(clampPanelWidth(850));
       setRightPanelType('file');
+      pushPanelHistory();
     }
-  }, [rightPanelType, clampPanelWidth]);
+  }, [rightPanelType, clampPanelWidth, pushPanelHistory, popPanelHistory]);
 
   // Add context from FilePanel or message selection to ChatInput
   const handleAddContext = useCallback((ctx: any) => { // TODO: type properly
@@ -1192,7 +1265,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
                            scrollAreaRef.current;
     if (scrollContainer) {
       setTimeout(() => {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
       }, 0);
     }
   }, [messages]);
@@ -1212,7 +1285,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
                            subagentScrollAreaRef.current;
     if (scrollContainer) {
       setTimeout(() => {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
       }, 0);
     }
   }, [activeAgent?.messages]);
@@ -1232,6 +1305,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
   return (
     <WorkspaceProvider workspaceId={workspaceId} downloadFile={null}>
     <motion.div
+      ref={containerRef}
       initial={_navPanelVisible ? false : { y: 10 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
@@ -1370,6 +1444,14 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: '-100%', opacity: 0 }}
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  {...(isMobile ? {
+                    drag: 'x' as const,
+                    dragConstraints: { left: -320, right: 0 },
+                    dragElastic: { left: 0.3, right: 0 },
+                    onDragEnd: (_: unknown, info: PanInfo) => {
+                      if (info.velocity.x < -300 || info.offset.x < -100) handleNavMinimize();
+                    },
+                  } : {})}
                   style={{ width: '100%', height: '100%', position: 'absolute', left: 0, top: 0 }}
                 >
                   {/* Minimize button — top right corner */}
@@ -1644,29 +1726,87 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
             />
           </Suspense>
         </MobileBottomSheet>
+      ) : isMobile ? (
+        /* Mobile: no AnimatePresence — avoids exit animation restart when React Router
+           re-renders mid-exit (popstate triggers RR location change during framer-motion
+           exit, causing the panel to briefly re-appear and slide out again).
+           Entry animation + drag-to-dismiss still work via motion.div. */
+        rightPanelType && (
+          <motion.div
+            key={rightPanelType}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={{ left: 0, right: 0.5 }}
+            onDragEnd={(_: unknown, info: PanInfo) => {
+              if (info.velocity.x > 300 || info.offset.x > 120) {
+                setRightPanelType(null);
+                setDetailToolCall(null);
+                setDetailPlanData(null);
+                popPanelHistory();
+              }
+            }}
+            className="flex overflow-hidden mobile-panel-overlay"
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 30, backgroundColor: 'var(--color-bg-page)' }}
+          >
+            <div className="flex-shrink-0 h-full" style={{ width: '100%' }}>
+              <Suspense fallback={null}>
+                {rightPanelType === 'file' ? (
+                  <FilePanel
+                    workspaceId={workspaceId}
+                    onClose={() => { setRightPanelType(null); popPanelHistory(); }}
+                    targetFile={filePanelTargetFile}
+                    onTargetFileHandled={() => setFilePanelTargetFile(null)}
+                    targetDirectory={filePanelTargetDir}
+                    onTargetDirHandled={() => setFilePanelTargetDir(null)}
+                    files={workspaceFiles}
+                    filesLoading={filesLoading}
+                    filesError={filesError}
+                    onRefreshFiles={refreshFiles}
+                    onAddContext={handleAddContext}
+                    showSystemFiles={showSystemFiles}
+                    onToggleSystemFiles={() => {
+                      setShowSystemFiles((v) => {
+                        localStorage.setItem('filePanel.showSystemFiles', String(!v));
+                        return !v;
+                      });
+                    }}
+                  />
+                ) : rightPanelType === 'detail' && (detailToolCall || detailPlanData) ? (
+                  <DetailPanel
+                    toolCallProcess={detailToolCall}
+                    planData={detailPlanData}
+                    onClose={handleCloseDetailPanel}
+                    onOpenFile={handleOpenFileFromChat}
+                    onOpenSubagentTask={handleOpenSubagentTask}
+                  />
+                ) : null}
+              </Suspense>
+            </div>
+          </motion.div>
+        )
       ) : (
         <AnimatePresence>
           {rightPanelType && (
             <motion.div
-              initial={isMobile ? { x: '100%' } : { width: 0, opacity: 0 }}
-              animate={isMobile ? { x: 0 } : { width: rightPanelWidth + DIVIDER_WIDTH, opacity: 1 }}
-              exit={isMobile ? { x: '100%' } : { width: 0, opacity: 0 }}
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: rightPanelWidth + DIVIDER_WIDTH, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
               transition={{ duration: isDragging ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className={isMobile ? 'flex overflow-hidden mobile-panel-overlay' : 'flex flex-shrink-0 overflow-hidden'}
-              style={isMobile ? { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 30, backgroundColor: 'var(--color-bg-page)' } : undefined}
+              className="flex flex-shrink-0 overflow-hidden"
             >
-              {!isMobile && (
-                <div
-                  className="chat-split-divider"
-                  onMouseDown={handleDividerMouseDown}
-                />
-              )}
-              <div className="flex-shrink-0 h-full" style={{ width: isMobile ? '100%' : rightPanelWidth }}>
+              <div
+                className="chat-split-divider"
+                onMouseDown={handleDividerMouseDown}
+              />
+              <div className="flex-shrink-0 h-full" style={{ width: rightPanelWidth }}>
                 <Suspense fallback={null}>
                   {rightPanelType === 'file' ? (
                     <FilePanel
                       workspaceId={workspaceId}
-                      onClose={() => setRightPanelType(null)}
+                      onClose={() => { setRightPanelType(null); popPanelHistory(); }}
                       targetFile={filePanelTargetFile}
                       onTargetFileHandled={() => setFilePanelTargetFile(null)}
                       targetDirectory={filePanelTargetDir}
