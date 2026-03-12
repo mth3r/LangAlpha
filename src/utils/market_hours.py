@@ -179,3 +179,17 @@ def seconds_until_next_open(now: datetime | None = None) -> int:
 
     # Fallback: shouldn't happen but return 12 hours as safe default
     return 43200
+
+
+def today_market_open_ms() -> int | None:
+    """Return today's regular-session market open (9:30 ET) as Unix ms.
+
+    Returns None if today is not a trading day or market hasn't opened yet.
+    """
+    now = datetime.now(ET)
+    if not _is_trading_day(now.date()):
+        return None
+    if now.time() < _MARKET_OPEN:
+        return None
+    open_dt = datetime.combine(now.date(), _MARKET_OPEN, tzinfo=ET)
+    return int(open_dt.timestamp() * 1000)

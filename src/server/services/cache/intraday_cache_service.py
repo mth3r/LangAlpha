@@ -27,20 +27,35 @@ from src.server.services.cache._ohlcv_envelope import (
     watermark_to_date_str,
 )
 from src.utils.cache.redis_cache import get_cache_client
-from src.utils.market_hours import current_market_phase, is_market_closed, seconds_until_next_open
+from src.utils.market_hours import current_market_phase, is_market_closed, seconds_until_next_open, today_market_open_ms
+
+
+# Max gap tolerance between market open and first cached bar (10 min in ms).
+# If the first bar is more than this after market open, the cache has a
+# coverage gap and should be discarded for a full re-fetch.
+_GAP_TOLERANCE_MS = 10 * 60 * 1000
 
 
 def _should_discard_envelope(envelope: dict) -> bool:
     """Return True if the cached envelope should be discarded for a sync re-fetch.
 
-    Covers two cases:
+    Covers three cases:
     - Stale date: cached data is from a previous trading day.
     - Day-boundary: cached as ``complete`` but market is now active.
+    - Coverage gap: first bar is significantly after market open.
     """
     if _is_stale_date(envelope):
         return True
     if envelope.get("complete") and not is_market_closed():
         return True
+    # Coverage gap: bars start well after market open
+    bars = envelope.get("bars")
+    if bars and not envelope.get("complete"):
+        open_ms = today_market_open_ms()
+        if open_ms is not None:
+            first_bar_time = bars[0].get("time", 0)
+            if first_bar_time > open_ms + _GAP_TOLERANCE_MS:
+                return True
     return False
 
 logger = logging.getLogger(__name__)
@@ -357,8 +372,12 @@ class IntradayCacheService:
             bg_triggered = False
             if _needs_refresh(envelope, base_ttl):
                 if _should_discard_envelope(envelope):
-                    # Stale date or day-boundary transition → sync re-fetch
-                    logger.info("Cache %s %s: stale/complete → sync re-fetch", normalized, interval)
+                    # Stale date, day-boundary, or coverage gap → sync re-fetch
+                    logger.info(
+                        "Cache %s %s: discarding envelope (bars=%d, first_t=%s) → sync re-fetch",
+                        normalized, interval, len(bars),
+                        bars[0].get("time") if bars else None,
+                    )
                     envelope = None
                 else:
                     # Normal SWR: return stale bars, refresh in background.
