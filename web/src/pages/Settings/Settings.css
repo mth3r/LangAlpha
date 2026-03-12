@@ -12,3 +12,9 @@
 .settings-content {
   min-height: 0;
 }
+
+@media (max-width: 767px) {
+  .settings-page { padding: 16px 16px 48px; }
+  .settings-tab-bar { scrollbar-width: none; -ms-overflow-style: none; }
+  .settings-tab-bar::-webkit-scrollbar { display: none; }
+}

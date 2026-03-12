@@ -756,11 +756,11 @@ function Settings() {
     <div className="settings-page">
       <div className="settings-container">
         <h2 className="text-xl font-semibold mb-6" style={{ color: 'var(--color-text-primary)' }}>{t('settings.title')}</h2>
-            <div className="flex gap-2 mb-6 border-b" style={{ borderColor: 'var(--color-border-muted)' }}>
+            <div className="flex gap-2 mb-6 border-b overflow-x-auto settings-tab-bar" style={{ borderColor: 'var(--color-border-muted)' }}>
               <button
                 type="button"
                 onClick={() => handleTabChange('userInfo')}
-                className="px-4 py-2 text-sm font-medium"
+                className="px-4 py-2 text-sm font-medium whitespace-nowrap flex-shrink-0"
                 style={{
                   color: activeTab === 'userInfo' ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
                   borderBottom: activeTab === 'userInfo' ? '2px solid var(--color-accent-primary)' : '2px solid transparent',
@@ -771,7 +771,7 @@ function Settings() {
               <button
                 type="button"
                 onClick={() => handleTabChange('preferences')}
-                className="px-4 py-2 text-sm font-medium"
+                className="px-4 py-2 text-sm font-medium whitespace-nowrap flex-shrink-0"
                 style={{
                   color: activeTab === 'preferences' ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
                   borderBottom: activeTab === 'preferences' ? '2px solid var(--color-accent-primary)' : '2px solid transparent',
@@ -782,7 +782,7 @@ function Settings() {
               <button
                 type="button"
                 onClick={() => handleTabChange('model')}
-                className="px-4 py-2 text-sm font-medium"
+                className="px-4 py-2 text-sm font-medium whitespace-nowrap flex-shrink-0"
                 style={{
                   color: activeTab === 'model' ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
                   borderBottom: activeTab === 'model' ? '2px solid var(--color-accent-primary)' : '2px solid transparent',
