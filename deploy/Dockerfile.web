@@ -1,7 +1,8 @@
 FROM node:20-alpine AS build
+RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
-COPY web/package.json web/package-lock.json* ./
-RUN npm ci
+COPY web/package.json web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY web/ .
 ARG VITE_API_BASE_URL=""
 ARG VITE_SUPABASE_URL=""
@@ -13,7 +14,7 @@ ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
 ENV VITE_SUPABASE_PUBLISHABLE_KEY=${VITE_SUPABASE_PUBLISHABLE_KEY}
 ENV VITE_ACCOUNT_URL=${VITE_ACCOUNT_URL}
 ENV VITE_CDN_BASE=${VITE_CDN_BASE}
-RUN npm run build
+RUN pnpm run build
 
 FROM alpine:3.20
 COPY --from=build /app/dist /dist
