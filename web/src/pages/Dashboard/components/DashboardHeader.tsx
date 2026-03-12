@@ -238,6 +238,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ onStockSearch }) => {
                   backgroundColor: 'var(--color-bg-elevated)',
                   border: '1px solid var(--color-border-elevated)',
                   width: '280px',
+                  maxWidth: 'calc(100vw - 32px)',
                   padding: '16px',
                 }}
               >

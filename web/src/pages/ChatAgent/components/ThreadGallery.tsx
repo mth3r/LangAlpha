@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Loader2, Folder, FileText, Zap } from 'lucide-react';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +13,7 @@ import ChatInput from '../../../components/ui/chat-input';
 import type { ChatInputHandle } from '../../../components/ui/chat-input';
 import { attachmentsToImageContexts } from '../utils/fileUpload';
 import FilePanel, { SYSTEM_DIR_PREFIXES } from './FilePanel';
+import { clampPanelWidth as clampPanelWidthUtil } from '@/lib/panelUtils';
 import SandboxSettingsPanel from './SandboxSettingsPanel';
 import { getWorkspaceThreads, deleteThread, updateThreadTitle } from '../utils/api';
 import { useWorkspaceFiles } from '../hooks/useWorkspaceFiles';
@@ -61,6 +63,7 @@ interface ThreadGalleryProps {
  */
 function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryProps) {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const location = useLocation();
   const queryClient = useQueryClient();
   const { theme } = useTheme();
@@ -113,6 +116,8 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
   const [files, setFiles] = useState<string[]>([]);
   const isDraggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const containerWidthRef = useRef<number>(0);
   const DIVIDER_WIDTH = 4; // px -- matches w-[4px] divider
   const chatInputRef = useRef<ChatInputHandle>(null);
   const handleAddContext = useCallback((ctx: Record<string, unknown>) => {
@@ -155,6 +160,22 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
       if (pa !== pb) return pa - pb;
       return a.localeCompare(b);
     });
+  }, []);
+
+  const clampPanelWidth = useCallback(
+    (desired: number) => clampPanelWidthUtil(desired, containerWidthRef.current),
+    [],
+  );
+
+  // Track container width via ResizeObserver
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries: ResizeObserverEntry[]) => {
+      containerWidthRef.current = entries[0].contentRect.width;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   // Derive sorted file list from hook data
@@ -448,8 +469,13 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
    * Toggle file panel visibility
    */
   const handleToggleFilePanel = useCallback(() => {
-    setShowFilePanel(!showFilePanel);
-  }, [showFilePanel]);
+    if (showFilePanel) {
+      setShowFilePanel(false);
+    } else {
+      setFilePanelWidth(clampPanelWidth(850));
+      setShowFilePanel(true);
+    }
+  }, [showFilePanel, clampPanelWidth]);
 
   /**
    * Handle drag panel width
@@ -464,8 +490,8 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingRef.current) return;
       const delta = startX - moveEvent.clientX;
-      const newWidth = Math.max(280, Math.min(startWidth + delta, window.innerWidth * 0.6));
-      setFilePanelWidth(newWidth);
+      const containerW = containerWidthRef.current > 0 ? containerWidthRef.current : window.innerWidth;
+      setFilePanelWidth(clampPanelWidthUtil(startWidth + delta, containerW));
     };
 
     const onMouseUp = () => {
@@ -551,8 +577,10 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
 
   return (
     <div
-      className="h-screen flex overflow-hidden"
+      ref={containerRef}
+      className={`${isMobile ? 'h-full' : 'h-screen'} flex overflow-hidden`}
       style={{
+        position: 'relative',
         backgroundColor: 'var(--color-bg-page)',
         backgroundImage: 'radial-gradient(circle at center, var(--color-dot-grid) 0.75px, transparent 0.75px)',
         backgroundSize: '18px 18px',
@@ -652,6 +680,7 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
                           onClick={(e) => {
                             e.stopPropagation();
                             setFilePanelTargetFile(filePath);
+                            setFilePanelWidth(clampPanelWidth(850));
                             setShowFilePanel(true);
                           }}
                         >
@@ -712,17 +741,20 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
       <AnimatePresence>
         {showFilePanel && !isFlash && (
           <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: filePanelWidth + DIVIDER_WIDTH, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
+            initial={isMobile ? { x: '100%' } : { width: 0, opacity: 0 }}
+            animate={isMobile ? { x: 0 } : { width: filePanelWidth + DIVIDER_WIDTH, opacity: 1 }}
+            exit={isMobile ? { x: '100%' } : { width: 0, opacity: 0 }}
             transition={{ duration: isDragging ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-shrink-0 overflow-hidden"
+            className={isMobile ? 'flex overflow-hidden' : 'flex flex-shrink-0 overflow-hidden'}
+            style={isMobile ? { position: 'absolute', inset: 0, zIndex: 30 } : undefined}
           >
-            <div
-              className="w-[4px] bg-transparent hover:bg-foreground/20 cursor-col-resize flex-shrink-0 transition-colors"
-              onMouseDown={handleDividerMouseDown}
-            />
-            <div className="flex-shrink-0" style={{ width: filePanelWidth }}>
+            {!isMobile && (
+              <div
+                className="w-[4px] bg-transparent hover:bg-foreground/20 cursor-col-resize flex-shrink-0 transition-colors"
+                onMouseDown={handleDividerMouseDown}
+              />
+            )}
+            <div className="flex-shrink-0" style={{ width: isMobile ? '100%' : filePanelWidth }}>
               <FilePanel
                 workspaceId={workspaceId}
                 onClose={() => setShowFilePanel(false)}

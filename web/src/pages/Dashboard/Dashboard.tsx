@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { ListFilter } from 'lucide-react';
+import { MobileBottomSheet } from '../../components/ui/mobile-bottom-sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import DashboardHeader from './components/DashboardHeader';
 import ConfirmDialog from './components/ConfirmDialog';
 import IndexMovementCard from './components/IndexMovementCard';
@@ -32,11 +35,15 @@ interface DeleteConfirmState {
 function Dashboard() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   // News modal state
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
 
   // Insight modal state
   const [selectedMarketInsightId, setSelectedMarketInsightId] = useState<string | null>(null);
+
+  // Mobile watchlist bottom sheet
+  const [showWatchlistSheet, setShowWatchlistSheet] = useState(false);
 
   const {
     indices,
@@ -79,20 +86,50 @@ function Dashboard() {
     setDeleteConfirm((p) => ({ ...p, open: false }));
   }, [deleteConfirm.onConfirm]);
 
+  const portfolioWatchlistProps = {
+    watchlistRows: watchlist.rows,
+    watchlistLoading: watchlist.loading,
+    onWatchlistAdd: () => watchlist.setModalOpen(true),
+    onWatchlistDelete: watchlist.handleDelete,
+    portfolioRows: portfolio.rows,
+    portfolioLoading: portfolio.loading,
+    hasRealHoldings: portfolio.hasRealHoldings,
+    onPortfolioAdd: () => portfolio.setModalOpen(true),
+    onPortfolioDelete: handleDeletePortfolioItem,
+    onPortfolioEdit: portfolio.openEdit,
+    marketStatus,
+  };
+
   return (
     <div className="dashboard-container min-h-screen">
       {/* Main content area */}
       <main className="flex-1 flex flex-col min-h-0 overflow-y-auto">
         <DashboardHeader />
 
-        <div className="mx-auto max-w-[1920px] w-full p-6 pb-32">
-          {/* Market Overview heading */}
-          <h1
-            className="text-2xl font-bold mb-6"
-            style={{ color: 'var(--color-text-primary)' }}
-          >
-            Market Overview
-          </h1>
+        <div className="mx-auto max-w-[1920px] w-full p-3 sm:p-6 pb-32">
+          {/* Market Overview heading + mobile watchlist tab */}
+          <div className="flex items-center justify-between mb-6">
+            <h1
+              className="text-2xl font-bold"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Market Overview
+            </h1>
+            {isMobile && (
+              <button
+                onClick={() => setShowWatchlistSheet(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
+                style={{
+                  borderColor: 'var(--color-border-muted)',
+                  color: 'var(--color-text-secondary)',
+                  backgroundColor: 'var(--color-bg-card)',
+                }}
+              >
+                <ListFilter size={13} />
+                {t('dashboard.watchlist')}
+              </button>
+            )}
+          </div>
 
           {/* Index Movement — full width */}
           <div className="mb-8">
@@ -115,27 +152,17 @@ function Dashboard() {
               />
             </div>
 
-            {/* Right 1/3 — sticky sidebar */}
-            <div className="lg:col-span-1">
-              <div className="lg:sticky lg:top-24 space-y-6">
-                <div className="lg:h-[calc(100vh-420px)]">
-                  <PortfolioWatchlistCard
-                    watchlistRows={watchlist.rows}
-                    watchlistLoading={watchlist.loading}
-                    onWatchlistAdd={() => watchlist.setModalOpen(true)}
-                    onWatchlistDelete={watchlist.handleDelete}
-                    portfolioRows={portfolio.rows}
-                    portfolioLoading={portfolio.loading}
-                    hasRealHoldings={portfolio.hasRealHoldings}
-                    onPortfolioAdd={() => portfolio.setModalOpen(true)}
-                    onPortfolioDelete={handleDeletePortfolioItem}
-                    onPortfolioEdit={portfolio.openEdit}
-                    marketStatus={marketStatus}
-                  />
+            {/* Right 1/3 — sticky sidebar (hidden on mobile, accessible via sheet) */}
+            {!isMobile && (
+              <div className="lg:col-span-1">
+                <div className="lg:sticky lg:top-24 space-y-6">
+                  <div>
+                    <PortfolioWatchlistCard {...portfolioWatchlistProps} />
+                  </div>
+                  <EarningsCalendarCard />
                 </div>
-                <EarningsCalendarCard />
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -269,6 +296,14 @@ function Dashboard() {
         onClose={() => portfolio.setModalOpen(false)}
         onAdd={portfolio.handleAdd as (...args: unknown[]) => void}
       />
+
+      {/* Mobile watchlist/portfolio bottom sheet */}
+      <MobileBottomSheet open={showWatchlistSheet} onClose={() => setShowWatchlistSheet(false)} className="pb-8">
+        <PortfolioWatchlistCard {...portfolioWatchlistProps} />
+        <div className="mt-4">
+          <EarningsCalendarCard />
+        </div>
+      </MobileBottomSheet>
     </div>
   );
 }

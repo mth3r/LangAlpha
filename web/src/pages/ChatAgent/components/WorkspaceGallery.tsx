@@ -11,13 +11,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import CreateWorkspaceModal from './CreateWorkspaceModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
 import MorphingPageDots from '../../../components/ui/morphing-page-dots';
+import { getIsMobileSnapshot } from '@/hooks/useIsMobile';
 import { useWorkspaces } from '../../../hooks/useWorkspaces';
 import { queryKeys } from '../../../lib/queryKeys';
 import { createWorkspace, deleteWorkspace, getFlashWorkspace, updateWorkspace, reorderWorkspaces } from '../utils/api';
 import { removeStoredThreadId } from '../hooks/useChatMessages';
 import { clearChatSession } from '../hooks/utils/chatSessionRestore';
 
-const PAGE_SIZE = 8;
+const DEFAULT_PAGE_SIZE = 8;
 
 interface WorkspaceRecord {
   workspace_id: string;
@@ -308,14 +309,16 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
   const slideDirectionRef = useRef(0); // 1 = forward, -1 = back
   const skipInitialAnimRef = useRef(true); // skip slide animation on first render
   const gridHeightRef = useRef<number | null>(null); // locked grid height for consistent dot placement
+  const touchStartRef = useRef<{ x: number; y: number; t: number } | null>(null); // swipe gesture tracking
   const preSortByRef = useRef(sortBy); // sort mode before entering reorder
   const didReorderRef = useRef(false); // whether a drag occurred in reorder mode
   const isSearching = debouncedSearch.length > 0;
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Pagination: reserve one slot on page 0 for the flash workspace
   const isFirstPage = currentPage === 0;
-  const wsLimit = isSearching ? 100 : isFirstPage ? PAGE_SIZE - 1 : PAGE_SIZE;
-  const wsOffset = isSearching ? 0 : isFirstPage ? 0 : (PAGE_SIZE - 1) + (currentPage - 1) * PAGE_SIZE;
+  const wsLimit = isSearching ? 100 : isFirstPage ? pageSize - 1 : pageSize;
+  const wsOffset = isSearching ? 0 : isFirstPage ? 0 : (pageSize - 1) + (currentPage - 1) * pageSize;
 
   // Main workspace list query
   const {
@@ -355,7 +358,7 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
   }, [wsData, flashWs, isFirstPage, isSearching]);
 
   const totalWorkspaces = (wsData as any)?.total || 0; // TODO: type properly
-  const totalPages = Math.ceil((totalWorkspaces + 1) / PAGE_SIZE);
+  const totalPages = Math.ceil((totalWorkspaces + 1) / pageSize);
 
   // Sync allWorkspaces state from query data when in reorder mode
   useEffect(() => {
@@ -378,6 +381,30 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
     });
   }, []);
 
+  // Swipe gesture handlers for mobile pagination
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, t: Date.now() };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current || isSearching || totalPages <= 1) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.t;
+    touchStartRef.current = null;
+
+    // Require: horizontal distance > 50px, more horizontal than vertical, within 500ms
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 500) {
+      if (dx < 0 && currentPage < totalPages - 1) {
+        goToPage(currentPage + 1);
+      } else if (dx > 0 && currentPage > 0) {
+        goToPage(currentPage - 1);
+      }
+    }
+  }, [isSearching, totalPages, currentPage, goToPage]);
+
   // Clear saved chat session so tab-switching returns to workspace gallery
   useEffect(() => {
     clearChatSession();
@@ -387,6 +414,60 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentPage]);
+
+  // Dynamic page size: compute how many cards fit in the scroll container.
+  // Pagination container is always rendered (visibility:hidden when unused)
+  // so the scroll container height is stable and no paginationReserve is needed.
+  const computePageSizeFromHeight = useCallback((height: number) => {
+    const isMobile = getIsMobileSnapshot();
+    const columns = isMobile ? 1 : 2;
+    const gap = isMobile ? 12 : 24;
+    const cardHeight = 160;
+    const gridBottomMargin = isMobile ? 12 : 24;
+    const available = height - gridBottomMargin;
+    const rows = Math.max(1, Math.floor((available + gap) / (cardHeight + gap)));
+    return Math.max(2, columns * rows);
+  }, []);
+
+  useEffect(() => {
+    if (isReorderMode || isWsLoading) return;
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleResize = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const newSize = computePageSizeFromHeight(el.clientHeight);
+        setPageSize(prev => prev === newSize ? prev : newSize);
+      }, 200);
+    };
+
+    // Measure after a frame to ensure layout is settled
+    requestAnimationFrame(() => {
+      const newSize = computePageSizeFromHeight(el.clientHeight);
+      setPageSize(newSize);
+    });
+
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(el);
+
+    return () => {
+      observer.disconnect();
+      if (debounceTimer) clearTimeout(debounceTimer);
+    };
+  }, [isReorderMode, isWsLoading, computePageSizeFromHeight]);
+
+  // Reset page and grid height when page size changes
+  const prevPageSizeRef = useRef(DEFAULT_PAGE_SIZE);
+  useEffect(() => {
+    if (prevPageSizeRef.current !== pageSize) {
+      prevPageSizeRef.current = pageSize;
+      gridHeightRef.current = null;
+      setCurrentPage(0);
+    }
+  }, [pageSize]);
 
   /**
    * Debounced search: update debouncedSearch after 300ms
@@ -742,7 +823,7 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
       <div
         style={{ height: gridHeightRef.current || undefined, overflow: 'hidden' }}
         ref={(el) => {
-          if (el && visibleWorkspaces.length >= PAGE_SIZE) {
+          if (el && visibleWorkspaces.length >= pageSize) {
             const h = el.scrollHeight;
             if (!gridHeightRef.current || h > gridHeightRef.current) {
               gridHeightRef.current = h;
@@ -789,13 +870,12 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
         backgroundPosition: '0 0'
       }}
     >
-      {/* Header */}
-      <header className="flex w-full h-16 md:h-24 md:items-end mx-auto max-w-4xl flex-shrink-0 px-4 md:px-8 enter-fade-up">
+      {/* Header (desktop only) */}
+      <header className="hidden md:flex w-full h-24 items-end mx-auto max-w-4xl flex-shrink-0 px-8 enter-fade-up">
         <div className="flex w-full items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold hidden md:block title-font" style={{ color: 'var(--color-text-primary)' }}>
+          <h1 className="text-2xl font-semibold title-font" style={{ color: 'var(--color-text-primary)' }}>
             {t('workspace.workspaces')}
           </h1>
-          <div></div>
           {hasWorkspaces && (
             <button
               onClick={() => setIsModalOpen(true)}
@@ -814,9 +894,24 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
 
       {/* Main Content */}
       <main className="mx-auto mt-4 w-full flex-1 min-h-0 px-4 md:px-8 lg:mt-6 max-w-4xl flex flex-col pb-0">
-        <h1 className="text-xl font-semibold mb-4 md:hidden title-font" style={{ color: 'var(--color-text-primary)' }}>
-          {t('workspace.workspaces')}
-        </h1>
+        <div className="flex items-center justify-between mb-4 md:hidden">
+          <h1 className="text-xl font-semibold title-font" style={{ color: 'var(--color-text-primary)' }}>
+            {t('workspace.workspaces')}
+          </h1>
+          {hasWorkspaces && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 h-9 rounded-lg transition-all hover:scale-[1.01] active:scale-[0.985]"
+              style={{
+                backgroundColor: 'var(--color-accent-primary)',
+                color: 'var(--color-text-on-accent)',
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="text-sm font-medium">{t('workspace.newWorkspace')}</span>
+            </button>
+          )}
+        </div>
 
         {hasWorkspaces && !isReorderMode && (
         <div className="flex-shrink-0 flex flex-col gap-4 pb-4 md:pb-6 px-1 enter-fade-up enter-fade-up-d1">
@@ -905,20 +1000,30 @@ function WorkspaceGallery({ onWorkspaceSelect, prefetchThreads }: WorkspaceGalle
         ) : (
           /* -- Normal Mode: paginated grid -- */
           <>
-            <div ref={scrollContainerRef} className="overflow-y-auto overflow-x-hidden px-1">
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 min-h-0 overflow-hidden px-1"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
               {renderGrid()}
             </div>
 
-            {/* Pagination dots -- pinned below scroll area */}
-            {!isSearching && totalPages > 1 && (
-              <div className="flex-shrink-0 py-3">
-                <MorphingPageDots
-                  totalPages={totalPages}
-                  activeIndex={currentPage}
-                  onChange={goToPage}
-                />
-              </div>
-            )}
+            {/* Pagination dots -- always rendered to keep scroll container height stable;
+                hidden via visibility when not needed to prevent layout oscillation */}
+            <div
+              className="flex-shrink-0 py-3"
+              style={{
+                visibility: (!isSearching && totalPages > 1) ? 'visible' : 'hidden',
+                pointerEvents: (!isSearching && totalPages > 1) ? 'auto' : 'none',
+              }}
+            >
+              <MorphingPageDots
+                totalPages={totalPages}
+                activeIndex={currentPage}
+                onChange={goToPage}
+              />
+            </div>
           </>
         )}
       </main>

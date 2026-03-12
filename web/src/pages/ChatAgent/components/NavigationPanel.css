@@ -14,15 +14,8 @@
 }
 
 .nav-panel {
-  background: transparent;
-}
-
-/* Add background when panel overlaps the centered message column */
-@container (max-width: 1407px) {
-  .nav-panel {
-    background: var(--color-bg-page);
-    border-right: 1px solid var(--color-border-muted);
-  }
+  background: var(--color-bg-page);
+  border-right: 1px solid var(--color-border-muted);
 }
 
 .nav-panel-row {
@@ -84,4 +77,10 @@
 .nav-panel-dismiss-btn:hover {
   opacity: 1;
   background-color: var(--color-border-muted) !important;
+}
+
+/* ====== Mobile touch targets ====== */
+@media (max-width: 767px) {
+  .nav-panel-row { min-height: 44px; padding: 10px 16px; }
+  .nav-panel-agent-row { min-height: 44px; padding: 10px 16px; }
 }

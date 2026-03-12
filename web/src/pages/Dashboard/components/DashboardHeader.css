@@ -93,3 +93,7 @@
 .dashboard-search-dropdown-empty:hover {
   background-color: transparent;
 }
+
+@media (max-width: 767px) {
+  .dashboard-search-dropdown { min-width: 0; width: 100%; max-width: calc(100vw - 32px); }
+}

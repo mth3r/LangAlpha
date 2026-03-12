@@ -432,3 +432,8 @@
 .model-dropdown-empty {
   padding: 4px 0;
 }
+
+/* ====== Mobile responsive dropdowns ====== */
+@media (max-width: 767px) {
+  .workspace-dropdown { width: calc(100vw - 32px); max-width: 280px; }
+}

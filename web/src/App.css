@@ -4,15 +4,16 @@
 
 .app-layout {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   position: relative;
+  overflow: hidden;
 }
 
 .app-main {
   width: 100%;
-  min-height: 100vh;
-  padding-left: 80px;
+  height: 100%;
+  padding-left: var(--sidebar-width);
   background-color: hsl(var(--bg-main));
   overflow: auto;
   box-sizing: border-box;
@@ -24,4 +25,15 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+  .app-layout {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .app-main {
+    padding-left: 0;
+    padding-bottom: var(--bottom-tab-height);
+  }
 }

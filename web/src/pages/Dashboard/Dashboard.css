@@ -202,3 +202,9 @@
   border-radius: 1rem;
   box-shadow: 0 0 30px var(--color-accent-soft);
 }
+
+@media (max-width: 767px) {
+  .dashboard-container { height: auto; min-height: 100%; overflow-y: auto; }
+  .dashboard-floating-chat-wrapper { bottom: calc(var(--bottom-tab-height, 0px) + 8px) !important; }
+  .dashboard-suggestion-bubbles { display: none !important; }
+}

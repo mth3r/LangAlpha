@@ -14,11 +14,15 @@ import { fetchMarketStatus } from '@/lib/marketUtils';
 import { supports1sInterval } from './utils/chartConstants';
 import { useMarketChat } from './hooks/useMarketChat';
 import { getWorkspaces } from '../ChatAgent/utils/api';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, RefreshCw, List, Info } from 'lucide-react';
 import CompanyOverviewPanel from './components/CompanyOverviewPanel';
+import { MobileBottomSheet } from '../../components/ui/mobile-bottom-sheet';
+import { MobileFabChat } from '../../components/ui/mobile-fab-chat';
 import { MarketDataWSProvider, useMarketDataWSContext } from './contexts/MarketDataWSContext';
 
 import { loadPref, savePref } from './utils/prefs';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { useStockData } from './hooks/useStockData';
 
@@ -126,6 +130,9 @@ function MarketViewInner() {
   const [chartImage, setChartImage] = useState<string | null>(null);       // base64 data URL
   const [chartImageDesc, setChartImageDesc] = useState<string | null>(null); // text description for LLM
   const [showOverview, setShowOverview] = useState<boolean>(false);
+  const [mobileTab, setMobileTab] = useState<'watchlist' | null>(null);
+  const [chatExpanded, setChatExpanded] = useState(false);
+  const isMobile = useIsMobile();
 
   const [prefillMessage, setPrefillMessage] = useState<string>('');
   const [mode, setMode] = useState<'fast' | 'deep'>('fast');
@@ -403,7 +410,7 @@ function MarketViewInner() {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current) return;
       const delta = dragStartX.current - e.clientX;
-      const newWidth = Math.min(700, Math.max(300, dragStartWidth.current + delta));
+      const newWidth = Math.min(Math.min(700, window.innerWidth * 0.4), Math.max(300, dragStartWidth.current + delta));
       setChatPanelWidth(newWidth);
     };
 
@@ -425,8 +432,8 @@ function MarketViewInner() {
   return (
     <div className="market-center-container">
       <DashboardHeader onStockSearch={handleStockSearch as any} />
-      <div className="market-content-wrapper">
-        <div className="market-left-panel">
+      {isMobile ? (
+        <div className="market-mobile-layout">
           <StockHeader
             symbol={selectedStock}
             stockInfo={stockInfo}
@@ -434,6 +441,7 @@ function MarketViewInner() {
             chartMeta={chartMeta}
             displayOverride={selectedStockDisplay}
             onToggleOverview={() => setShowOverview(v => !v)}
+            onOpenWatchlist={() => setMobileTab('watchlist')}
             wsStatus={wsStatus}
             wsHasData={!!wsPrices.get(selectedStock)}
             wsDataLevel={wsDataLevel}
@@ -442,16 +450,9 @@ function MarketViewInner() {
             marketStatus={marketStatus}
             snapshot={snapshotData}
           />
-          <div className="market-chart-area">
-            {showOverview && (
-              <CompanyOverviewPanel
-                symbol={selectedStock}
-                visible={showOverview}
-                onClose={() => setShowOverview(false)}
-                data={overviewData as OverviewData | null}
-                loading={overviewLoading}
-              />
-            )}
+
+          {/* Chart fills remaining space */}
+          <div className="market-chart-area" style={{ flex: 1, minHeight: 0 }}>
             <MarketChart
               ref={chartRef}
               symbol={selectedStock}
@@ -470,34 +471,16 @@ function MarketViewInner() {
               ginlixDataEnabled={ginlixDataEnabled}
             />
           </div>
-        </div>
-        <MarketSidebarPanel
-          activeSymbol={selectedStock}
-          onSymbolClick={handleSidebarSymbolClick}
-          marketStatus={marketStatus}
-        />
-        <div className="market-resize-handle" onMouseDown={handleDragStart} />
-        <div className="market-right-panel" style={{ width: chatPanelWidth }}>
-          <div className="market-right-panel-inner">
-            <MarketPanel
-              messages={messages as any}
-              isLoading={isLoading}
-              error={error}
-            />
-            {messages.length === 0 && (
-              <div className="market-quick-queries">
-                {quickQueries.map((q, i) => (
-                  <button key={i} className="market-quick-query-card" onClick={() => handleQuickQuery(q)}>
-                    {q}
-                  </button>
-                ))}
-                <button className="market-quick-query-shuffle" onClick={handleShuffleQueries} title="Show different suggestions">
-                  <RefreshCw size={13} />
-                </button>
-              </div>
-            )}
+
+          {/* Floating chat input — FAB on mobile, expands on tap */}
+          <MobileFabChat
+            expanded={chatExpanded}
+            onExpand={() => setChatExpanded(true)}
+            onCollapse={() => setChatExpanded(false)}
+            className="market-mobile-chat-float"
+          >
             <ChatInput
-              onSend={handleSendMessage as any}
+              onSend={(...args: any[]) => { (handleSendMessage as any)(...args); setChatExpanded(false); }}
               isLoading={isLoading}
               mode={mode}
               onModeChange={setMode as any}
@@ -509,47 +492,194 @@ function MarketViewInner() {
               onRemoveChartImage={() => { setChartImage(null); setChartImageDesc(null); }}
               prefillMessage={prefillMessage}
               onClearPrefill={() => setPrefillMessage('')}
-              placeholder="What would you like to know?"
+              placeholder="Ask about this stock..."
             />
-          </div>
+          </MobileFabChat>
+
+          {/* Watchlist — left drawer overlay */}
+          <AnimatePresence>
+            {mobileTab === 'watchlist' && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 z-40"
+                  style={{ backgroundColor: 'var(--color-bg-overlay)' }}
+                  onClick={() => setMobileTab(null)}
+                />
+                <motion.div
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+                  className="fixed top-0 right-0 bottom-0 z-50 border-l"
+                  style={{
+                    width: '80vw',
+                    maxWidth: '320px',
+                    backgroundColor: 'var(--color-bg-card)',
+                    borderColor: 'var(--color-border-muted)',
+                  }}
+                >
+                  <MarketSidebarPanel
+                    activeSymbol={selectedStock}
+                    onSymbolClick={(symbol) => {
+                      handleSidebarSymbolClick(symbol);
+                      setMobileTab(null);
+                    }}
+                    marketStatus={marketStatus}
+                  />
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* Company Overview — bottom drawer sheet */}
+          <MobileBottomSheet
+            open={showOverview}
+            onClose={() => setShowOverview(false)}
+            sizing="fixed"
+            style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + 16px)' }}
+          >
+            <CompanyOverviewPanel
+              symbol={selectedStock}
+              visible={true}
+              onClose={() => setShowOverview(false)}
+              data={overviewData as OverviewData | null}
+              loading={overviewLoading}
+            />
+          </MobileBottomSheet>
         </div>
-      </div>
-      {/* Floating "Return to Chat" card — shown when navigated from chat context */}
-      {chatReturnPath && (
-        <button
-          onClick={() => navigate(chatReturnPath)}
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 416,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '10px 16px',
-            background: 'var(--color-accent-soft)',
-            border: '1px solid var(--color-accent-overlay)',
-            borderRadius: 10,
-            color: 'var(--color-accent-light)',
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: 'pointer',
-            backdropFilter: 'blur(12px)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            transition: 'background 0.15s, border-color 0.15s',
-            zIndex: 50,
-          }}
-          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-            e.currentTarget.style.background = 'var(--color-accent-overlay)';
-            e.currentTarget.style.borderColor = 'var(--color-accent-primary)';
-          }}
-          onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-            e.currentTarget.style.background = 'var(--color-accent-soft)';
-            e.currentTarget.style.borderColor = 'var(--color-accent-overlay)';
-          }}
-        >
-          <ArrowLeft style={{ width: 14, height: 14 }} />
-          Return to Chat
-        </button>
+      ) : (
+        <>
+          <div className="market-content-wrapper">
+            <div className="market-left-panel">
+              <StockHeader
+                symbol={selectedStock}
+                stockInfo={stockInfo}
+                realTimePrice={displayPrice}
+                chartMeta={chartMeta}
+                displayOverride={selectedStockDisplay}
+                onToggleOverview={() => setShowOverview(v => !v)}
+                wsStatus={wsStatus}
+                wsHasData={!!wsPrices.get(selectedStock)}
+                wsDataLevel={wsDataLevel}
+                ginlixDataEnabled={ginlixDataEnabled}
+                quoteData={(overviewData as OverviewData | null)?.quote || null}
+                marketStatus={marketStatus}
+                snapshot={snapshotData}
+              />
+              <div className="market-chart-area">
+                {showOverview && (
+                  <CompanyOverviewPanel
+                    symbol={selectedStock}
+                    visible={showOverview}
+                    onClose={() => setShowOverview(false)}
+                    data={overviewData as OverviewData | null}
+                    loading={overviewLoading}
+                  />
+                )}
+                <MarketChart
+                  ref={chartRef}
+                  symbol={selectedStock}
+                  interval={selectedInterval}
+                  onIntervalChange={handleIntervalChange}
+                  onCapture={handleCaptureChart}
+                  onStockMeta={handleStockMeta as any}
+                  onLatestBar={handleLatestBar}
+                  quoteData={(overviewData as OverviewData | null)?.quote || null}
+                  earningsData={(overviewData as OverviewData | null)?.earningsSurprises || null}
+                  overlayData={overlayData as Record<string, unknown> | null}
+                  stockMeta={chartMeta}
+                  snapshot={snapshotData}
+                  liveTick={wsPrices.get(selectedStock)?.barData || null}
+                  wsStatus={wsStatus}
+                  ginlixDataEnabled={ginlixDataEnabled}
+                />
+              </div>
+            </div>
+            <MarketSidebarPanel
+              activeSymbol={selectedStock}
+              onSymbolClick={handleSidebarSymbolClick}
+              marketStatus={marketStatus}
+            />
+            <div className="market-resize-handle" onMouseDown={handleDragStart} />
+            <div className="market-right-panel" style={{ width: chatPanelWidth }}>
+              <div className="market-right-panel-inner">
+                <MarketPanel
+                  messages={messages as any}
+                  isLoading={isLoading}
+                  error={error}
+                />
+                {messages.length === 0 && (
+                  <div className="market-quick-queries">
+                    {quickQueries.map((q, i) => (
+                      <button key={i} className="market-quick-query-card" onClick={() => handleQuickQuery(q)}>
+                        {q}
+                      </button>
+                    ))}
+                    <button className="market-quick-query-shuffle" onClick={handleShuffleQueries} title="Show different suggestions">
+                      <RefreshCw size={13} />
+                    </button>
+                  </div>
+                )}
+                <ChatInput
+                  onSend={handleSendMessage as any}
+                  isLoading={isLoading}
+                  mode={mode}
+                  onModeChange={setMode as any}
+                  workspaces={workspaces as any}
+                  selectedWorkspaceId={selectedWorkspaceId}
+                  onWorkspaceChange={setSelectedWorkspaceId}
+                  onCaptureChart={handleCaptureChartForContext}
+                  chartImage={chartImage}
+                  onRemoveChartImage={() => { setChartImage(null); setChartImageDesc(null); }}
+                  prefillMessage={prefillMessage}
+                  onClearPrefill={() => setPrefillMessage('')}
+                  placeholder="What would you like to know?"
+                />
+              </div>
+            </div>
+          </div>
+          {/* Floating "Return to Chat" card — shown when navigated from chat context */}
+          {chatReturnPath && (
+            <button
+              onClick={() => navigate(chatReturnPath)}
+              style={{
+                position: 'fixed',
+                bottom: 24,
+                right: 416,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '10px 16px',
+                background: 'var(--color-accent-soft)',
+                border: '1px solid var(--color-accent-overlay)',
+                borderRadius: 10,
+                color: 'var(--color-accent-light)',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                transition: 'background 0.15s, border-color 0.15s',
+                zIndex: 50,
+              }}
+              onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                e.currentTarget.style.background = 'var(--color-accent-overlay)';
+                e.currentTarget.style.borderColor = 'var(--color-accent-primary)';
+              }}
+              onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                e.currentTarget.style.background = 'var(--color-accent-soft)';
+                e.currentTarget.style.borderColor = 'var(--color-accent-overlay)';
+              }}
+            >
+              <ArrowLeft style={{ width: 14, height: 14 }} />
+              Return to Chat
+            </button>
+          )}
+        </>
       )}
     </div>
   );

@@ -1,7 +1,8 @@
 import React, { Suspense, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, FolderOpen, StopCircle, ScrollText, AlertTriangle, CheckCircle2, Circle, Loader2, TextSelect, Minus, PanelLeftOpen } from 'lucide-react';
+import { ArrowLeft, FolderOpen, StopCircle, ScrollText, AlertTriangle, CheckCircle2, Circle, Loader2, TextSelect, Minus, PanelLeftOpen, Menu } from 'lucide-react';
+import { useIsMobile, getIsMobileSnapshot } from '@/hooks/useIsMobile';
 import { ScrollArea } from '../../../components/ui/scroll-area';
 import { usePreferences } from '@/hooks/usePreferences';
 import { useQueryClient } from '@tanstack/react-query';
@@ -10,6 +11,7 @@ import { updateCurrentUser } from '../../Dashboard/utils/api';
 import { softInterruptWorkflow, getWorkspace, summarizeThread, offloadThread } from '../utils/api';
 import { useChatMessages } from '../hooks/useChatMessages';
 import { saveChatSession, getChatSession, clearChatSession } from '../hooks/utils/chatSessionRestore';
+import { clampPanelWidth as clampPanelWidthUtil } from '@/lib/panelUtils';
 import { useCardState } from '../hooks/useCardState';
 import { useWorkspaceFiles } from '../hooks/useWorkspaceFiles';
 import './FilePanel.css';
@@ -25,6 +27,7 @@ import SubagentStatusBar from './SubagentStatusBar';
 import TodoDrawer from './TodoDrawer';
 import { parseErrorMessage } from '../utils/parseErrorMessage';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MobileBottomSheet } from '@/components/ui/mobile-bottom-sheet';
 
 const FilePanel = React.lazy(() => import('./FilePanel'));
 const DetailPanel = React.lazy(() => import('./DetailPanel'));
@@ -251,6 +254,7 @@ function SubagentStatusIndicator({ status, currentTool, toolCalls = 0, messages 
  */
 function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspaceName }: ChatViewProps): React.ReactElement | null {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const subagentScrollAreaRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -284,6 +288,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
   const navHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navLockedRef = useRef(_navLocked);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+  const contentAreaWidthRef = useRef<number>(0);
   // Skip nav panel slide-in on mount if it was already open (thread navigation);
   // allow animation on subsequent hover opens.
   const skipNavAnimRef = useRef(_navPanelVisible);
@@ -294,7 +299,10 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
     if (!container) return;
     const observer = new ResizeObserver((entries: ResizeObserverEntry[]) => {
       const width = entries[0].contentRect.width;
-      if (width < 800 && _navPanelVisible) {
+      contentAreaWidthRef.current = width;
+      // Skip auto-hide on mobile — hamburger controls nav drawer
+      if (getIsMobileSnapshot()) return;
+      if (width < 1100 && _navPanelVisible) {
         if (navHideTimerRef.current) clearTimeout(navHideTimerRef.current);
         _navPanelVisible = false;
         setNavPanelVisible(false);
@@ -755,6 +763,11 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
   }, [activeAgent, cards, updateSubagentCard]);
 
 
+  const clampPanelWidth = useCallback(
+    (desired: number) => clampPanelWidthUtil(desired, contentAreaWidthRef.current),
+    [],
+  );
+
   // Handle drag panel width
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -766,8 +779,8 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingRef.current) return;
       const delta = startX - moveEvent.clientX;
-      const newWidth = Math.max(280, Math.min(startWidth + delta, window.innerWidth * 0.6));
-      setRightPanelWidth(newWidth);
+      const containerW = contentAreaWidthRef.current > 0 ? contentAreaWidthRef.current : window.innerWidth;
+      setRightPanelWidth(clampPanelWidthUtil(startWidth + delta, containerW));
     };
 
     const onMouseUp = () => {
@@ -787,41 +800,41 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
 
   // Open a file in the right panel from chat tool calls
   const handleOpenFileFromChat = useCallback((filePath: string) => {
-    setRightPanelWidth(850);
+    setRightPanelWidth(clampPanelWidth(850));
     setRightPanelType('file');
     setFilePanelTargetDir(null);
     setFilePanelTargetFile(filePath);
-  }, []);
+  }, [clampPanelWidth]);
 
   // Open file panel filtered to a specific directory
   const handleOpenDirFromChat = useCallback((dirPath: string) => {
-    setRightPanelWidth(850);
+    setRightPanelWidth(clampPanelWidth(850));
     setRightPanelType('file');
     setFilePanelTargetFile(null);
     setFilePanelTargetDir(dirPath);
-  }, []);
+  }, [clampPanelWidth]);
 
   // Determine detail panel width based on content type
   const getDetailPanelWidth = useCallback((toolCallProcess: ToolCallProcessRecord | null) => {
-    if (!toolCallProcess) return 550;
-    const toolName = toolCallProcess.toolName || '';
-    const artifactType = toolCallProcess.toolCallResult?.artifact?.type;
+    let desired = 650;
+    if (!toolCallProcess) { desired = 550; }
+    else {
+      const toolName = toolCallProcess.toolName || '';
+      const artifactType = toolCallProcess.toolCallResult?.artifact?.type;
 
-    // Wide: file reading, SEC filings, subagent results
-    if (artifactType === 'sec_filing') return 850;
-    if (toolName === 'Read' || toolName === 'read_file') return 850;
-    if (toolName === 'Task' || toolName === 'task') return 750;
-
-    // Medium: charts, search results, default markdown
-    if (artifactType === 'stock_prices' || artifactType === 'market_indices' || artifactType === 'sector_performance') return 650;
-    if (toolName === 'WebSearch' || toolName === 'web_search') return 650;
-
-    // Slim: compact data cards
-    if (artifactType === 'company_overview') return 480;
-    if (artifactType === 'automations') return 480;
-
-    return 650;
-  }, []);
+      // Wide: file reading, SEC filings, subagent results
+      if (artifactType === 'sec_filing') desired = 850;
+      else if (toolName === 'Read' || toolName === 'read_file') desired = 850;
+      else if (toolName === 'Task' || toolName === 'task') desired = 750;
+      // Medium: charts, search results, default markdown
+      else if (artifactType === 'stock_prices' || artifactType === 'market_indices' || artifactType === 'sector_performance') desired = 650;
+      else if (toolName === 'WebSearch' || toolName === 'web_search') desired = 650;
+      // Slim: compact data cards
+      else if (artifactType === 'company_overview') desired = 480;
+      else if (artifactType === 'automations') desired = 480;
+    }
+    return clampPanelWidth(desired);
+  }, [clampPanelWidth]);
 
   // Open tool call detail in right panel
   const handleToolCallDetailClick = useCallback((toolCallProcess: ToolCallProcessRecord) => {
@@ -835,8 +848,15 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
   const handlePlanDetailClick = useCallback((planData: PlanData) => {
     setDetailPlanData(planData);
     setDetailToolCall(null);
-    setRightPanelWidth(550);
+    setRightPanelWidth(clampPanelWidth(550));
     setRightPanelType('detail');
+  }, [clampPanelWidth]);
+
+  // Close detail panel (shared by MobileBottomSheet + DetailPanel onClose)
+  const handleCloseDetailPanel = useCallback(() => {
+    setRightPanelType(null);
+    setDetailToolCall(null);
+    setDetailPlanData(null);
   }, []);
 
   // Toggle file panel
@@ -844,10 +864,10 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
     if (rightPanelType === 'file') {
       setRightPanelType(null);
     } else {
-      setRightPanelWidth(850);
+      setRightPanelWidth(clampPanelWidth(850));
       setRightPanelType('file');
     }
-  }, [rightPanelType]);
+  }, [rightPanelType, clampPanelWidth]);
 
   // Add context from FilePanel or message selection to ChatInput
   const handleAddContext = useCallback((ctx: any) => { // TODO: type properly
@@ -917,7 +937,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
   const handleNavEnter = useCallback(() => {
     if (navLockedRef.current) return; // locked after explicit minimize
     // Don't open if content area is too narrow (e.g., right panel consuming space)
-    if ((contentAreaRef.current?.offsetWidth ?? Infinity) < 800) return;
+    if ((contentAreaRef.current?.offsetWidth ?? Infinity) < 1100) return;
     if (navHideTimerRef.current) clearTimeout(navHideTimerRef.current);
     _navPanelVisible = true;
     setNavPanelVisible(true);
@@ -1215,7 +1235,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
       initial={_navPanelVisible ? false : { y: 10 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className="flex h-screen w-full overflow-hidden"
+      className={`flex w-full overflow-hidden ${isMobile ? 'h-full' : 'h-screen'}`}
       style={{
         backgroundColor: 'var(--color-bg-page)',
       }}
@@ -1225,6 +1245,16 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-2 border-b min-w-0 flex-shrink-0" style={{ borderColor: 'var(--color-border-muted)' }}>
           <div className="flex items-center gap-4 min-w-0 flex-shrink">
+            {isMobile && (
+              <button
+                onClick={handleNavExpand}
+                className="p-2 rounded-md transition-colors flex-shrink-0"
+                style={{ color: 'var(--color-text-primary)' }}
+                title="Menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+            )}
             <button
               onClick={() => { intentionalExitRef.current = true; onBack(); }}
               className="p-2 rounded-md transition-colors flex-shrink-0"
@@ -1266,21 +1296,23 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
 
         {/* Content area: Navigation Panel Overlay + Chat Window */}
         <div ref={contentAreaRef} className="flex-1 flex overflow-hidden" style={{ position: 'relative', containerType: 'inline-size' }}>
-          {/* Navigation trigger strip — hover zone clamped to left margin of centered content column */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: 'max(16px, calc((100% - 768px) / 2))',
-              zIndex: 41,
-              pointerEvents: navPanelVisible ? 'none' : 'auto',
-            }}
-            onMouseEnter={handleNavEnter}
-          />
-          {/* Expand tab — always visible when panel is hidden */}
-          {!navPanelVisible && (
+          {/* Navigation trigger strip — hover zone (desktop only) */}
+          {!isMobile && (
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 'clamp(24px, calc((100% - 768px) / 2), 80px)',
+                zIndex: 41,
+                pointerEvents: navPanelVisible ? 'none' : 'auto',
+              }}
+              onMouseEnter={handleNavEnter}
+            />
+          )}
+          {/* Expand tab — desktop only, visible when panel is hidden */}
+          {!isMobile && !navPanelVisible && (
             <button
               onClick={handleNavExpand}
               className="nav-panel-dismiss-btn"
@@ -1305,6 +1337,18 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
               <PanelLeftOpen className="h-3.5 w-3.5" style={{ color: 'var(--color-text-tertiary)' }} />
             </button>
           )}
+          {/* Mobile backdrop — dimmed overlay behind nav drawer */}
+          {isMobile && navPanelVisible && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 39,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              }}
+              onClick={handleNavMinimize}
+            />
+          )}
           {/* Navigation panel area — responsive width, interactive only when visible */}
           <div
             style={{
@@ -1316,8 +1360,8 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
               zIndex: 40,
               pointerEvents: navPanelVisible ? 'auto' : 'none',
             }}
-            onMouseEnter={handleNavEnter}
-            onMouseLeave={handleNavLeave}
+            onMouseEnter={!isMobile ? handleNavEnter : undefined}
+            onMouseLeave={!isMobile ? handleNavLeave : undefined}
           >
             <AnimatePresence>
               {navPanelVisible && (
@@ -1369,8 +1413,14 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
             </AnimatePresence>
           </div>
 
-          {/* Chat Window */}
-          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          {/* Chat Window — nudge right when nav panel is open so content clears the overlay */}
+          <div
+            className="flex-1 flex flex-col overflow-hidden min-w-0"
+            style={{
+              paddingLeft: !isMobile && navPanelVisible ? 'min(320px, max(0px, calc(1424px - 100%)))' : 0,
+              transition: 'padding-left 0.2s cubic-bezier(0.22, 1, 0.36, 1)',
+            }}
+          >
             {/* Messages Area - Fixed height, scrollable */}
             <div
               ref={msgAreaRef}
@@ -1401,7 +1451,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
               })()}
               {activeAgentId === 'main' ? (
                 <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-                  <div className="px-6 py-4 flex justify-center">
+                  <div className={`${isMobile ? 'px-3 py-3' : 'px-6 py-4'} flex justify-center`}>
                     <div className="w-full max-w-3xl">
                       <MessageList
                         messages={messages as unknown as MessageRecord[]}
@@ -1435,7 +1485,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
                 </ScrollArea>
               ) : activeAgent ? (
                 <ScrollArea ref={subagentScrollAreaRef} className="h-full w-full">
-                  <div className="px-6 py-4 flex justify-center">
+                  <div className={`${isMobile ? 'px-3 py-3' : 'px-6 py-4'} flex justify-center`}>
                     <div className="w-full max-w-3xl space-y-2.5">
                       {/* Task description as header */}
                       {activeAgent.description && (
@@ -1447,7 +1497,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
                       {activeAgent.prompt && (
                         <div className="flex justify-end">
                           <div
-                            className="max-w-[80%] rounded-lg rounded-tr-none px-4 py-3 overflow-hidden"
+                            className={`max-w-[80%] rounded-lg rounded-tr-none ${isMobile ? 'px-3 py-2' : 'px-4 py-3'} overflow-hidden`}
                             style={{
                               backgroundColor: 'var(--color-bg-elevated)',
                               color: 'var(--color-text-primary)',
@@ -1494,7 +1544,7 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
             </div>
 
             {/* Input Area */}
-            <div className="flex-shrink-0 p-4 flex justify-center">
+            <div className={`flex-shrink-0 ${isMobile ? 'p-3' : 'p-4'} flex justify-center`}>
               <div className="w-full max-w-3xl space-y-3">
                 {activeAgentId === 'main' ? (
                   <>
@@ -1575,61 +1625,80 @@ function ChatView({ workspaceId, threadId, onBack, workspaceName: initialWorkspa
         </div>
       </div>
 
-      {/* Right Side: Split Panel (File or Detail only) */}
-      <AnimatePresence>
-        {rightPanelType && (
-          <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: rightPanelWidth + DIVIDER_WIDTH, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: isDragging ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-shrink-0 overflow-hidden"
-          >
-            <div
-              className="chat-split-divider"
-              onMouseDown={handleDividerMouseDown}
+      {/* Right Side: Split Panel (File or Detail) */}
+      {/* On mobile, DetailPanel renders as a bottom sheet; FilePanel keeps the full-screen overlay */}
+      {isMobile && rightPanelType === 'detail' && (detailToolCall || detailPlanData) ? (
+        <MobileBottomSheet
+          open
+          onClose={handleCloseDetailPanel}
+          sizing="fixed"
+          style={{ paddingBottom: 'calc(var(--bottom-tab-height, 0px) + 16px)' }}
+        >
+          <Suspense fallback={null}>
+            <DetailPanel
+              toolCallProcess={detailToolCall}
+              planData={detailPlanData}
+              onClose={handleCloseDetailPanel}
+              onOpenFile={handleOpenFileFromChat}
+              onOpenSubagentTask={handleOpenSubagentTask}
             />
-            <div className="flex-shrink-0" style={{ width: rightPanelWidth }}>
-              <Suspense fallback={null}>
-                {rightPanelType === 'file' ? (
-                  <FilePanel
-                    workspaceId={workspaceId}
-                    onClose={() => setRightPanelType(null)}
-                    targetFile={filePanelTargetFile}
-                    onTargetFileHandled={() => setFilePanelTargetFile(null)}
-                    targetDirectory={filePanelTargetDir}
-                    onTargetDirHandled={() => setFilePanelTargetDir(null)}
-                    files={workspaceFiles}
-                    filesLoading={filesLoading}
-                    filesError={filesError}
-                    onRefreshFiles={refreshFiles}
-                    onAddContext={handleAddContext}
-                    showSystemFiles={showSystemFiles}
-                    onToggleSystemFiles={() => {
-                      setShowSystemFiles((v) => {
-                        localStorage.setItem('filePanel.showSystemFiles', String(!v));
-                        return !v;
-                      });
-                    }}
-                  />
-                ) : rightPanelType === 'detail' && (detailToolCall || detailPlanData) ? (
-                  <DetailPanel
-                    toolCallProcess={detailToolCall}
-                    planData={detailPlanData}
-                    onClose={() => {
-                      setRightPanelType(null);
-                      setDetailToolCall(null);
-                      setDetailPlanData(null);
-                    }}
-                    onOpenFile={handleOpenFileFromChat}
-                    onOpenSubagentTask={handleOpenSubagentTask}
-                  />
-                ) : null}
-              </Suspense>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </Suspense>
+        </MobileBottomSheet>
+      ) : (
+        <AnimatePresence>
+          {rightPanelType && (
+            <motion.div
+              initial={isMobile ? { x: '100%' } : { width: 0, opacity: 0 }}
+              animate={isMobile ? { x: 0 } : { width: rightPanelWidth + DIVIDER_WIDTH, opacity: 1 }}
+              exit={isMobile ? { x: '100%' } : { width: 0, opacity: 0 }}
+              transition={{ duration: isDragging ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }}
+              className={isMobile ? 'flex overflow-hidden mobile-panel-overlay' : 'flex flex-shrink-0 overflow-hidden'}
+              style={isMobile ? { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 30, backgroundColor: 'var(--color-bg-page)' } : undefined}
+            >
+              {!isMobile && (
+                <div
+                  className="chat-split-divider"
+                  onMouseDown={handleDividerMouseDown}
+                />
+              )}
+              <div className="flex-shrink-0 h-full" style={{ width: isMobile ? '100%' : rightPanelWidth }}>
+                <Suspense fallback={null}>
+                  {rightPanelType === 'file' ? (
+                    <FilePanel
+                      workspaceId={workspaceId}
+                      onClose={() => setRightPanelType(null)}
+                      targetFile={filePanelTargetFile}
+                      onTargetFileHandled={() => setFilePanelTargetFile(null)}
+                      targetDirectory={filePanelTargetDir}
+                      onTargetDirHandled={() => setFilePanelTargetDir(null)}
+                      files={workspaceFiles}
+                      filesLoading={filesLoading}
+                      filesError={filesError}
+                      onRefreshFiles={refreshFiles}
+                      onAddContext={handleAddContext}
+                      showSystemFiles={showSystemFiles}
+                      onToggleSystemFiles={() => {
+                        setShowSystemFiles((v) => {
+                          localStorage.setItem('filePanel.showSystemFiles', String(!v));
+                          return !v;
+                        });
+                      }}
+                    />
+                  ) : rightPanelType === 'detail' && (detailToolCall || detailPlanData) ? (
+                    <DetailPanel
+                      toolCallProcess={detailToolCall}
+                      planData={detailPlanData}
+                      onClose={handleCloseDetailPanel}
+                      onOpenFile={handleOpenFileFromChat}
+                      onOpenSubagentTask={handleOpenSubagentTask}
+                    />
+                  ) : null}
+                </Suspense>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
     </motion.div>
     </WorkspaceProvider>
