@@ -16,6 +16,7 @@ export default function BottomTabBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const handleItemClick = (path: string) => {
+    if (location.pathname === path) return;
     navigate(path);
   };
 

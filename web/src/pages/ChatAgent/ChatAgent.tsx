@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { queryKeys } from '../../lib/queryKeys';
 import { getWorkspaceThreads, getThread } from './utils/api';
-import { getChatSession, clearChatSession } from './hooks/utils/chatSessionRestore';
+import { getChatSession } from './hooks/utils/chatSessionRestore';
 import ChatView from './components/ChatView';
 import './ChatAgent.css';
 
@@ -250,7 +250,7 @@ function ChatAgent(): React.ReactElement | null {
     );
   } else {
     content = (
-      <Suspense fallback={null}>
+      <Suspense fallback={<div style={{ height: '100%', background: 'var(--color-bg-page, #0a0a0a)' }} />}>
         <WorkspaceGallery
           onWorkspaceSelect={handleWorkspaceSelect}
           prefetchThreads={prefetchThreads}
