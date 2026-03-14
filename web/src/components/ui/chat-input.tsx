@@ -313,8 +313,21 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
   // Voice Input (Speech Recognition)
   const [isListening, setIsListening] = useState(false);
+  const [speechLang, setSpeechLang] = useState<string>(() => {
+    // Priority: Persisted > Browser > fallback en-US
+    const persisted = localStorage.getItem('chat_input_speech_lang');
+    if (persisted) return persisted;
+    const browserLang = navigator.language;
+    if (browserLang.startsWith('zh')) return 'zh-CN';
+    return 'en-US';
+  });
   const recognitionRef = useRef<any>(null);
   const baseMessageRef = useRef('');
+
+  // Persist speech language preference
+  useEffect(() => {
+    localStorage.setItem('chat_input_speech_lang', speechLang);
+  }, [speechLang]);
 
   const toggleListening = useCallback(() => {
     if (isListening) {
@@ -335,7 +348,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = i18n.language || 'en-US';
+      recognition.lang = speechLang;
 
       // Capture message BEFORE starting recognition
       const startMessage = message.trim();
@@ -1421,6 +1434,26 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                   <Mic className="w-4 h-4" />
                 )}
               </button>
+
+              {/* Speech Language Toggle */}
+              {!isLoading && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSpeechLang((prev) => (prev === 'en-US' ? 'zh-CN' : 'en-US'));
+                  }}
+                  className="inline-flex items-center justify-center px-1.5 h-6 rounded-md text-[10px] font-bold transition-all hover:bg-foreground/10 active:scale-95 border border-[var(--color-border-muted)]"
+                  style={{
+                    color: 'var(--color-text-tertiary)',
+                    marginLeft: '-4px',
+                    zIndex: 10,
+                  }}
+                  type="button"
+                  title="Toggle voice input language"
+                >
+                  {speechLang === 'en-US' ? 'EN' : 'CN'}
+                </button>
+              )}
               {/* Send / Stop Button */}
               {isLoading && onStop ? (
                 <button
