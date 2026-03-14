@@ -82,7 +82,6 @@ export const TOOL_DISPLAY_CONFIG: Record<string, ToolDisplayEntry> = {
   ExecuteCode:              { displayName: 'Execute Code',         i18nKey: 'executeCode',         icon: SquareChevronRight },
   think_tool:               { displayName: 'Thinking',             i18nKey: 'thinking',            icon: Brain },
   // Background subagent management
-  Wait:                     { displayName: 'Waiting for Subagent', i18nKey: 'waitingForSubagent',  icon: Clock },
   TaskOutput:               { displayName: 'Task Output',          i18nKey: 'taskOutput',          icon: ClipboardList },
   // Automations
   check_automations:        { displayName: 'Automations',          i18nKey: 'automations',         icon: Clock },
@@ -175,10 +174,10 @@ export function getInProgressText(rawToolName: string, toolCall: ToolCall | unde
       return args?.description ? `${args.description}...` : (tr?.('runningCommand') ?? 'running command...');
     case 'ExecuteCode':
       return args?.description ? `${args.description}...` : (tr?.('executing') ?? 'executing...');
-    case 'Wait':
-      return tr?.('waitingForSubagent') ?? 'waiting for subagent...';
     case 'TaskOutput':
-      return tr?.('fetchingTaskOutput') ?? 'fetching task output...';
+      return args?.timeout
+        ? (tr?.('waitingForSubagent') ?? 'waiting for subagent...')
+        : (tr?.('fetchingTaskOutput') ?? 'fetching task output...');
     case 'check_automations':
       return tr?.('checkingAutomations') ?? 'checking automations...';
     case 'create_automation':

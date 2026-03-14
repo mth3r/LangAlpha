@@ -250,7 +250,6 @@ TOOL_ICONS = {
     "WebFetch": "🌍",
     "http_request": "🌍",
     "Task": "🤖",
-    "Wait": "⏳",
     "TaskOutput": "📤",
     "TodoWrite": "📋",
     "SubmitPlan": "📋",
@@ -925,7 +924,7 @@ def _handle_tool_result(
         console.print()
         return
 
-    if tool_name in ("Task", "Wait", "TaskOutput") and status == "success" and content:
+    if tool_name in ("Task", "TaskOutput") and status == "success" and content:
         state.flush_text(final=True)
         if state.spinner_active:
             state.stop_spinner()
@@ -933,7 +932,6 @@ def _handle_tool_result(
         icon = TOOL_ICONS.get(tool_name, "🔧")
         title = {
             "Task": "Subagent result",
-            "Wait": "Subagent results",
             "TaskOutput": "Task output",
         }.get(tool_name, f"{tool_name} result")
 
