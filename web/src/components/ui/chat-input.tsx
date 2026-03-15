@@ -333,6 +333,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     return i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
   });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const finalTranscriptRef = useRef('');
   const baseMessageRef = useRef('');
   const messageRef = useRef(message);
 
@@ -351,11 +352,22 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     localStorage.setItem('chat_input_speech_lang', speechLang);
   }, [speechLang]);
 
+  // Stop recognition when loading starts (ghost text fix)
+  useEffect(() => {
+    if (isLoading && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  }, [isLoading]);
+
   const toggleListening = useCallback(() => {
+    // ALWAYS stop existing instance if it exists (prevents orphaned instances on rapid clicks)
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+
     if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
       setIsListening(false);
       return;
     }
@@ -378,14 +390,21 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
       recognition.onstart = () => {
         setIsListening(true);
+        finalTranscriptRef.current = ''; // Reset for new session
       };
 
       recognition.onresult = (event: any) => {
-        let sessionTranscript = '';
-        for (let i = 0; i < event.results.length; ++i) {
-          sessionTranscript += event.results[i][0].transcript;
+        let interimTranscript = '';
+        // Start from resultIndex to avoid re-processing or duplicating old results
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscriptRef.current += result[0].transcript;
+          } else {
+            interimTranscript += result[0].transcript;
+          }
         }
-        setMessage(baseMessageRef.current + sessionTranscript);
+        setMessage(baseMessageRef.current + finalTranscriptRef.current + interimTranscript);
       };
 
       recognition.onerror = (event: any) => {
