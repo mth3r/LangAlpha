@@ -354,6 +354,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   useEffect(() => {
     if (isLoading && recognitionRef.current) {
       recognitionRef.current.stop();
+      recognitionRef.current = null;
       setIsListening(false);
     }
   }, [isLoading]);
@@ -394,7 +395,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
         finalTranscriptRef.current = ''; // Reset for new session
       };
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
         let interimTranscript = '';
         // Start from resultIndex to avoid re-processing or duplicating old results
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -408,7 +409,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
         setMessage(baseMessageRef.current + finalTranscriptRef.current + interimTranscript);
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         if (event.error !== 'no-speech') {
           console.error('Speech recognition error:', event.error);
         }
@@ -437,7 +438,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        recognitionRef.current.abort(); // Terminate immediately without firing callbacks
+        recognitionRef.current = null;
       }
     };
   }, []);
