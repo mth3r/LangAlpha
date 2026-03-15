@@ -314,9 +314,11 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   // Voice Input (Speech Recognition)
   const [isListening, setIsListening] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(() => {
-    // Priority: Persisted > Browser > fallback en-US
+    // Priority: Persisted > App Locale > Browser > fallback en-US
     const persisted = localStorage.getItem('chat_input_speech_lang');
     if (persisted) return persisted;
+    const appLang = i18n.language;
+    if (appLang.startsWith('zh')) return 'zh-CN';
     const browserLang = navigator.language;
     if (browserLang.startsWith('zh')) return 'zh-CN';
     return 'en-US';
@@ -1448,14 +1450,15 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                       e.stopPropagation();
                       setSpeechLang((prev) => (prev === 'en-US' ? 'zh-CN' : 'en-US'));
                     }}
-                    className="inline-flex items-center justify-center px-1.5 h-6 rounded-md text-[10px] font-bold transition-all hover:bg-foreground/10 active:scale-95 border border-[var(--color-border-muted)]"
+                    disabled={isListening}
+                    className={`inline-flex items-center justify-center px-1.5 h-6 rounded-md text-[10px] font-bold transition-all hover:bg-foreground/10 active:scale-95 border border-[var(--color-border-muted)] ${isListening ? 'opacity-50 cursor-not-allowed' : ''}`}
                     style={{
                       color: 'var(--color-text-tertiary)',
                       marginLeft: '-4px',
                       zIndex: 10,
                     }}
                     type="button"
-                    title="Toggle voice input language"
+                    title={isListening ? 'Cannot change language while recording' : 'Toggle voice input language'}
                   >
                     {speechLang === 'en-US' ? 'EN' : 'CN'}
                   </button>
