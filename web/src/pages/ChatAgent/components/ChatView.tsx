@@ -1602,7 +1602,7 @@ function ChatView({ workspaceId, threadId, initialTaskId, onBack, workspaceName:
               {activeAgentId === 'main' ? (
                 <ScrollArea ref={scrollAreaRef} className="h-full w-full">
                   <div className={`${isMobile ? 'px-3 py-3' : 'px-6 py-4'} flex justify-center`}>
-                    <div className="w-full max-w-3xl">
+                    <div className="w-full max-w-3xl overflow-x-hidden">
                       <MessageList
                         messages={messages as unknown as MessageRecord[]}
                         isLoading={isLoading}
