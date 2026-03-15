@@ -317,7 +317,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   const [isListening, setIsListening] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(() => {
     // Priority: Persisted > App Locale > fallback en-US
-    // Only use persisted if the user has explicitly overridden the default
+    // Only use persisted if the user has explicitly overridden the default via toggleLang.
+    // Note: Once 'chat_input_speech_lang_manual' is true, auto-sync with app locale is permanently
+    // disabled for this user/browser until localStorage is cleared.
     const isManual = localStorage.getItem('chat_input_speech_lang_manual') === 'true';
     if (isManual) {
       const persisted = localStorage.getItem('chat_input_speech_lang');
@@ -420,6 +422,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     } catch (err) {
       console.error('Failed to start speech recognition:', err);
       isStartingRef.current = false;
+      recognitionRef.current = null; // Prevent stale ref if start() throws
       setIsListening(false);
     }
   }, [isListening, speechLang]);
@@ -1493,6 +1496,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                     }}
                     type="button"
                     title={isListening ? t('chat.voice.cannotChangeLang') : t('chat.voice.toggleLang')}
+                    aria-label={isListening ? t('chat.voice.cannotChangeLang') : t('chat.voice.toggleLang')}
                   >
                     {speechLang === 'en-US' ? 'EN' : 'CN'}
                   </button>
