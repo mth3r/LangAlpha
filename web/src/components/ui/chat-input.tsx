@@ -430,6 +430,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
           }
         }
         setIsListening(false);
+        isStartingRef.current = false;
         recognitionRef.current = null;
       };
 
