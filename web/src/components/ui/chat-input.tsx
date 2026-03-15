@@ -398,6 +398,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
+        if (recognitionRef.current !== recognition) return;
         let interimTranscript = '';
         // Start from resultIndex to avoid re-processing or duplicating old results
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -412,6 +413,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        if (recognitionRef.current !== recognition) return;
         if (event.error !== 'no-speech') {
           console.error('Speech recognition error:', event.error);
           if (event.error === 'not-allowed') {
@@ -432,6 +434,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       };
 
       recognition.onend = () => {
+        if (recognitionRef.current !== recognition) return;
         isStartingRef.current = false; // Release lock in case onstart never fired
         setIsListening(false);
         recognitionRef.current = null;
