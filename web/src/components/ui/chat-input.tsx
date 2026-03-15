@@ -449,7 +449,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       recognitionRef.current = null; // Prevent stale ref if start() throws
       setIsListening(false);
     }
-  }, [isListening, speechLang]);
+  }, [isListening, speechLang, toast, t]);
 
   // Clean up recognition on unmount
   useEffect(() => {

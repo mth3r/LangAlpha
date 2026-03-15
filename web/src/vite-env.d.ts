@@ -11,8 +11,3 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-// webkitSpeechRecognition is still not in standard DOM types
-declare var webkitSpeechRecognition: {
-  prototype: SpeechRecognition;
-  new(): SpeechRecognition;
-};
