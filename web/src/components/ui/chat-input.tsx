@@ -15,19 +15,6 @@ import './chat-input.css';
 
 /* --- TYPES --- */
 
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onresult: ((this: SpeechRecognition, ev: any) => any) | null;
-  onerror: ((this: SpeechRecognition, ev: any) => any) | null;
-  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-
 interface FileAttachment {
   id: string;
   file: File;
@@ -238,6 +225,8 @@ function areModelsCompatible(modelA: string | null, modelB: string | null, metad
  * @param {string}    prefillMessage
  * @param {Function}  onClearPrefill
  */
+const speechSupported = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
 const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
   onSend,
   disabled = false,
@@ -333,6 +322,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     return i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
   });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const isStartingRef = useRef(false);
   const finalTranscriptRef = useRef('');
   const baseMessageRef = useRef('');
   const messageRef = useRef(message);
@@ -340,11 +330,12 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   // Sync message ref
   useEffect(() => { messageRef.current = message; }, [message]);
 
-  const speechSupported = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-
-  // Sync speechLang with app locale change
+  // Sync speechLang with app locale change - only if not explicitly set by user
   useEffect(() => {
-    setSpeechLang(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US');
+    const persisted = localStorage.getItem('chat_input_speech_lang');
+    if (!persisted) {
+      setSpeechLang(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US');
+    }
   }, [i18n.language]);
 
   // Persist speech language preference
@@ -361,6 +352,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   }, [isLoading]);
 
   const toggleListening = useCallback(() => {
+    if (isStartingRef.current) return;
+
     // ALWAYS stop existing instance if it exists (prevents orphaned instances on rapid clicks)
     if (recognitionRef.current) {
       recognitionRef.current.stop();
@@ -390,6 +383,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
       recognition.onstart = () => {
         setIsListening(true);
+        isStartingRef.current = false;
         finalTranscriptRef.current = ''; // Reset for new session
       };
 
@@ -417,9 +411,11 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       };
 
       recognitionRef.current = recognition;
+      isStartingRef.current = true;
       recognition.start();
     } catch (err) {
       console.error('Failed to start speech recognition:', err);
+      isStartingRef.current = false;
       setIsListening(false);
     }
   }, [isListening, speechLang]);
