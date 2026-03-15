@@ -109,6 +109,15 @@ const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try { return localStorage.getItem(key); } catch { return null; }
+  },
+  setItem: (key: string, value: string): void => {
+    try { localStorage.setItem(key, value); } catch { /* ignore */ }
+  },
+};
+
 /* --- FILE PREVIEW CARD --- */
 const FilePreviewCard = ({ file, onRemove }: { file: FileAttachment; onRemove: (id: string) => void }) => {
   const isMobilePreview = useIsMobile();
@@ -320,9 +329,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     // Only use persisted if the user has explicitly overridden the default via toggleLang.
     // Note: Once 'chat_input_speech_lang_manual' is true, auto-sync with app locale is permanently
     // disabled for this user/browser until localStorage is cleared.
-    const isManual = localStorage.getItem('chat_input_speech_lang_manual') === 'true';
+    const isManual = safeLocalStorage.getItem('chat_input_speech_lang_manual') === 'true';
     if (isManual) {
-      const persisted = localStorage.getItem('chat_input_speech_lang');
+      const persisted = safeLocalStorage.getItem('chat_input_speech_lang');
       if (persisted) return persisted;
     }
     return i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
@@ -338,7 +347,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
   // Sync speechLang with app locale change - only if not explicitly set by user
   useEffect(() => {
-    const isManual = localStorage.getItem('chat_input_speech_lang_manual') === 'true';
+    const isManual = safeLocalStorage.getItem('chat_input_speech_lang_manual') === 'true';
     if (!isManual) {
       setSpeechLang(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US');
     }
@@ -346,7 +355,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
   // Persist speech language preference
   useEffect(() => {
-    localStorage.setItem('chat_input_speech_lang', speechLang);
+    safeLocalStorage.setItem('chat_input_speech_lang', speechLang);
   }, [speechLang]);
 
   // Stop recognition when loading starts (ghost text fix)
@@ -413,6 +422,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       };
 
       recognition.onend = () => {
+        isStartingRef.current = false; // Release lock in case onstart never fired
         setIsListening(false);
       };
 
@@ -1484,7 +1494,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      localStorage.setItem('chat_input_speech_lang_manual', 'true');
+                      // MVP Scope: Currently only supports toggling between English (US) and Chinese (CN).
+                      // Other app locales default to English for speech recognition.
+                      safeLocalStorage.setItem('chat_input_speech_lang_manual', 'true');
                       setSpeechLang((prev) => (prev === 'en-US' ? 'zh-CN' : 'en-US'));
                     }}
                     disabled={isListening}
