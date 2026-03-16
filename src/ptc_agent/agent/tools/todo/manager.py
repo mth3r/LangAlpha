@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from .types import TodoItem, TodoStatus, validate_todo_list_dict
+from .types import validate_todo_list_dict
 
 logger = logging.getLogger(__name__)
 

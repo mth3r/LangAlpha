@@ -6,7 +6,7 @@ markdown files. These files provide context to the agent but cannot be modified
 directly - agents must use the user-profile skill instead.
 
 Directory structure in sandbox:
-    /home/daytona/.agent/user/
+    /home/workspace/.agent/user/
     ├── preference.md      # User preferences (risk, investment, agent settings)
     ├── watchlist.md       # All watchlists with symbols
     └── portfolio.md       # Holdings (symbol, quantity, cost basis)
@@ -22,9 +22,8 @@ from src.server.database import portfolio as portfolio_db
 
 logger = logging.getLogger(__name__)
 
-# Sandbox directory for user data files
+# Sandbox directory for user data files (relative to working dir)
 USER_DATA_DIR = ".agent/user"
-USER_DATA_SANDBOX_PATH = f"/home/daytona/{USER_DATA_DIR}"
 
 # File names
 PREFERENCE_FILE = "preference.md"
@@ -300,10 +299,14 @@ async def sync_user_data_to_sandbox(
     watchlist_md = format_watchlist_md(data)
     portfolio_md = format_portfolio_md(data)
 
+    # Derive sandbox path from working directory
+    work_dir = sandbox.working_dir
+    user_data_path = f"{work_dir}/{USER_DATA_DIR}"
+
     # Ensure directory exists
     try:
-        logger.info(f"[sync_user_data] Creating directory: {USER_DATA_SANDBOX_PATH}")
-        await sandbox.execute_bash_command(f"mkdir -p {USER_DATA_SANDBOX_PATH}")
+        logger.info(f"[sync_user_data] Creating directory: {user_data_path}")
+        await sandbox.execute_bash_command(f"mkdir -p {user_data_path}")
     except Exception as e:
         logger.warning(f"Failed to create user data directory: {e}")
 
@@ -311,17 +314,17 @@ async def sync_user_data_to_sandbox(
     results = await asyncio.gather(
         _sync_file_if_changed(
             sandbox,
-            f"{USER_DATA_SANDBOX_PATH}/{PREFERENCE_FILE}",
+            f"{user_data_path}/{PREFERENCE_FILE}",
             preference_md,
         ),
         _sync_file_if_changed(
             sandbox,
-            f"{USER_DATA_SANDBOX_PATH}/{WATCHLIST_FILE}",
+            f"{user_data_path}/{WATCHLIST_FILE}",
             watchlist_md,
         ),
         _sync_file_if_changed(
             sandbox,
-            f"{USER_DATA_SANDBOX_PATH}/{PORTFOLIO_FILE}",
+            f"{user_data_path}/{PORTFOLIO_FILE}",
             portfolio_md,
         ),
         return_exceptions=True,
@@ -400,10 +403,13 @@ async def sync_single_file(
     data = await fetch_all_user_data(user_id)
     content = formatter(data)
 
+    work_dir = sandbox.working_dir
+    user_data_path = f"{work_dir}/{USER_DATA_DIR}"
+
     try:
         updated = await _sync_file_if_changed(
             sandbox,
-            f"{USER_DATA_SANDBOX_PATH}/{file_name}",
+            f"{user_data_path}/{file_name}",
             content,
         )
         if updated:

@@ -44,9 +44,16 @@ _STATE_MAP: dict[str, RuntimeState] = {
 class DaytonaRuntime(SandboxRuntime):
     """Runtime that delegates to a Daytona SDK sandbox object."""
 
-    def __init__(self, sdk_sandbox: Any, *, snapshot_name: str | None = None) -> None:
+    def __init__(
+        self,
+        sdk_sandbox: Any,
+        *,
+        snapshot_name: str | None = None,
+        default_working_dir: str = "/home/workspace",
+    ) -> None:
         self._sandbox = sdk_sandbox
         self._working_dir: str | None = None
+        self._default_working_dir = default_working_dir
         self.snapshot_name: str | None = snapshot_name
 
     # -- Properties --
@@ -58,7 +65,7 @@ class DaytonaRuntime(SandboxRuntime):
     @property
     def working_dir(self) -> str:
         """Return cached working dir, or Daytona default if not yet fetched."""
-        return self._working_dir or "/home/daytona"
+        return self._working_dir or self._default_working_dir
 
     async def fetch_working_dir(self) -> str:
         """Fetch and cache the sandbox working directory (must be awaited)."""
@@ -222,8 +229,9 @@ class DaytonaProvider(SandboxProvider):
     SNAPSHOT_PYTHON_VERSION = SNAPSHOT_PYTHON_VERSION
     DEFAULT_DEPENDENCIES = DEFAULT_DEPENDENCIES
 
-    def __init__(self, config: DaytonaConfig) -> None:
+    def __init__(self, config: DaytonaConfig, working_dir: str | None = None) -> None:
         self._config = config
+        self._working_dir = working_dir or "/home/workspace"
         sdk_config = SDKDaytonaConfig(
             api_key=config.api_key, api_url=config.base_url
         )
@@ -261,11 +269,17 @@ class DaytonaProvider(SandboxProvider):
         )
 
         sdk_sandbox = await self._client.create(params)
-        return DaytonaRuntime(sdk_sandbox, snapshot_name=snapshot_name)
+        return DaytonaRuntime(
+            sdk_sandbox,
+            snapshot_name=snapshot_name,
+            default_working_dir=self._working_dir,
+        )
 
     async def get(self, sandbox_id: str) -> DaytonaRuntime:
         sdk_sandbox = await self._client.get(sandbox_id)
-        return DaytonaRuntime(sdk_sandbox)
+        return DaytonaRuntime(
+            sdk_sandbox, default_working_dir=self._working_dir,
+        )
 
     async def close(self) -> None:
         try:
@@ -306,6 +320,7 @@ class DaytonaProvider(SandboxProvider):
         """Generate an 8-char hash for snapshot versioning."""
         config_data = {
             "base_image": "ubuntu:24.04",
+            "working_dir": self._working_dir,
             "python_version": self.SNAPSHOT_PYTHON_VERSION,
             "dependencies": self.DEFAULT_DEPENDENCIES,
             "mcp_packages": sorted(mcp_packages or []),
@@ -390,7 +405,7 @@ class DaytonaProvider(SandboxProvider):
                 "matplotlib.font_manager._load_fontmanager(try_read_cache=False)"
                 '"',
             )
-            .workdir("/home/daytona")
+            .workdir(self._working_dir)
         )
 
         logger.info(

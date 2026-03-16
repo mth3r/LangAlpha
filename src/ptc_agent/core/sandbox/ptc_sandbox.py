@@ -1,4 +1,4 @@
-"""PTC Sandbox - Manages Daytona sandbox for Programmatic Tool Calling execution."""
+"""PTC Sandbox - Manages sandbox for Programmatic Tool Calling execution."""
 
 import asyncio
 import base64
@@ -102,12 +102,11 @@ def _entry_is_dir(entry) -> bool:
 
 
 class PTCSandbox:
-    """Manages Daytona sandbox for Programmatic Tool Calling (PTC) execution."""
+    """Manages sandbox for Programmatic Tool Calling (PTC) execution."""
 
     SNAPSHOT_PYTHON_VERSION = SNAPSHOT_PYTHON_VERSION
     DEFAULT_DEPENDENCIES = DEFAULT_DEPENDENCIES
 
-    UNIFIED_MANIFEST_PATH = "/home/daytona/_internal/.sandbox_manifest.json"
     TOKEN_FRESHNESS_SECONDS = 25 * 60  # 25 min (access token TTL is 30 min)
 
     def __init__(
@@ -130,6 +129,10 @@ class PTCSandbox:
         self.execution_count = 0
         self.bash_execution_count = 0
 
+        # Working directory — initialized from config, updated by fetch_working_dir()
+        # after sandbox creation/reconnect.
+        self._work_dir: str = config.filesystem.working_directory
+
         self._reconnect_lock = asyncio.Lock()
         self._tool_refresh_lock = asyncio.Lock()
         self._reconnect_inflight: asyncio.Future[None] | None = None
@@ -150,6 +153,19 @@ class PTCSandbox:
         self._disabled_modules_pruned = False
 
         logger.info("Initialized PTCSandbox")
+
+    @property
+    def working_dir(self) -> str:
+        """The sandbox working directory (available from construction, updated after setup)."""
+        return self._work_dir
+
+    @property
+    def _unified_manifest_path(self) -> str:
+        return f"{self._work_dir}/_internal/.sandbox_manifest.json"
+
+    @property
+    def _token_file_path(self) -> str:
+        return f"{self._work_dir}/_internal/.mcp_tokens.json"
 
     async def _wait_ready(self) -> None:
         """Wait for sandbox to be ready. Call at start of methods needing sandbox."""
@@ -243,9 +259,9 @@ class PTCSandbox:
             Absolute sandbox path
         """
         if path == ".":
-            return self.config.filesystem.working_directory
+            return self._work_dir
         if not path.startswith("/"):
-            return f"{self.config.filesystem.working_directory}/{path}"
+            return f"{self._work_dir}/{path}"
         return path
 
     def _build_sandbox_env_vars(self) -> dict[str, str]:
@@ -390,8 +406,6 @@ class PTCSandbox:
 
         logger.info("Tools and MCP servers ready", sandbox_id=self.sandbox_id)
 
-    TOKEN_FILE_PATH = "/home/daytona/_internal/.mcp_tokens.json"
-
     async def upload_token_file(self, tokens: dict) -> None:
         """Write scoped auth tokens to a file in the sandbox.
 
@@ -419,10 +433,10 @@ class PTCSandbox:
             await self._runtime_call(
                 self.runtime.upload_file,
                 token_data.encode("utf-8"),
-                self.TOKEN_FILE_PATH,
+                self._token_file_path,
                 retry_policy=RetryPolicy.SAFE,
             )
-            logger.info("Uploaded sandbox token file", path=self.TOKEN_FILE_PATH)
+            logger.info("Uploaded sandbox token file", path=self._token_file_path)
         except Exception as e:
             logger.warning("Failed to upload sandbox token file", error=str(e))
 
@@ -461,7 +475,7 @@ class PTCSandbox:
         since they're already present from the first session.
 
         Args:
-            sandbox_id: The ID of an existing Daytona sandbox
+            sandbox_id: The ID of an existing sandbox
 
         Raises:
             RuntimeError: If sandbox cannot be found or is in invalid state
@@ -682,7 +696,7 @@ class PTCSandbox:
         Currently uploads the `src.data_client` package so code executed inside the
         sandbox can import `src.data_client` without depending on the full repo.
         """
-        work_dir = getattr(self, "_work_dir", "/home/daytona")
+        work_dir = self._work_dir
         internal_root = Path(f"{work_dir}/_internal/src")
 
         # Resolve local paths relative to config file directory if available.
@@ -763,6 +777,8 @@ class PTCSandbox:
         actual file contents so the manifest is deterministic and portable.
         """
 
+        skills_base = f"{self._work_dir}/skills"
+
         def build() -> dict[str, Any]:
             from ptc_agent.agent.middleware.skills import (
                 get_sandbox_skill_names,
@@ -819,7 +835,7 @@ class PTCSandbox:
                         content = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
                     except (OSError, UnicodeDecodeError):
                         continue
-                    sandbox_path = f"/home/daytona/skills/{skill_name}/SKILL.md"
+                    sandbox_path = f"{skills_base}/{skill_name}/SKILL.md"
                     meta = parse_skill_metadata(content, sandbox_path, skill_name)
                     skills_metadata[skill_name] = dict(meta)
 
@@ -921,7 +937,7 @@ class PTCSandbox:
         try:
             raw = await self._runtime_call(
                 self.runtime.download_file,
-                self.UNIFIED_MANIFEST_PATH,
+                self._unified_manifest_path,
                 retry_policy=RetryPolicy.SAFE,
             )
             if raw:
@@ -943,13 +959,13 @@ class PTCSandbox:
         await self._runtime_call(
             self.runtime.upload_file,
             json.dumps(manifest, sort_keys=True).encode("utf-8"),
-            self.UNIFIED_MANIFEST_PATH,
+            self._unified_manifest_path,
             retry_policy=RetryPolicy.SAFE,
         )
 
     async def _cleanup_legacy_manifests(self) -> None:
         """Remove old per-module manifest files after migration to unified manifest."""
-        work_dir = getattr(self, "_work_dir", "/home/daytona")
+        work_dir = self._work_dir
         legacy_paths = [
             f"{work_dir}/mcp_servers/.mcp_manifest.json",
             f"{work_dir}/skills/.skills_manifest.json",
@@ -967,7 +983,7 @@ class PTCSandbox:
 
     async def _upload_mcp_server_files_impl(self) -> None:
         """Upload MCP server .py files to sandbox (pure upload, no manifest check)."""
-        work_dir = getattr(self, "_work_dir", "/home/daytona")
+        work_dir = self._work_dir
         mcp_servers_dir = f"{work_dir}/mcp_servers"
         config_dir = getattr(self.config, "config_file_dir", None)
 
@@ -1238,7 +1254,7 @@ class PTCSandbox:
             self._disabled_modules_pruned = True
             return
 
-        work_dir = getattr(self, "_work_dir", "/home/daytona")
+        work_dir = self._work_dir
         paths: list[str] = []
         for name in disabled:
             paths.append(f"{work_dir}/tools/{name}.py")
@@ -1424,7 +1440,7 @@ class PTCSandbox:
 
         Args:
             local_skills_dirs: List of (local_path, sandbox_path) tuples.
-                Example: [("~/.ptc-agent/skills", "/home/daytona/skills")]
+                Example: [("~/.ptc-agent/skills", "{working_directory}/skills")]
             manifest: Pre-computed skills manifest. If None, computed from local_skills_dirs.
         """
         assert self.runtime is not None
@@ -1585,7 +1601,7 @@ class PTCSandbox:
         logger.info("Installing tool modules")
 
         # Get work directory (set by _setup_workspace)
-        work_dir = getattr(self, "_work_dir", "/home/daytona")
+        work_dir = self._work_dir
 
         # Collect all files to upload (content generation is CPU-bound, fast)
         uploads: list[tuple[bytes, str, tuple[str, dict[str, str]] | None]] = []
@@ -2028,7 +2044,7 @@ class PTCSandbox:
     async def execute_bash_command(
         self,
         command: str,
-        working_dir: str = "/home/daytona",
+        working_dir: str | None = None,
         timeout: int = 60,
         *,
         background: bool = False,
@@ -2038,7 +2054,7 @@ class PTCSandbox:
 
         Args:
             command: Bash command to execute
-            working_dir: Working directory for command execution (default: /home/daytona)
+            working_dir: Working directory for command execution (default: sandbox working dir)
             timeout: Maximum execution time in seconds (default: 60)
             background: Run command in background (not fully implemented yet)
             thread_id: Optional thread ID (first 8 chars) for thread-scoped script storage
@@ -2046,6 +2062,8 @@ class PTCSandbox:
         Returns:
             Dictionary with success, stdout, stderr, exit_code, bash_id, command_hash
         """
+        if working_dir is None:
+            working_dir = self._work_dir
         await self._wait_ready()
         start_time = time.time()
 
@@ -2195,7 +2213,7 @@ class PTCSandbox:
         """Download raw bytes from sandbox.
 
         This path is safe to retry automatically. Concurrency is bounded by a
-        semaphore to limit event-loop pressure from the Daytona SDK multipart parser.
+        semaphore to limit event-loop pressure from concurrent downloads.
 
         Returns:
             Bytes if downloaded, or None if missing.
@@ -2246,7 +2264,7 @@ class PTCSandbox:
         """
         await self._wait_ready()
 
-        # Normalize the path to ensure it's in the correct format for Daytona SDK
+        # Normalize the path to ensure it's absolute for the sandbox runtime
         normalized_path = self.normalize_path(filepath)
 
         if self.config.filesystem.enable_path_validation and not self.validate_path(
@@ -2257,7 +2275,7 @@ class PTCSandbox:
 
         try:
             assert self.runtime is not None
-            # Use normalized path for upload - Daytona SDK expects absolute paths
+            # Use normalized path for upload - runtime expects absolute paths
             await self._runtime_call(
                 self.runtime.upload_file,
                 content,
@@ -2358,8 +2376,8 @@ class PTCSandbox:
         Returns:
             Absolute sandbox path
         """
-        # Use configured working_directory as the prefix for path normalization
-        work_dir = self.config.filesystem.working_directory
+        # Use live working directory (updated by fetch_working_dir)
+        work_dir = self._work_dir
 
         if path in (None, "", ".", "/"):
             return work_dir
@@ -2371,11 +2389,11 @@ class PTCSandbox:
             if path.startswith(allowed_dir):
                 return str(Path(path))
 
-        # Virtual absolute path: /foo -> /home/daytona/foo
+        # Virtual absolute path: /foo -> {working_directory}/foo
         if path.startswith("/"):
             return str(Path(f"{work_dir}{path}"))
 
-        # Relative path: foo -> /home/daytona/foo
+        # Relative path: foo -> {working_directory}/foo
         return str(Path(f"{work_dir}/{path}"))
 
     def virtualize_path(self, path: str) -> str:
@@ -2392,8 +2410,8 @@ class PTCSandbox:
         Returns:
             Virtual path for agent consumption
         """
-        # Use configured working_directory as the prefix to strip
-        work_dir = self.config.filesystem.working_directory
+        # Use live working directory (updated by fetch_working_dir)
+        work_dir = self._work_dir
 
         if path.startswith(work_dir + "/"):
             return path[len(work_dir) :]  # Strip prefix, keep leading /

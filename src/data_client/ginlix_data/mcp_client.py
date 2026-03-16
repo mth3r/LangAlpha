@@ -94,7 +94,10 @@ def filter_bars_by_time(
 # Token file helpers
 # ---------------------------------------------------------------------------
 
-TOKEN_FILE = Path("/home/daytona/_internal/.mcp_tokens.json")
+# Derive token file path from the sandbox working directory.
+# Inside the sandbox, $HOME matches the configured working directory
+# (e.g. /home/workspace for Daytona, /home/sandbox for Docker).
+TOKEN_FILE = Path(os.environ.get("HOME", "/home/workspace")) / "_internal" / ".mcp_tokens.json"
 
 
 def _load_tokens() -> dict:

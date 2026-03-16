@@ -112,7 +112,7 @@ class SummarizationMiddleware(AgentMiddleware):
             token_counter: Function to count tokens in messages.
             summary_prompt: Prompt template for generating summaries.
             trim_tokens_to_summarize: Max tokens to keep for summarization call.
-            backend: Backend for offloading conversation history (DaytonaBackend for PTC,
+            backend: Backend for offloading conversation history (SandboxBackend for PTC,
                 None for flash). When None, no filesystem ops are attempted.
             truncate_args_settings: Settings for truncating large tool arguments
                 in old messages. When None, argument truncation is disabled.
@@ -548,7 +548,7 @@ class SummarizationMiddleware(AgentMiddleware):
         cached_input_tokens = 0
         cached_output_tokens = 0
 
-        # Sync path skips backend persistence (DaytonaBackend is async-only)
+        # Sync path skips backend persistence (SandboxBackend is async-only)
         file_path = None
 
         summary = self._create_summary(
@@ -1214,7 +1214,7 @@ class SummarizationMiddleware(AgentMiddleware):
 
         Args:
             config: Optional config override (defaults to SummarizationConfig defaults).
-            backend: Backend for offloading conversation history (DaytonaBackend
+            backend: Backend for offloading conversation history (SandboxBackend
                 for PTC, None for flash). When None, no filesystem ops are attempted.
 
         Returns:

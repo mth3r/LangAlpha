@@ -27,11 +27,12 @@ IMAGE_EXTS = {"png", "jpg", "jpeg", "gif", "svg", "webp", "bmp"}
 IMAGE_MD_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 
 
-def _is_sandbox_image_path(path: str) -> bool:
+def _is_sandbox_image_path(path: str, work_dir: str = "/home/workspace") -> bool:
     """Check if path is a sandbox-relative image (not an external URL)."""
     if path.startswith(("http://", "https://", "//", "data:")):
         return False
-    normalized = path.replace("/home/daytona/", "")
+    work_dir_prefix = work_dir.rstrip("/") + "/"
+    normalized = path.replace(work_dir_prefix, "") if path.startswith(work_dir_prefix) else path
     ext = normalized.rsplit(".", 1)[-1].lower() if "." in normalized else ""
     return ext in IMAGE_EXTS
 
@@ -49,6 +50,9 @@ async def capture_and_rewrite_images(
     if not is_storage_enabled() or not sse_events:
         return 0
 
+    work_dir = sandbox.working_dir
+    work_dir_prefix = work_dir.rstrip("/") + "/"
+
     # Collect all unique sandbox image paths from text message_chunks
     image_paths: set[str] = set()
     for evt in sse_events:
@@ -60,7 +64,7 @@ async def capture_and_rewrite_images(
         content = data.get("content", "")
         for match in IMAGE_MD_RE.finditer(content):
             path = match.group(2)
-            if _is_sandbox_image_path(path):
+            if _is_sandbox_image_path(path, work_dir):
                 image_paths.add(path)
 
     if not image_paths:
@@ -73,7 +77,7 @@ async def capture_and_rewrite_images(
 
     for path in image_paths:
         try:
-            normalized = path.replace("/home/daytona/", "")
+            normalized = path.replace(work_dir_prefix, "") if path.startswith(work_dir_prefix) else path
             abs_path = sandbox.normalize_path(normalized)
             content = await sandbox.adownload_file_bytes(abs_path)
             if not content:

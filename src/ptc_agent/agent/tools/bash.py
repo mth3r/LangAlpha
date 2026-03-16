@@ -19,13 +19,16 @@ def create_execute_bash_tool(sandbox: Any, thread_id: str = "") -> BaseTool:
         Configured Bash tool function
     """
 
+    # Resolve the default working directory from sandbox config at tool creation time
+    _default_working_dir = sandbox.config.filesystem.working_directory
+
     @tool
     async def Bash(
         command: str,
         description: str | None = None,
         timeout: int | None = 120000,
         run_in_background: bool | None = False,
-        working_dir: str | None = "/home/daytona",
+        working_dir: str | None = _default_working_dir,
     ) -> str:
         """Execute bash commands in a persistent shell session.
 
@@ -37,12 +40,12 @@ def create_execute_bash_tool(sandbox: Any, thread_id: str = "") -> BaseTool:
             description: Brief description (5-10 words, active voice)
             timeout: Milliseconds (default: 120000, max: 600000)
             run_in_background: Run asynchronously (default: False)
-            working_dir: Working directory (default: /home/daytona)
+            working_dir: Working directory (default: /home/workspace)
 
         Returns:
             Command output (stdout/stderr), or ERROR message
 
-        Paths: Quote paths with spaces. Use /home/daytona/ for workspace files.
+        Paths: Quote paths with spaces. Use /home/workspace/ for workspace files.
         """
         try:
             logger.info(
@@ -113,5 +116,9 @@ def create_execute_bash_tool(sandbox: Any, thread_id: str = "") -> BaseTool:
                 exc_info=True,
             )
             return f"ERROR: {error_msg}"
+
+    # Patch the LLM-visible description with the actual configured working directory
+    if _default_working_dir != "/home/workspace":
+        Bash.description = Bash.description.replace("/home/workspace", _default_working_dir)
 
     return Bash

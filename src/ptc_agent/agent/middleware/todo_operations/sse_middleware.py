@@ -149,7 +149,7 @@ class TodoWriteMiddleware(AgentMiddleware):
 
             try:
                 writer(failed_event)
-                logger.debug(f"[TODO_MIDDLEWARE] ✓ Emitted failed event")
+                logger.debug("[TODO_MIDDLEWARE] ✓ Emitted failed event")
             except Exception as emit_error:
                 logger.error(f"[TODO_MIDDLEWARE] Failed to emit failed event: {emit_error}")
 

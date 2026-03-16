@@ -19,9 +19,19 @@ def create_provider(config) -> SandboxProvider:
         getattr(config, "sandbox", None), "provider", "daytona"
     )
 
+    # Both providers use filesystem.working_directory as single source of truth
+    working_dir = getattr(
+        getattr(config, "filesystem", None), "working_directory", None
+    )
+
     if provider_name == "daytona":
         from ptc_agent.core.sandbox.providers.daytona import DaytonaProvider
 
-        return DaytonaProvider(config.sandbox.daytona)
+        return DaytonaProvider(config.sandbox.daytona, working_dir=working_dir)
+
+    if provider_name == "docker":
+        from ptc_agent.core.sandbox.providers.docker import DockerProvider
+
+        return DockerProvider(config.sandbox.docker, working_dir=working_dir)
 
     raise ValueError(f"Unknown sandbox provider: {provider_name!r}")

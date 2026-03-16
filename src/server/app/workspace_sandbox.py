@@ -127,7 +127,7 @@ class PackageInstallResponse(BaseModel):
 
 
 def _parse_df_output(stdout: str) -> DiskOverview | None:
-    """Parse `df -h /home/daytona` output into a DiskOverview."""
+    """Parse `df -h /home/workspace` output into a DiskOverview."""
     lines = stdout.strip().splitlines()
     if len(lines) < 2:
         return None
@@ -143,8 +143,9 @@ def _parse_df_output(stdout: str) -> DiskOverview | None:
     )
 
 
-def _parse_du_output(stdout: str) -> list[DirectorySize]:
-    """Parse `du -sh /home/daytona/*/` output into directory sizes."""
+def _parse_du_output(stdout: str, work_dir: str = "/home/workspace") -> list[DirectorySize]:
+    """Parse `du -sh <work_dir>/*/` output into directory sizes."""
+    work_dir_prefix = work_dir.rstrip("/") + "/"
     results: list[DirectorySize] = []
     for line in stdout.strip().splitlines():
         parts = line.split(None, 1)
@@ -152,7 +153,11 @@ def _parse_du_output(stdout: str) -> list[DirectorySize]:
             continue
         size, path = parts
         # Convert absolute path to relative display name
-        name = path.rstrip("/").split("/home/daytona/")[-1]
+        stripped = path.rstrip("/")
+        if stripped.startswith(work_dir_prefix):
+            name = stripped[len(work_dir_prefix):]
+        else:
+            name = stripped.split(work_dir_prefix)[-1]
         if name:
             results.append(DirectorySize(path=name, size=size))
     return results
@@ -248,8 +253,9 @@ async def _get_offline_sandbox_stats(
     from ptc_agent.core.sandbox.providers import create_provider
 
     manager = WorkspaceManager.get_instance()
-    provider = create_provider(manager.config.to_core_config())
+    provider = None
     try:
+        provider = create_provider(manager.config.to_core_config())
         runtime = await provider.get(sandbox_id)
         meta = await runtime.get_metadata()
         return SandboxStatsResponse(
@@ -275,7 +281,8 @@ async def _get_offline_sandbox_stats(
             resources=SandboxResources(),
         )
     finally:
-        await provider.close()
+        if provider is not None:
+            await provider.close()
 
 
 async def _get_full_sandbox_stats(
@@ -312,10 +319,12 @@ async def _get_full_sandbox_stats(
             pass
 
     # --- 2. Concurrent bash commands for disk & packages ---
+    work_dir = sandbox.working_dir
+
     async def _get_disk_usage():
         try:
             result = await sandbox.execute_bash_command(
-                "df -h /home/daytona", timeout=10
+                f"df -h {work_dir}", timeout=10
             )
             if result.get("success"):
                 return _parse_df_output(result.get("stdout", ""))
@@ -326,10 +335,10 @@ async def _get_full_sandbox_stats(
     async def _get_directory_breakdown():
         try:
             result = await sandbox.execute_bash_command(
-                "du -sh /home/daytona/*/ 2>/dev/null || true", timeout=15
+                f"du -sh {work_dir}/*/ 2>/dev/null || true", timeout=15
             )
             if result.get("success"):
-                return _parse_du_output(result.get("stdout", ""))
+                return _parse_du_output(result.get("stdout", ""), work_dir)
         except Exception as e:
             logger.debug(f"du command failed: {e}")
         return []
@@ -350,7 +359,7 @@ async def _get_full_sandbox_stats(
         try:
             # Read SKILL.md frontmatter from each skill directory
             cmd = (
-                "for d in /home/daytona/skills/*/; do "
+                f"for d in {work_dir}/skills/*/; do "
                 '  [ -f "$d/SKILL.md" ] && echo "=== $(basename "$d") ===" && head -5 "$d/SKILL.md"; '
                 "done 2>/dev/null || true"
             )
