@@ -424,7 +424,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
           } else if (event.error === 'service-not-allowed' || event.error === 'network') {
             toast({
               title: t('chat.voice.serviceError'),
-              description: event.message,
+              description: event.message || undefined,
               variant: 'destructive',
             });
           }
