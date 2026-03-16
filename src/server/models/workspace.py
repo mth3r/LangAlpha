@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WorkspaceStatus(str, Enum):
@@ -99,8 +99,7 @@ class WorkspaceResponse(BaseModel):
     is_pinned: bool = Field(False, description="Whether workspace is pinned to top")
     sort_order: int = Field(0, description="Manual sort order within pin group")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class WorkspaceReorderItem(BaseModel):

@@ -429,7 +429,7 @@ function ChatView({ workspaceId, threadId, initialTaskId, onBack, workspaceName:
     updateTodoListCard,
     updateSubagentCard,
     inactivateAllSubagents,
-    completePendingTodos,
+    finalizePendingTodos,
     clearSubagentCards,
   } = useCardState();
 
@@ -522,7 +522,7 @@ function ChatView({ workspaceId, threadId, initialTaskId, onBack, workspaceName:
     getFeedbackForMessage,
     getSubagentHistory,
     resolveSubagentIdToAgentId,
-  } = useChatMessages(workspaceId, threadId, updateTodoListCard as (todoData: Record<string, unknown>) => void, updateSubagentCard, inactivateAllSubagents, completePendingTodos, handleOnboardingRelatedToolComplete, refreshFiles, agentMode, clearSubagentCards, handleWorkspaceCreated);
+  } = useChatMessages(workspaceId, threadId, updateTodoListCard as (todoData: Record<string, unknown>) => void, updateSubagentCard, inactivateAllSubagents, finalizePendingTodos, handleOnboardingRelatedToolComplete, refreshFiles, agentMode, clearSubagentCards, handleWorkspaceCreated);
 
   const chatPlaceholder = useMemo(() => {
     if (pendingRejection) return t('chat.placeholderPendingRejection');
@@ -1602,7 +1602,7 @@ function ChatView({ workspaceId, threadId, initialTaskId, onBack, workspaceName:
               {activeAgentId === 'main' ? (
                 <ScrollArea ref={scrollAreaRef} className="h-full w-full">
                   <div className={`${isMobile ? 'px-3 py-3' : 'px-6 py-4'} flex justify-center`}>
-                    <div className="w-full max-w-3xl">
+                    <div className="w-full max-w-3xl overflow-x-hidden">
                       <MessageList
                         messages={messages as unknown as MessageRecord[]}
                         isLoading={isLoading}

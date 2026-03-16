@@ -7,7 +7,7 @@ the query-response schema (workspaces, thread, query, response).
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ==================== Workspace Thread Response Models ====================
@@ -27,20 +27,19 @@ class WorkspaceThreadListItem(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
-                "workspace_id": "ws-abc123",
-                "thread_index": 0,
-                "current_status": "completed",
-                "msg_type": "ptc",
-                "title": "Tesla Stock Analysis",
-                "is_shared": False,
-                "created_at": "2025-10-15T10:30:00Z",
-                "updated_at": "2025-10-15T14:45:00Z"
-            }
-        }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
+            "workspace_id": "ws-abc123",
+            "thread_index": 0,
+            "current_status": "completed",
+            "msg_type": "ptc",
+            "title": "Tesla Stock Analysis",
+            "is_shared": False,
+            "created_at": "2025-10-15T10:30:00Z",
+            "updated_at": "2025-10-15T14:45:00Z",
+        },
+    })
 
 
 class WorkspaceThreadsListResponse(BaseModel):
@@ -112,37 +111,36 @@ class WorkspaceMessagesResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "workspace_id": "ws-abc123",
-                "user_id": "user123",
-                "name": "Code Analysis Project",
-                "messages": [
-                    {
-                        "turn_index": 0,
-                        "thread_id": "thread-1",
-                        "thread_index": 0,
-                        "query": {
-                            "query_id": "query-1",
-                            "content": "Analyze the codebase",
-                            "type": "initial",
-                            "created_at": "2025-10-15T21:03:43Z"
-                        },
-                        "response": {
-                            "response_id": "resp-1",
-                            "status": "completed",
-                            "execution_time": 123.45,
-                            "created_at": "2025-10-15T21:05:47Z"
-                        }
-                    }
-                ],
-                "total_messages": 1,
-                "has_more": False,
-                "created_at": "2025-10-15T21:03:43Z",
-                "updated_at": "2025-10-15T21:05:47Z"
-            }
-        }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "workspace_id": "ws-abc123",
+            "user_id": "user123",
+            "name": "Code Analysis Project",
+            "messages": [
+                {
+                    "turn_index": 0,
+                    "thread_id": "thread-1",
+                    "thread_index": 0,
+                    "query": {
+                        "query_id": "query-1",
+                        "content": "Analyze the codebase",
+                        "type": "initial",
+                        "created_at": "2025-10-15T21:03:43Z",
+                    },
+                    "response": {
+                        "response_id": "resp-1",
+                        "status": "completed",
+                        "execution_time": 123.45,
+                        "created_at": "2025-10-15T21:05:47Z",
+                    },
+                }
+            ],
+            "total_messages": 1,
+            "has_more": False,
+            "created_at": "2025-10-15T21:03:43Z",
+            "updated_at": "2025-10-15T21:05:47Z",
+        },
+    })
 
 
 # ==================== Thread Management Request/Response Models ====================
@@ -151,12 +149,9 @@ class ThreadUpdateRequest(BaseModel):
     """Request model for updating a thread."""
     title: Optional[str] = Field(None, max_length=255, description="New thread title")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "title": "Tesla Stock Analysis"
-            }
-        }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {"title": "Tesla Stock Analysis"},
+    })
 
 
 class ThreadDeleteResponse(BaseModel):
@@ -165,14 +160,13 @@ class ThreadDeleteResponse(BaseModel):
     thread_id: str = Field(..., description="Deleted thread ID")
     message: str = Field(..., description="Status message")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
-                "message": "Thread deleted successfully"
-            }
-        }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "success": True,
+            "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
+            "message": "Thread deleted successfully",
+        },
+    })
 
 
 # ==================== Thread Sharing Models ====================

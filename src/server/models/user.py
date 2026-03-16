@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # =============================================================================
@@ -61,16 +61,17 @@ class InstrumentType(str, Enum):
 class RiskPreference(BaseModel):
     """Risk preference settings stored in JSONB."""
 
+    model_config = ConfigDict(extra="allow")
+
     risk_tolerance: Optional[str] = Field(
         None, description="Risk tolerance description"
     )
 
-    class Config:
-        extra = "allow"  # Allow additional fields (notes, etc.)
-
 
 class InvestmentPreference(BaseModel):
     """Investment preference settings stored in JSONB."""
+
+    model_config = ConfigDict(extra="allow")
 
     company_interest: Optional[str] = Field(
         None, description="Type of companies interested in"
@@ -82,33 +83,27 @@ class InvestmentPreference(BaseModel):
         None, description="Primary analysis focus area"
     )
 
-    class Config:
-        extra = "allow"  # Allow additional fields (avoid_sectors, focus_sectors, notes, etc.)
-
 
 class AgentPreference(BaseModel):
     """AI agent behavior preferences stored in JSONB."""
+
+    model_config = ConfigDict(extra="allow")
 
     output_style: Optional[str] = Field(
         None, description="Preferred output style"
     )
 
-    class Config:
-        extra = "allow"  # Allow additional fields (notes, instruction, etc.)
-
 
 class OtherPreference(BaseModel):
     """Miscellaneous preferences stored in JSONB."""
 
-    # Future fields: theme, email_notifications, marketing_opt_in, feature_flags
-    pass
-
-    class Config:
-        extra = "allow"  # Allow additional fields for flexibility
+    model_config = ConfigDict(extra="allow")
 
 
 class AlertSettings(BaseModel):
     """Alert settings for watchlist items."""
+
+    model_config = ConfigDict(extra="allow")
 
     price_above: Optional[float] = Field(None, description="Alert when price goes above")
     price_below: Optional[float] = Field(None, description="Alert when price goes below")
@@ -116,9 +111,6 @@ class AlertSettings(BaseModel):
         None, description="Alert on percent change threshold"
     )
     news_alerts: Optional[bool] = Field(None, description="Enable news alerts")
-
-    class Config:
-        extra = "allow"
 
 
 # =============================================================================
@@ -170,8 +162,7 @@ class UserResponse(UserBase):
     updated_at: datetime = Field(description="Last update timestamp")
     last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =============================================================================
@@ -216,8 +207,7 @@ class UserPreferencesResponse(UserPreferencesBase):
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =============================================================================
@@ -261,8 +251,7 @@ class WatchlistResponse(WatchlistBase):
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------------------------------------------------------
@@ -322,8 +311,7 @@ class WatchlistItemResponse(WatchlistItemBase):
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # -----------------------------------------------------------------------------
@@ -423,8 +411,7 @@ class PortfolioHoldingResponse(PortfolioHoldingBase):
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PortfolioResponse(BaseModel):

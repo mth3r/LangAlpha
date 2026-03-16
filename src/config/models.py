@@ -4,9 +4,9 @@ Pydantic models for infrastructure configuration.
 These models define the schema for config.yaml (infrastructure settings).
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BackgroundExecutionConfig(BaseModel):
@@ -31,11 +31,17 @@ class BackgroundExecutionConfig(BaseModel):
     max_stored_messages_per_agent: int = Field(
         default=150000, description="Maximum events to buffer per workflow"
     )
-    event_storage_backend: str = Field(
+    event_storage_backend: Literal["redis", "memory"] = Field(
         default="redis", description='Backend for event buffering: "redis" or "memory"'
     )
     event_storage_fallback_to_memory: bool = Field(
         default=True, description="Fallback to in-memory storage if Redis fails"
+    )
+    subagent_collector_timeout: int = Field(
+        default=120, description="Initial subagent collector timeout in seconds"
+    )
+    subagent_orphan_collector_timeout: int = Field(
+        default=600, description="Orphan subagent collector idle timeout in seconds"
     )
 
 
@@ -50,6 +56,9 @@ class RedisTTLConfig(BaseModel):
     )
     workflow_events: int = Field(
         default=86400, description="Workflow event buffer TTL (24 hours)"
+    )
+    ohlcv: Dict[str, int] = Field(
+        default_factory=dict, description="Per-interval OHLCV cache TTLs"
     )
 
 
@@ -78,15 +87,36 @@ class RedisConfig(BaseModel):
     swr: RedisSWRConfig = Field(default_factory=RedisSWRConfig)
 
 
+class MarketDataProviderConfig(BaseModel):
+    """Configuration for a single market data provider."""
+
+    name: str
+    markets: List[str] = Field(default_factory=lambda: ["all"])
+
+
+class MarketDataConfig(BaseModel):
+    """Market data provider chain configuration."""
+
+    providers: List[MarketDataProviderConfig] = Field(default_factory=list)
+
+
+class NewsDataConfig(BaseModel):
+    """News data provider chain configuration."""
+
+    providers: List[MarketDataProviderConfig] = Field(default_factory=list)
+
+
 class InfrastructureConfig(BaseModel):
     """Root model for infrastructure configuration (config.yaml)."""
+
+    model_config = ConfigDict(extra="allow")
 
     # Application Settings
     debug: bool = Field(default=False, description="Debug mode flag")
     agent_recursion_limit: int = Field(default=100, description="Agent recursion limit")
     workflow_timeout: int = Field(default=3200, description="Workflow timeout in seconds")
-    sse_keepalive_interval: int = Field(
-        default=15, description="SSE keepalive interval in seconds"
+    sse_keepalive_interval: float = Field(
+        default=15.0, description="SSE keepalive interval in seconds"
     )
 
     # Feature Flags
@@ -125,5 +155,6 @@ class InfrastructureConfig(BaseModel):
     # Redis Cache
     redis: RedisConfig = Field(default_factory=RedisConfig)
 
-    class Config:
-        extra = "allow"  # Allow extra fields for forward compatibility
+    # Market Data
+    market_data: MarketDataConfig = Field(default_factory=MarketDataConfig)
+    news_data: NewsDataConfig = Field(default_factory=NewsDataConfig)

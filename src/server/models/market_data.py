@@ -5,7 +5,7 @@ This module provides request and response models for FMP intraday data proxy end
 """
 
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # Supported intervals for intraday data
@@ -45,72 +45,85 @@ class CacheMetadata(BaseModel):
 
 class IntradayResponse(BaseModel):
     """Response for single symbol intraday data request."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "symbol": "AAPL",
+            "interval": "1min",
+            "data": [
+                {
+                    "time": 1705322400000,
+                    "open": 185.50,
+                    "high": 185.75,
+                    "low": 185.25,
+                    "close": 185.60,
+                    "volume": 1500000
+                }
+            ],
+            "count": 1,
+            "cache": {
+                "cached": True,
+                "cache_key": "ohlcv:stock:AAPL:1min",
+                "ttl_remaining": 45,
+                "refreshed_in_background": False
+            }
+        }
+    })
+
     symbol: str = Field(..., description="Stock/index symbol")
     interval: str = Field(..., description="Data interval (e.g., 1min, 5min, 1hour)")
     data: List[IntradayDataPoint] = Field(default_factory=list, description="Intraday OHLCV data points")
     count: int = Field(0, description="Number of data points returned")
     cache: CacheMetadata = Field(..., description="Cache metadata")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "symbol": "AAPL",
-                "interval": "1min",
-                "data": [
-                    {
-                        "time": 1705322400000,
-                        "open": 185.50,
-                        "high": 185.75,
-                        "low": 185.25,
-                        "close": 185.60,
-                        "volume": 1500000
-                    }
-                ],
-                "count": 1,
-                "cache": {
-                    "cached": True,
-                    "cache_key": "ohlcv:stock:AAPL:1min",
-                    "ttl_remaining": 45,
-                    "refreshed_in_background": False
-                }
-            }
-        }
-
 
 class DailyResponse(BaseModel):
     """Response for single symbol daily historical data request."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "symbol": "AAPL",
+            "data": [
+                {
+                    "time": 1705276800000,
+                    "open": 185.50,
+                    "high": 187.00,
+                    "low": 184.25,
+                    "close": 186.60,
+                    "volume": 55000000
+                }
+            ],
+            "count": 1,
+            "cache": {
+                "cached": True,
+                "cache_key": "ohlcv:stock:AAPL:day",
+                "ttl_remaining": 3200,
+                "refreshed_in_background": False
+            }
+        }
+    })
+
     symbol: str = Field(..., description="Stock symbol")
     data: List[IntradayDataPoint] = Field(default_factory=list, description="Daily OHLCV data points")
     count: int = Field(0, description="Number of data points returned")
     cache: CacheMetadata = Field(..., description="Cache metadata")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "symbol": "AAPL",
-                "data": [
-                    {
-                        "time": 1705276800000,
-                        "open": 185.50,
-                        "high": 187.00,
-                        "low": 184.25,
-                        "close": 186.60,
-                        "volume": 55000000
-                    }
-                ],
-                "count": 1,
-                "cache": {
-                    "cached": True,
-                    "cache_key": "ohlcv:stock:AAPL:day",
-                    "ttl_remaining": 3200,
-                    "refreshed_in_background": False
-                }
-            }
-        }
-
 
 class BatchIntradayRequest(BaseModel):
     """Request for batch intraday data."""
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "symbols": ["AAPL", "MSFT", "GOOGL"],
+                "interval": "15min",
+                "from": "2024-01-01",
+                "to": "2024-01-15"
+            }
+        },
+    )
+
     symbols: List[str] = Field(
         ...,
         description="List of stock/index symbols (max 50)",
@@ -132,17 +145,6 @@ class BatchIntradayRequest(BaseModel):
         description="End date (YYYY-MM-DD format)"
     )
 
-    class Config:
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "symbols": ["AAPL", "MSFT", "GOOGL"],
-                "interval": "15min",
-                "from": "2024-01-01",
-                "to": "2024-01-15"
-            }
-        }
-
 
 class BatchCacheStats(BaseModel):
     """Cache statistics for batch requests."""
@@ -154,6 +156,44 @@ class BatchCacheStats(BaseModel):
 
 class BatchIntradayResponse(BaseModel):
     """Response for batch intraday data request."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "interval": "15min",
+            "results": {
+                "AAPL": [
+                    {
+                        "time": 1705322400000,
+                        "open": 185.50,
+                        "high": 185.75,
+                        "low": 185.25,
+                        "close": 185.60,
+                        "volume": 1500000
+                    }
+                ],
+                "MSFT": [
+                    {
+                        "time": 1705322400000,
+                        "open": 375.00,
+                        "high": 375.50,
+                        "low": 374.80,
+                        "close": 375.25,
+                        "volume": 800000
+                    }
+                ]
+            },
+            "errors": {
+                "INVALID": "Symbol not found"
+            },
+            "cache_stats": {
+                "total_requests": 3,
+                "cache_hits": 2,
+                "cache_misses": 1,
+                "background_refreshes": 1
+            }
+        }
+    })
+
     interval: str = Field(..., description="Data interval used for the request")
     results: Dict[str, List[IntradayDataPoint]] = Field(
         default_factory=dict,
@@ -164,44 +204,6 @@ class BatchIntradayResponse(BaseModel):
         description="Map of symbol to error message for failed requests"
     )
     cache_stats: BatchCacheStats = Field(..., description="Aggregated cache statistics")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "interval": "15min",
-                "results": {
-                    "AAPL": [
-                        {
-                            "time": 1705322400000,
-                            "open": 185.50,
-                            "high": 185.75,
-                            "low": 185.25,
-                            "close": 185.60,
-                            "volume": 1500000
-                        }
-                    ],
-                    "MSFT": [
-                        {
-                            "time": 1705322400000,
-                            "open": 375.00,
-                            "high": 375.50,
-                            "low": 374.80,
-                            "close": 375.25,
-                            "volume": 800000
-                        }
-                    ]
-                },
-                "errors": {
-                    "INVALID": "Symbol not found"
-                },
-                "cache_stats": {
-                    "total_requests": 3,
-                    "cache_hits": 2,
-                    "cache_misses": 1,
-                    "background_refreshes": 1
-                }
-            }
-        }
 
 
 class CompanyOverviewResponse(BaseModel):
@@ -277,43 +279,43 @@ class MarketStatusResponse(BaseModel):
 
 class StockSearchResult(BaseModel):
     """Single stock search result."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "symbol": "AAPL",
+            "name": "Apple Inc.",
+            "currency": "USD",
+            "stockExchange": "NASDAQ Global Select",
+            "exchangeShortName": "NASDAQ"
+        }
+    })
+
     symbol: str = Field(..., description="Stock ticker symbol (e.g., AAPL)")
     name: str = Field(..., description="Company name")
     currency: Optional[str] = Field(None, description="Currency code")
     stockExchange: Optional[str] = Field(None, description="Stock exchange name")
     exchangeShortName: Optional[str] = Field(None, description="Short exchange name")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "symbol": "AAPL",
-                "name": "Apple Inc.",
-                "currency": "USD",
-                "stockExchange": "NASDAQ Global Select",
-                "exchangeShortName": "NASDAQ"
-            }
-        }
-
 
 class StockSearchResponse(BaseModel):
     """Response for stock search request."""
+
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "query": "Apple",
+            "results": [
+                {
+                    "symbol": "AAPL",
+                    "name": "Apple Inc.",
+                    "currency": "USD",
+                    "stockExchange": "NASDAQ Global Select",
+                    "exchangeShortName": "NASDAQ"
+                }
+            ],
+            "count": 1
+        }
+    })
+
     query: str = Field(..., description="Search query used")
     results: List[StockSearchResult] = Field(default_factory=list, description="List of matching stocks")
     count: int = Field(0, description="Number of results returned")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "query": "Apple",
-                "results": [
-                    {
-                        "symbol": "AAPL",
-                        "name": "Apple Inc.",
-                        "currency": "USD",
-                        "stockExchange": "NASDAQ Global Select",
-                        "exchangeShortName": "NASDAQ"
-                    }
-                ],
-                "count": 1
-            }
-        }

@@ -86,21 +86,18 @@ async def cancel_workflow(thread_id: str) -> dict:
 
         await qr_db.update_thread_status(thread_id, "cancelled")
 
-        from src.config.settings import is_background_execution_enabled
+        from src.server.services.background_task_manager import (
+            BackgroundTaskManager,
+        )
 
-        if is_background_execution_enabled():
-            from src.server.services.background_task_manager import (
-                BackgroundTaskManager,
+        manager = BackgroundTaskManager.get_instance()
+        cancel_success = await manager.cancel_workflow(thread_id)
+
+        if not cancel_success:
+            logger.warning(
+                f"Could not cancel background task for {thread_id} "
+                "(may be already completed or not found)"
             )
-
-            manager = BackgroundTaskManager.get_instance()
-            cancel_success = await manager.cancel_workflow(thread_id)
-
-            if not cancel_success:
-                logger.warning(
-                    f"Could not cancel background task for {thread_id} "
-                    "(may be already completed or not found)"
-                )
 
         if not success:
             logger.warning(
@@ -140,18 +137,6 @@ async def soft_interrupt_workflow(thread_id: str) -> dict:
         Status including whether workflow can be resumed and active subagents
     """
     try:
-        from src.config.settings import is_background_execution_enabled
-
-        if not is_background_execution_enabled():
-            # Without background execution, soft interrupt is same as cancel
-            return {
-                "status": "not_supported",
-                "thread_id": thread_id,
-                "can_resume": False,
-                "background_tasks": [],
-                "message": "Soft interrupt requires background execution mode",
-            }
-
         from src.server.services.background_task_manager import BackgroundTaskManager
 
         manager = BackgroundTaskManager.get_instance()
@@ -237,38 +222,35 @@ async def get_workflow_status(thread_id: str) -> dict:
         active_tasks = []
         soft_interrupted = False
 
-        from src.config.settings import is_background_execution_enabled
+        try:
+            from src.server.services.background_task_manager import (
+                BackgroundTaskManager,
+            )
 
-        if is_background_execution_enabled():
-            try:
-                from src.server.services.background_task_manager import (
-                    BackgroundTaskManager,
+            manager = BackgroundTaskManager.get_instance()
+            bg_status = await manager.get_workflow_status(thread_id)
+            if bg_status.get("status") != "not_found":
+                active_tasks = bg_status.get("active_tasks", [])
+                soft_interrupted = bg_status.get("soft_interrupted", False)
+            elif can_reconnect:
+                # Redis says active/disconnected but BackgroundTaskManager has no
+                # record — likely a stale Redis key surviving a server restart.
+                # Downgrade can_reconnect to avoid a guaranteed 404 on /messages/stream.
+                logger.info(
+                    f"Stale workflow status for {thread_id}: Redis says {status} "
+                    f"but BackgroundTaskManager has no task info. Clearing stale status."
                 )
-
-                manager = BackgroundTaskManager.get_instance()
-                bg_status = await manager.get_workflow_status(thread_id)
-                if bg_status.get("status") != "not_found":
-                    active_tasks = bg_status.get("active_tasks", [])
-                    soft_interrupted = bg_status.get("soft_interrupted", False)
-                elif can_reconnect:
-                    # Redis says active/disconnected but BackgroundTaskManager has no
-                    # record — likely a stale Redis key surviving a server restart.
-                    # Downgrade can_reconnect to avoid a guaranteed 404 on /messages/stream.
-                    logger.info(
-                        f"Stale workflow status for {thread_id}: Redis says {status} "
-                        f"but BackgroundTaskManager has no task info. Clearing stale status."
-                    )
-                    can_reconnect = False
-                    status = WorkflowStatus.COMPLETED
-                    # Clean up the stale Redis key so future requests don't hit this path
-                    try:
-                        await tracker.mark_completed(thread_id)
-                    except Exception:
-                        pass
-            except Exception as e:
-                logger.debug(
-                    f"Could not get background task status for {thread_id}: {e}"
-                )
+                can_reconnect = False
+                status = WorkflowStatus.COMPLETED
+                # Clean up the stale Redis key so future requests don't hit this path
+                try:
+                    await tracker.mark_completed(thread_id)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug(
+                f"Could not get background task status for {thread_id}: {e}"
+            )
 
         # Include share status so the UI can show the correct icon without an extra API call
         is_shared = False
@@ -405,7 +387,7 @@ async def trigger_summarization(thread_id: str, keep_messages: int = 5) -> dict:
     """
     try:
         from ptc_agent.agent.middleware.summarization import summarize_messages
-        from src.config.settings import get_summarization_config
+        from src.server.app import setup
 
         graph, lg_config, state, messages, backend = await _resolve_graph_and_state(
             thread_id, "summarize"
@@ -413,8 +395,9 @@ async def trigger_summarization(thread_id: str, keep_messages: int = 5) -> dict:
 
         original_count = len(messages)
 
-        summarization_config = get_summarization_config()
-        model_name = summarization_config.get("llm", "")
+        agent_cfg = setup.agent_config
+        summ_cfg = agent_cfg.summarization if agent_cfg else None
+        model_name = (agent_cfg.llm.summarization or "") if agent_cfg else ""
 
         # Read previous event from state (for chained summarization)
         previous_event = state.values.get("_summarization_event")
@@ -426,6 +409,7 @@ async def trigger_summarization(thread_id: str, keep_messages: int = 5) -> dict:
                 model_name=model_name,
                 backend=backend,
                 previous_event=previous_event,
+                summarization_config=summ_cfg,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -523,11 +507,13 @@ async def trigger_offload(thread_id: str) -> dict:
             )
 
         # Call offload_tool_args (Tier 1 only)
+        summ_cfg = setup.agent_config.summarization if setup.agent_config else None
         try:
             result = await offload_tool_args(
                 messages=messages,
                 backend=backend,
                 already_offloaded=already_offloaded,
+                summarization_config=summ_cfg,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

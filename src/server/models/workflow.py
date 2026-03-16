@@ -7,7 +7,7 @@ historical workflow states from LangGraph checkpoints.
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from langchain_core.messages import BaseMessage
 
 
@@ -234,32 +234,31 @@ class WorkflowStateResponse(BaseModel):
     created_at: Optional[datetime] = Field(None, description="Checkpoint creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="Last update timestamp")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
-                "checkpoint_id": "1ef1234-...",
-                "messages": [
-                    {"role": "human", "content": "Analyze AAPL stock price"},
-                    {"role": "ai", "content": "I will analyze AAPL stock price for you..."}
-                ],
-                "plan": {
-                    "title": "AAPL Stock Analysis Plan",
-                    "market_type": "US",
-                    "steps": [
-                        {
-                            "title": "Get AAPL basic info",
-                            "description": "Fetch company fundamentals",
-                            "step_type": "DATA",
-                            "execution_res": "completed"
-                        }
-                    ]
-                },
-                "final_report": "AAPL stock analysis report...",
-                "research_topic": "AAPL Stock Analysis",
-                "completed": True
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
+            "checkpoint_id": "1ef1234-...",
+            "messages": [
+                {"role": "human", "content": "Analyze AAPL stock price"},
+                {"role": "ai", "content": "I will analyze AAPL stock price for you..."}
+            ],
+            "plan": {
+                "title": "AAPL Stock Analysis Plan",
+                "market_type": "US",
+                "steps": [
+                    {
+                        "title": "Get AAPL basic info",
+                        "description": "Fetch company fundamentals",
+                        "step_type": "DATA",
+                        "execution_res": "completed"
+                    }
+                ]
+            },
+            "final_report": "AAPL stock analysis report...",
+            "research_topic": "AAPL Stock Analysis",
+            "completed": True
         }
+    })
 
 
 class ThreadListItem(BaseModel):
@@ -290,18 +289,17 @@ class CheckpointMetadata(BaseModel):
     step: int = Field(..., description="Execution step number")
     writes: Optional[Dict[str, Any]] = Field(None, description="What nodes wrote to state at this checkpoint")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "source": "loop",
-                "step": 2,
-                "writes": {
-                    "planner": {
-                        "current_plan": {"title": "Research Plan", "steps": []}
-                    }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "source": "loop",
+            "step": 2,
+            "writes": {
+                "planner": {
+                    "current_plan": {"title": "Research Plan", "steps": []}
                 }
             }
         }
+    })
 
 
 class TaskInfo(BaseModel):
@@ -319,17 +317,16 @@ class TaskInfo(BaseModel):
     has_interrupts: bool = Field(False, description="Whether task has interrupts")
     interrupt_count: int = Field(0, description="Number of interrupts")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "abc-123-def",
-                "name": "researcher",
-                "has_error": False,
-                "error_message": None,
-                "has_interrupts": False,
-                "interrupt_count": 0
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "abc-123-def",
+            "name": "researcher",
+            "has_error": False,
+            "error_message": None,
+            "has_interrupts": False,
+            "interrupt_count": 0
         }
+    })
 
 
 class CheckpointResponse(BaseModel):
@@ -351,28 +348,27 @@ class CheckpointResponse(BaseModel):
         description="Preview of important state fields"
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "checkpoint_id": "1ef663ba-28fe-6528-8002-5a559208592c",
-                "parent_checkpoint_id": "1ef663ba-28f9-6ec4-8001-31981c2c39f8",
-                "created_at": "2024-08-29T19:19:38.821749+00:00",
-                "metadata": {
-                    "source": "loop",
-                    "step": 2,
-                    "writes": {"planner": {"current_plan": {}}}
-                },
-                "next_nodes": [],
-                "pending_tasks": 0,
-                "completed": True,
-                "state_preview": {
-                    "research_topic": "AAPL Stock Analysis",
-                    "plan_iterations": 1,
-                    "has_final_report": True,
-                    "message_count": 5
-                }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "checkpoint_id": "1ef663ba-28fe-6528-8002-5a559208592c",
+            "parent_checkpoint_id": "1ef663ba-28f9-6ec4-8001-31981c2c39f8",
+            "created_at": "2024-08-29T19:19:38.821749+00:00",
+            "metadata": {
+                "source": "loop",
+                "step": 2,
+                "writes": {"planner": {"current_plan": {}}}
+            },
+            "next_nodes": [],
+            "pending_tasks": 0,
+            "completed": True,
+            "state_preview": {
+                "research_topic": "AAPL Stock Analysis",
+                "plan_iterations": 1,
+                "has_final_report": True,
+                "message_count": 5
             }
         }
+    })
 
 
 class CheckpointHistoryResponse(BaseModel):
@@ -388,25 +384,24 @@ class CheckpointHistoryResponse(BaseModel):
         description="List of checkpoint snapshots (newest first)"
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
-                "total_checkpoints": 4,
-                "checkpoints": [
-                    {
-                        "checkpoint_id": "1ef663ba-28fe-6528-8002-5a559208592c",
-                        "parent_checkpoint_id": "1ef663ba-28f9-6ec4-8001-31981c2c39f8",
-                        "created_at": "2024-08-29T19:19:38.821749+00:00",
-                        "metadata": {"source": "loop", "step": 2, "writes": {}},
-                        "next_nodes": [],
-                        "pending_tasks": 0,
-                        "completed": True,
-                        "state_preview": {"research_topic": "AAPL Stock Analysis"}
-                    }
-                ]
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "thread_id": "3d4e5f6g-7h8i-9j0k-1l2m-3n4o5p6q7r8s",
+            "total_checkpoints": 4,
+            "checkpoints": [
+                {
+                    "checkpoint_id": "1ef663ba-28fe-6528-8002-5a559208592c",
+                    "parent_checkpoint_id": "1ef663ba-28f9-6ec4-8001-31981c2c39f8",
+                    "created_at": "2024-08-29T19:19:38.821749+00:00",
+                    "metadata": {"source": "loop", "step": 2, "writes": {}},
+                    "next_nodes": [],
+                    "pending_tasks": 0,
+                    "completed": True,
+                    "state_preview": {"research_topic": "AAPL Stock Analysis"}
+                }
+            ]
         }
+    })
 
 
 class TurnCheckpointInfo(BaseModel):

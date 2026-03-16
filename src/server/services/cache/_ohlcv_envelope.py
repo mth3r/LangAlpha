@@ -10,13 +10,13 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from src.config.settings import get_nested_config
+from src.config.core import get_infrastructure_config
 from src.utils.market_hours import current_trading_date, is_market_active, is_market_closed
 
 _ET = ZoneInfo("America/New_York")
 
 ENVELOPE_VERSION = 3  # v3: adds data_date and truncated fields
-_SOFT_TTL_RATIO: float = get_nested_config("redis.swr.soft_ttl_ratio", 0.5)
+_SOFT_TTL_RATIO: float = get_infrastructure_config().redis.swr.soft_ttl_ratio
 _TRUNCATED_TTL_RATIO = 0.25  # aggressive refresh for truncated data
 _EMPTY_RESULT_TTL = 30  # short TTL for empty upstream results
 

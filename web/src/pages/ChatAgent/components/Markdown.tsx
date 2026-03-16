@@ -175,7 +175,7 @@ const chatBlockquote = ({ node: _node, ...props }: MarkdownComponentProps) => (
   />
 );
 const chatA = ({ node: _node, ...props }: MarkdownComponentProps) => (
-  <a className="underline hover:opacity-80 transition-opacity" style={{ color: 'var(--color-accent-primary)' }} target="_blank" rel="noopener noreferrer" {...props} />
+  <a className="underline hover:opacity-80 transition-opacity break-all" style={{ color: 'var(--color-accent-primary)' }} target="_blank" rel="noopener noreferrer" {...props} />
 );
 const chatHr = ({ node: _node, ...props }: MarkdownComponentProps) => (
   <hr className="my-4 border-0" style={{ borderTop: '1px solid var(--color-border-muted)' }} {...props} />
