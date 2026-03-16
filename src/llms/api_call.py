@@ -5,11 +5,7 @@ import logging
 import json
 from .token_counter import extract_token_usage
 from .content_utils import (
-    extract_content_with_type,
-    get_message_content,
-    format_llm_content,
-    extract_json_from_content,
-    repair_json_output
+    get_message_content
 )
 
 # Configure logging for token usage
@@ -109,7 +105,7 @@ async def make_api_call(
                 return response, token_info
             return response
 
-        except Exception as e:
+        except Exception:
             # Fallback: Model doesn't support structured output, try manual parsing with retries
             from pydantic import ValidationError
 

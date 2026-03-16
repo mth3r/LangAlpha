@@ -657,7 +657,7 @@ class BackgroundTaskManager:
                 event_id_str = event.split("\n")[0].replace("id: ", "").strip()
                 event_id = int(event_id_str)
             except (ValueError, IndexError):
-                logger.debug(f"[EventBuffer] Could not parse event ID from SSE string")
+                logger.debug("[EventBuffer] Could not parse event ID from SSE string")
 
             # Append to Redis list with automatic FIFO trimming
             success = await cache.list_append(

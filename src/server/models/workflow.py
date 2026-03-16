@@ -8,7 +8,6 @@ historical workflow states from LangGraph checkpoints.
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
-from langchain_core.messages import BaseMessage
 
 
 def serialize_message(message: Any) -> Dict[str, Any]:

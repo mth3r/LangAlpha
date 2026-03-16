@@ -6,10 +6,8 @@ section extraction, financial statements, and multi-year comparison data.
 """
 
 import logging
-import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import pandas as pd
 
 from .base import BaseSECParser, ParsingFailedError
 from ..types import SECSection, FilingType

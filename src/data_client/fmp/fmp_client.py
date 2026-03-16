@@ -372,7 +372,7 @@ class FMPClient:
     async def get_stock_peers(self, symbol: str) -> List[str]:
         """Get peer companies list"""
         response = await self._make_request(
-            f"stock_peers", params={"symbol": symbol}, version="v4"
+            "stock_peers", params={"symbol": symbol}, version="v4"
         )
         # Extract the actual peer list from the API response
         if response and len(response) > 0 and isinstance(response[0], dict):
