@@ -6,11 +6,13 @@
 
 llm:
   # Model name from src/llms/manifest/models.json
-  name: "gemini-3.1-pro"
-  flash: "gemini-3.1-flash-lite"
-  summarization: "gemini-3.1-flash-lite"  # Model for conversation summarization
-  fetch: "gemini-3.1-flash-lite"          # Model for web content extraction (fetch tool)
-  fallback: []
+  name: "qwen3.5-plus-coding"
+  flash: "qwen3.5-plus-coding"
+  summarization: "qwen3.5-flash"  # Model for conversation summarization
+  fetch: "qwen3.5-flash"          # Model for web content extraction (fetch tool)
+  fallback:
+    - "kimi-k2.5"
+    - "doubao-seed-2.0-lite-anthropic"
 
 daytona:
   # Daytona sandbox configuration
