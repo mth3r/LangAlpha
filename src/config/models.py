@@ -4,7 +4,7 @@ Pydantic models for infrastructure configuration.
 These models define the schema for config.yaml (infrastructure settings).
 """
 
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -31,7 +31,7 @@ class BackgroundExecutionConfig(BaseModel):
     max_stored_messages_per_agent: int = Field(
         default=150000, description="Maximum events to buffer per workflow"
     )
-    event_storage_backend: str = Field(
+    event_storage_backend: Literal["redis", "memory"] = Field(
         default="redis", description='Backend for event buffering: "redis" or "memory"'
     )
     event_storage_fallback_to_memory: bool = Field(
@@ -115,8 +115,8 @@ class InfrastructureConfig(BaseModel):
     debug: bool = Field(default=False, description="Debug mode flag")
     agent_recursion_limit: int = Field(default=100, description="Agent recursion limit")
     workflow_timeout: int = Field(default=3200, description="Workflow timeout in seconds")
-    sse_keepalive_interval: int = Field(
-        default=15, description="SSE keepalive interval in seconds"
+    sse_keepalive_interval: float = Field(
+        default=15.0, description="SSE keepalive interval in seconds"
     )
 
     # Feature Flags

@@ -53,7 +53,7 @@ def get_workflow_timeout() -> int:
 
 def get_sse_keepalive_interval() -> float:
     """Get SSE keepalive interval in seconds from config.yaml."""
-    return float(get_infrastructure_config().sse_keepalive_interval)
+    return get_infrastructure_config().sse_keepalive_interval
 
 
 # =============================================================================
@@ -236,11 +236,6 @@ def get_ohlcv_ttl(interval: str) -> int:
 # =============================================================================
 # Background Execution Configuration
 # =============================================================================
-
-
-def is_background_execution_enabled() -> bool:
-    """Check if background execution is enabled."""
-    return True  # Always enabled per config.yaml comments
 
 
 def get_max_concurrent_workflows() -> int:

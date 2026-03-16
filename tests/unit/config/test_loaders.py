@@ -247,8 +247,6 @@ class TestLoadFromDictMCP:
 class TestLoadFromDictFilesystem:
     def test_filesystem_defaults(self):
         config = load_from_dict(_full_config_dict())
-        # BUG: create_filesystem_config drops working_directory from data
-        # It falls back to FilesystemConfig's default
         assert config.filesystem.working_directory == "/home/daytona"
         assert config.filesystem.allowed_directories == ["/home/daytona", "/tmp"]
 

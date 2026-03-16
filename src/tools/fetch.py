@@ -25,6 +25,7 @@ from .decorators import log_io
 from .crawler.safe_wrapper import get_safe_crawler_sync, CrawlResult
 from .crawler.sitemap import get_sitemap_summary
 from src.llms import LLM, make_api_call, format_llm_content
+from functools import lru_cache
 from src.config.core import load_yaml_config, find_config_file
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,14 @@ EXTRACTION_TIMEOUT = 60.0  # seconds per model attempt
 fetch_model_override: ContextVar[str | None] = ContextVar("fetch_model_override", default=None)
 
 
+@lru_cache(maxsize=1)
+def _get_agent_llm_config() -> dict:
+    """Load and cache the llm section from agent_config.yaml."""
+    path = find_config_file("agent_config.yaml")
+    config = load_yaml_config(str(path)) if path else {}
+    return config.get("llm", {})
+
+
 def _get_extraction_model() -> str:
     """Get the configured extraction model.
     Priority: context override (user pref) > agent_config.yaml llm.fetch > llm.flash > llm.name.
@@ -47,9 +56,7 @@ def _get_extraction_model() -> str:
     override = fetch_model_override.get()
     if override:
         return override
-    path = find_config_file("agent_config.yaml")
-    config = load_yaml_config(str(path)) if path else {}
-    llm = config.get("llm", {})
+    llm = _get_agent_llm_config()
     return llm.get("fetch") or llm.get("flash") or llm.get("name", "")
 
 
