@@ -319,15 +319,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   // Voice Input (Speech Recognition)
   const [isListening, setIsListening] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(() => {
-    // Priority: Persisted > App Locale > fallback en-US
-    // Only use persisted if the user has explicitly overridden the default via toggleLang.
-    // Note: Once 'chat_input_speech_lang_manual' is true, auto-sync with app locale is permanently
-    // disabled for this user/browser until localStorage is cleared.
-    const isManual = safeLocalStorage.getItem('chat_input_speech_lang_manual') === 'true';
-    if (isManual) {
-      const persisted = safeLocalStorage.getItem('chat_input_speech_lang');
-      if (persisted) return persisted;
-    }
+    // Basic initial guess from browser/app, will be auto-updated by keyboard interaction
     return i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
   });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -339,18 +331,12 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   // Sync message ref
   useEffect(() => { messageRef.current = message; }, [message]);
 
-  // Sync speechLang with app locale change - only if not explicitly set by user
+  // Sync speechLang with app locale change if user hasn't typed anything yet
   useEffect(() => {
-    const isManual = safeLocalStorage.getItem('chat_input_speech_lang_manual') === 'true';
-    if (!isManual) {
+    if (!message) {
       setSpeechLang(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US');
     }
   }, [i18n.language]);
-
-  // Persist speech language preference
-  useEffect(() => {
-    safeLocalStorage.setItem('chat_input_speech_lang', speechLang);
-  }, [speechLang]);
 
   // Stop recognition when loading starts (ghost text fix)
   useEffect(() => {
@@ -942,8 +928,26 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     }
   }, [hasContent, disabled, message, planMode, attachedFiles, chartImage, onSend, mentionedFiles, slashCommands]);
 
-  // --- Keyboard ---
+  // --- Keyboard & Language Detection ---
+  useEffect(() => {
+    // If there's content, use it as a signal for the primary language
+    if (message) {
+      const hasChinese = /[\u4e00-\u9fa5]/.test(message);
+      if (hasChinese) {
+        setSpeechLang('zh-CN');
+      } else if (/[a-zA-Z]/.test(message)) {
+        setSpeechLang('en-US');
+      }
+    }
+  }, [message]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Automatic language detection based on direct keyboard input
+    // Only switch to English if it's a direct Latin key AND we are not currently in an IME composition.
+    if (!e.repeat && !e.nativeEvent.isComposing && e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
+      setSpeechLang('en-US');
+    }
+
     // Slash command menu keyboard navigation
     if (showSlashMenu && filteredSlashCommands.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -1207,6 +1211,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               onPaste={handlePaste}
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
+              onCompositionStart={() => setSpeechLang('zh-CN')}
               placeholder={placeholder}
               className={`w-full bg-transparent border-0 outline-none text-[var(--color-text-primary)] ${isMobile ? 'text-base' : 'text-sm'} placeholder:text-[var(--color-text-tertiary)] resize-none overflow-hidden leading-relaxed block`}
               rows={1}
@@ -1507,36 +1512,20 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                     )}
                   </button>
 
-                  {/* Voice Language Toggle (only show for EN/ZH users) */}
+                  {/* Voice Language Indicator (Auto-detected from keyboard) */}
                   {(i18n.language.startsWith('en') || i18n.language.startsWith('zh')) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const nextLang = speechLang === 'en-US' ? 'zh-CN' : 'en-US';
-                        const defaultLang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
-
-                        // If user toggles back to the app's default locale, clear the manual flag 
-                        // to opt back into automatic sync.
-                        if (nextLang === defaultLang) {
-                          safeLocalStorage.removeItem('chat_input_speech_lang_manual');
-                        } else {
-                          safeLocalStorage.setItem('chat_input_speech_lang_manual', 'true');
-                        }
-                        setSpeechLang(nextLang);
-                      }}
-                      disabled={isListening}
-                      className={`inline-flex items-center justify-center px-1.5 h-6 rounded-md text-[10px] font-bold transition-all hover:bg-foreground/10 active:scale-95 border border-[var(--color-border-muted)] ${isListening ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    <div
+                      className={`inline-flex items-center justify-center px-1.5 h-6 rounded-md text-[10px] font-bold border border-[var(--color-border-muted)] ${isListening ? 'opacity-50' : ''}`}
                       style={{
                         color: 'var(--color-text-tertiary)',
                         marginLeft: '-4px',
                         zIndex: 10,
+                        backgroundColor: 'transparent',
                       }}
-                      type="button"
-                      title={isListening ? t('chat.voice.cannotChangeLang') : t('chat.voice.toggleLang')}
-                      aria-label={isListening ? t('chat.voice.cannotChangeLang') : t('chat.voice.toggleLang')}
+                      title={t('chat.voice.detectedKeyboardLang')}
                     >
                       {speechLang === 'en-US' ? 'EN' : 'CN'}
-                    </button>
+                    </div>
                   )}
                 </div>
               )}
