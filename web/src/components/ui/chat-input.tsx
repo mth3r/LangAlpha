@@ -323,8 +323,11 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   });
   const [speechLang, setSpeechLang] = useState<string>(() => {
     // Current effective language used by the recognition engine
-    const persisted = safeLocalStorage.getItem('chat_input_speech_lang');
-    if (persisted) return persisted;
+    const mode = (safeLocalStorage.getItem('chat_input_speech_mode') as 'en-US' | 'zh-CN' | 'auto') || 'auto';
+    if (mode !== 'auto') {
+      const persisted = safeLocalStorage.getItem('chat_input_speech_lang');
+      if (persisted) return persisted;
+    }
     return i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
   });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -1092,14 +1095,14 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
             <div className="recording-overlay" />
             <div className="voice-status-hint">
               <div className="waveform">
-                <div className="waveform-bar" style={{ animationDelay: '0s' }} />
-                <div className="waveform-bar" style={{ animationDelay: '0.1s' }} />
-                <div className="waveform-bar" style={{ animationDelay: '0.2s' }} />
-                <div className="waveform-bar" style={{ animationDelay: '0.3s' }} />
-                <div className="waveform-bar" style={{ animationDelay: '0.4s' }} />
-                <div className="waveform-bar" style={{ animationDelay: '0.5s' }} />
-                <div className="waveform-bar" style={{ animationDelay: '0.6s' }} />
-                <div className="waveform-bar" style={{ animationDelay: '0.7s' }} />
+                <div className="waveform-bar" />
+                <div className="waveform-bar" />
+                <div className="waveform-bar" />
+                <div className="waveform-bar" />
+                <div className="waveform-bar" />
+                <div className="waveform-bar" />
+                <div className="waveform-bar" />
+                <div className="waveform-bar" />
               </div>
               <span className="animate-pulse">{t('chat.voice.listening', { defaultValue: 'Listening... (Type to cancel)' })}</span>
             </div>
@@ -1563,21 +1566,18 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                         e.stopPropagation();
                         if (isListening) return;
 
-                        // Cycle: auto -> en-US -> zh-CN -> auto
-                        setSpeechMode(prev => {
-                          if (prev === 'auto') {
-                            setSpeechLang('en-US');
-                            return 'en-US';
-                          }
-                          if (prev === 'en-US') {
-                            setSpeechLang('zh-CN');
-                            return 'zh-CN';
-                          }
-                          // Back to auto
-                          const defaultLang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
-                          setSpeechLang(defaultLang);
-                          return 'auto';
-                        });
+                        // Calculate next mode and lang purely
+                        const nextMode = speechMode === 'auto' ? 'en-US' : (speechMode === 'en-US' ? 'zh-CN' : 'auto');
+                        let nextLang = speechLang;
+
+                        if (nextMode === 'auto') {
+                          nextLang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+                        } else {
+                          nextLang = nextMode;
+                        }
+
+                        setSpeechMode(nextMode);
+                        setSpeechLang(nextLang);
                       }}
                       disabled={isListening}
                       className={`inline-flex items-center justify-center px-1.5 h-6 rounded-md text-[10px] font-bold transition-all border border-[var(--color-border-muted)] ${isListening ? 'opacity-50 cursor-not-allowed' : 'hover:bg-foreground/5 cursor-pointer'}`}
