@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         FilesystemConfig,
         LoggingConfig,
         MCPConfig,
+        SandboxConfig,
     )
 
 
@@ -92,7 +93,7 @@ MCP_REQUIRED_FIELDS = ["servers", "tool_discovery_enabled"]
 
 LOGGING_REQUIRED_FIELDS = ["level", "file"]
 
-FILESYSTEM_REQUIRED_FIELDS = ["allowed_directories"]
+FILESYSTEM_REQUIRED_FIELDS: list[str] = []  # all fields derive from working_directory
 
 
 # Factory functions for creating config objects from dictionaries
@@ -123,6 +124,72 @@ def create_daytona_config(data: dict[str, Any]) -> DaytonaConfig:
         snapshot_name=data.get("snapshot_name"),
         snapshot_auto_create=data.get("snapshot_auto_create", True),
     )
+
+
+def create_sandbox_config(config_data: dict[str, Any]) -> SandboxConfig:
+    """Create SandboxConfig from top-level config data.
+
+    Supports both new "sandbox:" key and legacy "daytona:" key for backward compat.
+    SANDBOX_PROVIDER env var can override the provider.
+
+    Args:
+        config_data: Top-level parsed config dictionary (entire agent_config.yaml)
+
+    Returns:
+        Configured SandboxConfig object
+    """
+    import os
+
+    from ptc_agent.config.core import DaytonaConfig, DockerConfig, SandboxConfig
+
+    if "sandbox" in config_data:
+        sandbox_data = config_data["sandbox"]
+        provider = sandbox_data.get("provider", "daytona")
+        daytona_cfg = (
+            create_daytona_config(sandbox_data["daytona"])
+            if "daytona" in sandbox_data
+            else DaytonaConfig()
+        )
+        docker_cfg = (
+            DockerConfig(**sandbox_data["docker"])
+            if "docker" in sandbox_data
+            else DockerConfig()
+        )
+    elif "daytona" in config_data:
+        # Backward compat: top-level "daytona:" key
+        provider = "daytona"
+        daytona_cfg = create_daytona_config(config_data["daytona"])
+        docker_cfg = DockerConfig()
+    else:
+        raise ValueError(
+            "Missing required section: either 'sandbox' or 'daytona' must be present "
+            "in agent_config.yaml"
+        )
+
+    # Allow SANDBOX_PROVIDER env var to override
+    provider = os.getenv("SANDBOX_PROVIDER", provider)
+
+    sandbox_config = SandboxConfig(
+        provider=provider,
+        daytona=daytona_cfg,
+        docker=docker_cfg,
+    )
+
+    # Docker-specific env var overrides
+    if sandbox_config.provider == "docker":
+        if os.getenv("DOCKER_SANDBOX_IMAGE"):
+            sandbox_config.docker.image = os.environ["DOCKER_SANDBOX_IMAGE"]
+        if os.getenv("DOCKER_SANDBOX_DEV_MODE", "").lower() in ("1", "true"):
+            sandbox_config.docker.dev_mode = True
+        if os.getenv("DOCKER_SANDBOX_HOST_DIR"):
+            sandbox_config.docker.host_work_dir = os.environ["DOCKER_SANDBOX_HOST_DIR"]
+        if os.getenv("DOCKER_SANDBOX_VOLUMES"):
+            # Comma-separated: "/host/a:/container/a:ro,/host/b:/container/b"
+            sandbox_config.docker.volumes = [
+                v.strip() for v in os.environ["DOCKER_SANDBOX_VOLUMES"].split(",") if v.strip()
+            ]
+
+    return sandbox_config
 
 
 def create_mcp_config(data: dict[str, Any]) -> MCPConfig:
@@ -177,10 +244,11 @@ def create_filesystem_config(data: dict[str, Any]) -> FilesystemConfig:
     from ptc_agent.config.core import FilesystemConfig
 
     validate_section_fields(data, FILESYSTEM_REQUIRED_FIELDS, "filesystem")
+    _fs_defaults = FilesystemConfig()
     return FilesystemConfig(
-        working_directory=data.get("working_directory", "/home/daytona"),
-        allowed_directories=data["allowed_directories"],
-        denied_directories=data.get("denied_directories", []),
+        working_directory=data.get("working_directory", _fs_defaults.working_directory),
+        allowed_directories=data.get("allowed_directories"),  # None → derived from working_directory
+        denied_directories=data.get("denied_directories"),    # None → derived from working_directory
         enable_path_validation=data.get("enable_path_validation", True),
     )
 

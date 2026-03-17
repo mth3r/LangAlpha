@@ -15,10 +15,12 @@ from ptc_agent.config.core import (
     DEFAULT_BLOCKED_PATTERNS,
     CoreConfig,
     DaytonaConfig,
+    DockerConfig,
     FilesystemConfig,
     LoggingConfig,
     MCPConfig,
     MCPServerConfig,
+    SandboxConfig,
     SecurityConfig,
     create_default_security_config,
 )
@@ -131,9 +133,9 @@ class TestMCPConfig:
 class TestFilesystemConfig:
     def test_defaults(self):
         cfg = FilesystemConfig()
-        assert cfg.working_directory == "/home/daytona"
-        assert cfg.allowed_directories == ["/home/daytona", "/tmp"]
-        assert cfg.denied_directories == []
+        assert cfg.working_directory == "/home/workspace"
+        assert cfg.allowed_directories == ["/home/workspace", "/tmp"]
+        assert cfg.denied_directories == ["/home/workspace/_internal"]
         assert cfg.enable_path_validation is True
 
 
@@ -157,7 +159,7 @@ class TestLoggingConfig:
 class TestCoreConfig:
     def _make_core(self, **overrides) -> CoreConfig:
         defaults = dict(
-            daytona=DaytonaConfig(api_key="test-key"),
+            sandbox=SandboxConfig(daytona=DaytonaConfig(api_key="test-key")),
             security=SecurityConfig(),
             mcp=MCPConfig(),
             logging=LoggingConfig(),
@@ -171,11 +173,25 @@ class TestCoreConfig:
         assert cfg.daytona.api_key == "test-key"
         assert cfg.config_file_dir is None
 
+    def test_daytona_property_shim(self):
+        """config.daytona returns config.sandbox.daytona."""
+        cfg = self._make_core()
+        assert cfg.daytona is cfg.sandbox.daytona
+
     def test_validate_api_keys_valid(self):
         cfg = self._make_core()
         cfg.validate_api_keys()  # Should not raise
 
     def test_validate_api_keys_missing(self):
-        cfg = self._make_core(daytona=DaytonaConfig(api_key=""))
+        cfg = self._make_core(
+            sandbox=SandboxConfig(daytona=DaytonaConfig(api_key=""))
+        )
         with pytest.raises(ValueError, match="DAYTONA_API_KEY"):
             cfg.validate_api_keys()
+
+    def test_validate_api_keys_skips_for_docker(self):
+        """No DAYTONA_API_KEY required when provider=docker."""
+        cfg = self._make_core(
+            sandbox=SandboxConfig(provider="docker", daytona=DaytonaConfig(api_key=""))
+        )
+        cfg.validate_api_keys()  # Should not raise

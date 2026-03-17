@@ -5,6 +5,8 @@ Provides mock database connections, test FastAPI app builder,
 and sample data factories.
 """
 
+pytest_plugins = ["tests.integration.sandbox.metrics.conftest"]
+
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone

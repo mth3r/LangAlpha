@@ -127,7 +127,7 @@ class PackageInstallResponse(BaseModel):
 
 
 def _parse_df_output(stdout: str) -> DiskOverview | None:
-    """Parse `df -h /home/daytona` output into a DiskOverview."""
+    """Parse `df -h /home/workspace` output into a DiskOverview."""
     lines = stdout.strip().splitlines()
     if len(lines) < 2:
         return None
@@ -143,8 +143,9 @@ def _parse_df_output(stdout: str) -> DiskOverview | None:
     )
 
 
-def _parse_du_output(stdout: str) -> list[DirectorySize]:
-    """Parse `du -sh /home/daytona/*/` output into directory sizes."""
+def _parse_du_output(stdout: str, work_dir: str = "/home/workspace") -> list[DirectorySize]:
+    """Parse `du -sh <work_dir>/*/` output into directory sizes."""
+    work_dir_prefix = work_dir.rstrip("/") + "/"
     results: list[DirectorySize] = []
     for line in stdout.strip().splitlines():
         parts = line.split(None, 1)
@@ -152,7 +153,11 @@ def _parse_du_output(stdout: str) -> list[DirectorySize]:
             continue
         size, path = parts
         # Convert absolute path to relative display name
-        name = path.rstrip("/").split("/home/daytona/")[-1]
+        stripped = path.rstrip("/")
+        if stripped.startswith(work_dir_prefix):
+            name = stripped[len(work_dir_prefix):]
+        else:
+            name = stripped.split(work_dir_prefix)[-1]
         if name:
             results.append(DirectorySize(path=name, size=size))
     return results
@@ -245,36 +250,29 @@ async def _get_offline_sandbox_stats(
             resources=SandboxResources(),
         )
 
-    from daytona_sdk import AsyncDaytona, DaytonaConfig
+    from ptc_agent.core.sandbox.providers import create_provider
 
     manager = WorkspaceManager.get_instance()
-    daytona_config = DaytonaConfig(
-        api_key=manager.config.daytona.api_key,
-        api_url=manager.config.daytona.base_url,
-    )
+    provider = None
     try:
-        async with AsyncDaytona(daytona_config) as daytona:
-            sandbox = await daytona.get(sandbox_id)
-            state = (
-                sandbox.state.value
-                if hasattr(sandbox.state, "value")
-                else str(sandbox.state)
-            )
-            return SandboxStatsResponse(
-                workspace_id=workspace_id,
-                sandbox_id=sandbox_id,
-                state=state,
-                created_at=str(sandbox.created_at) if sandbox.created_at else None,
-                auto_stop_interval=sandbox.auto_stop_interval,
-                resources=SandboxResources(
-                    cpu=sandbox.cpu,
-                    memory=sandbox.memory,
-                    disk=sandbox.disk,
-                    gpu=sandbox.gpu,
-                ),
-            )
+        provider = create_provider(manager.config.to_core_config())
+        runtime = await provider.get(sandbox_id)
+        meta = await runtime.get_metadata()
+        return SandboxStatsResponse(
+            workspace_id=workspace_id,
+            sandbox_id=sandbox_id,
+            state=meta.get("state"),
+            created_at=str(meta["created_at"]) if meta.get("created_at") else None,
+            auto_stop_interval=meta.get("auto_stop_interval"),
+            resources=SandboxResources(
+                cpu=meta.get("cpu"),
+                memory=meta.get("memory"),
+                disk=meta.get("disk"),
+                gpu=meta.get("gpu"),
+            ),
+        )
     except Exception as e:
-        logger.warning(f"Failed to query Daytona for sandbox {sandbox_id}: {e}")
+        logger.warning(f"Failed to query sandbox provider for {sandbox_id}: {e}")
         return SandboxStatsResponse(
             workspace_id=workspace_id,
             sandbox_id=sandbox_id,
@@ -282,6 +280,9 @@ async def _get_offline_sandbox_stats(
             created_at=str(workspace.get("created_at", "")),
             resources=SandboxResources(),
         )
+    finally:
+        if provider is not None:
+            await provider.close()
 
 
 async def _get_full_sandbox_stats(
@@ -292,40 +293,38 @@ async def _get_full_sandbox_stats(
     """Get full sandbox stats for running workspaces (disk, packages, MCP, skills)."""
     session, sandbox = await _get_sandbox(workspace_id, x_user_id)
 
-    # --- 1. Static properties from the Daytona sandbox object ---
-    daytona_sandbox = getattr(sandbox, "sandbox", None)
+    # --- 1. Static properties from the runtime metadata ---
     resources = SandboxResources()
     state = None
     created_at = None
     auto_stop_interval = None
     sandbox_id = getattr(sandbox, "sandbox_id", None)
 
-    if daytona_sandbox is not None:
+    runtime = getattr(sandbox, "runtime", None)
+    if runtime is not None:
         try:
+            meta = await runtime.get_metadata()
             resources = SandboxResources(
-                cpu=getattr(daytona_sandbox, "cpu", None),
-                memory=getattr(daytona_sandbox, "memory", None),
-                disk=getattr(daytona_sandbox, "disk", None),
-                gpu=getattr(daytona_sandbox, "gpu", None),
+                cpu=meta.get("cpu"),
+                memory=meta.get("memory"),
+                disk=meta.get("disk"),
+                gpu=meta.get("gpu"),
             )
+            state = meta.get("state")
+            raw_created = meta.get("created_at")
+            if raw_created is not None:
+                created_at = str(raw_created)
+            auto_stop_interval = meta.get("auto_stop_interval")
         except Exception:
             pass
 
-        raw_state = getattr(daytona_sandbox, "state", None)
-        if raw_state is not None:
-            state = raw_state.value if hasattr(raw_state, "value") else str(raw_state)
-
-        raw_created = getattr(daytona_sandbox, "created_at", None)
-        if raw_created is not None:
-            created_at = str(raw_created)
-
-        auto_stop_interval = getattr(daytona_sandbox, "auto_stop_interval", None)
-
     # --- 2. Concurrent bash commands for disk & packages ---
+    work_dir = sandbox.working_dir
+
     async def _get_disk_usage():
         try:
             result = await sandbox.execute_bash_command(
-                "df -h /home/daytona", timeout=10
+                f"df -h {work_dir}", timeout=10
             )
             if result.get("success"):
                 return _parse_df_output(result.get("stdout", ""))
@@ -336,10 +335,10 @@ async def _get_full_sandbox_stats(
     async def _get_directory_breakdown():
         try:
             result = await sandbox.execute_bash_command(
-                "du -sh /home/daytona/*/ 2>/dev/null || true", timeout=15
+                f"du -sh {work_dir}/*/ 2>/dev/null || true", timeout=15
             )
             if result.get("success"):
-                return _parse_du_output(result.get("stdout", ""))
+                return _parse_du_output(result.get("stdout", ""), work_dir)
         except Exception as e:
             logger.debug(f"du command failed: {e}")
         return []
@@ -360,7 +359,7 @@ async def _get_full_sandbox_stats(
         try:
             # Read SKILL.md frontmatter from each skill directory
             cmd = (
-                "for d in /home/daytona/skills/*/; do "
+                f"for d in {work_dir}/skills/*/; do "
                 '  [ -f "$d/SKILL.md" ] && echo "=== $(basename "$d") ===" && head -5 "$d/SKILL.md"; '
                 "done 2>/dev/null || true"
             )

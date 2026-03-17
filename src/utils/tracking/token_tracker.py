@@ -6,7 +6,6 @@ and managing execution tracking lifecycle.
 """
 
 import logging
-from typing import Optional
 
 from .per_call_token_tracker import PerCallTokenTracker
 from .core import ExecutionTracker

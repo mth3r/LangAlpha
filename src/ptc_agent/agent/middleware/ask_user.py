@@ -5,7 +5,7 @@ options to the user, and receive their answer via the existing HITL
 interrupt/resume wire format.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import ToolMessage

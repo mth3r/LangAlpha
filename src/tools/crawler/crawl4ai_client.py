@@ -102,7 +102,7 @@ class Crawl4AIBrowserManager:
             error_str = str(e)
             # If browser was closed unexpectedly, reset it for next request
             if "has been closed" in error_str or "Target page" in error_str:
-                logger.warning(f"Browser closed unexpectedly, will reset")
+                logger.warning("Browser closed unexpectedly, will reset")
                 await self._reset_browser()
             raise
 

@@ -122,6 +122,11 @@ class SubagentCompiler:
             "max_iterations": defn.max_iterations,
             "user_profile": self._user_profile,
         }
+        # Pass working_directory so workspace_paths template can use it
+        if self._sandbox is not None and hasattr(self._sandbox, "config"):
+            template_kwargs["working_directory"] = (
+                self._sandbox.config.filesystem.working_directory
+            )
 
         # 2. Standalone custom template — render it directly
         if defn.custom_prompt_template is not None:

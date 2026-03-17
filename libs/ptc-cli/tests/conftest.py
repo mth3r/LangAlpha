@@ -138,7 +138,7 @@ def mock_sandbox():
     sandbox.is_healthy = AsyncMock(return_value=True)
     sandbox.execute = AsyncMock(return_value={"stdout": "", "stderr": "", "exit_code": 0})
     sandbox.aglob_files = AsyncMock(return_value=[])
-    sandbox.normalize_path = Mock(side_effect=lambda x: f"/home/daytona/{x}")
+    sandbox.normalize_path = Mock(side_effect=lambda x: f"/home/workspace/{x}")
     sandbox.read_file = Mock(return_value=None)
     sandbox.download_file_bytes = Mock(return_value=None)
 

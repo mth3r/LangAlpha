@@ -63,7 +63,7 @@ async def summarize_messages(
         messages: List of conversation messages to summarize (full state).
         keep_messages: Number of recent messages to preserve (default: 5).
         model_name: LLM model name for generating summaries (default: gpt-5-nano).
-        backend: Optional DaytonaBackend for offloading to sandbox filesystem.
+        backend: Optional SandboxBackend for offloading to sandbox filesystem.
         previous_event: Previous SummarizationEvent for chained summarization.
 
     Returns:
@@ -240,7 +240,7 @@ async def offload_tool_args(
 
     Args:
         messages: Current conversation messages.
-        backend: Optional DaytonaBackend for offloading originals to sandbox.
+        backend: Optional SandboxBackend for offloading originals to sandbox.
         already_offloaded: IDs of tool calls already offloaded by the middleware,
             to skip re-offloading.
 

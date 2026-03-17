@@ -204,21 +204,23 @@ class TestCreateFilesystemConfig:
         assert cfg.enable_path_validation is False
 
     def test_defaults(self):
-        data = {"allowed_directories": ["/home/daytona"]}
+        data = {}  # everything derived from working_directory default
         cfg = create_filesystem_config(data)
-        assert cfg.denied_directories == []
+        assert cfg.allowed_directories == ["/home/workspace", "/tmp"]
+        assert cfg.denied_directories == ["/home/workspace/_internal"]
         assert cfg.enable_path_validation is True
 
     def test_working_directory_applied(self):
         """working_directory from config data should be applied."""
         data = {
             "working_directory": "/custom/workdir",
-            "allowed_directories": ["/home/daytona"],
+            "allowed_directories": ["/home/workspace"],
         }
         cfg = create_filesystem_config(data)
         assert cfg.working_directory == "/custom/workdir"
 
-    def test_missing_required_field(self):
-        data = {}
-        with pytest.raises(ValueError, match="allowed_directories"):
-            create_filesystem_config(data)
+    def test_empty_data_uses_defaults(self):
+        """Empty data should derive all values from working_directory default."""
+        cfg = create_filesystem_config({})
+        assert cfg.working_directory == "/home/workspace"
+        assert "/home/workspace" in cfg.allowed_directories

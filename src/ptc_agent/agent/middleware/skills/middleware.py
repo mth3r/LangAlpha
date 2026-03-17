@@ -111,7 +111,7 @@ class SkillsMiddleware(AgentMiddleware):
             mode: Agent mode. Determines behavior:
                 - "ptc": No LoadSkill tool, auto-load on Read of SKILL.md
                 - "flash": LoadSkill tool exposed, skill manifest in system message
-            backend: Optional DaytonaBackend for filesystem scanning of user-installed
+            backend: Optional SandboxBackend for filesystem scanning of user-installed
                 skills (PTC mode only).
             sources: Optional list of sandbox paths to scan for SKILL.md files.
             known_skills: Pre-parsed skill metadata from the upload manifest, keyed

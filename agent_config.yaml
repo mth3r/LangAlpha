@@ -14,18 +14,35 @@ llm:
     - "kimi-k2.5"
     - "doubao-seed-2.0-lite-anthropic"
 
-daytona:
-  # Daytona sandbox configuration
-  base_url: "https://app.daytona.io/api"
-  auto_stop_interval: 3600 # 1 hour in seconds
-  auto_archive_interval: 86400 # 24 hours in seconds
-  auto_delete_interval: 604800 # 7 days in seconds
-  python_version: "3.12"
+sandbox:
+  # Provider selection: "daytona" (cloud) or "docker" (local)
+  # Override at runtime with SANDBOX_PROVIDER env var.
+  provider: "daytona"
 
-  # Hash will be automatically appended based on dependencies
-  snapshot_enabled: true # Recommended: Enable snapshot-based sandbox creation
-  snapshot_name: "open-ptc-v1" # Base name for snapshot (hash will be appended)
-  snapshot_auto_create: true # Automatically create snapshot if it doesn't exist
+  # Daytona cloud sandbox configuration
+  daytona:
+    base_url: "https://app.daytona.io/api"
+    auto_stop_interval: 3600 # 1 hour in seconds
+    auto_archive_interval: 86400 # 24 hours in seconds
+    auto_delete_interval: 604800 # 7 days in seconds
+    python_version: "3.12"
+
+    # Hash will be automatically appended based on dependencies
+    snapshot_enabled: true # Recommended: Enable snapshot-based sandbox creation
+    snapshot_name: "open-ptc-v1" # Base name for snapshot (hash will be appended)
+    snapshot_auto_create: true # Automatically create snapshot if it doesn't exist
+
+  # Docker local sandbox configuration
+  # Ignored when provider is "daytona". Override with DOCKER_SANDBOX_* env vars.
+  docker:
+    image: "langalpha-sandbox:latest" # Build with: docker build -f Dockerfile.sandbox -t langalpha-sandbox:latest .
+    memory_limit: "4g"
+    cpu_count: 2.0
+    network_mode: "bridge" # "bridge" (default) or "none" for full isolation
+    dev_mode: false # true = bind-mount host dir (fast local dev, files shared instantly)
+    # host_work_dir: "/tmp/langalpha-sandbox-work"  # Required when dev_mode is true
+    # volumes:  # Extra mounts in "host:container[:ro]" format
+    #   - "/data/datasets:/mnt/datasets:ro"
 
 mcp:
   # MCP server configurations
@@ -112,14 +129,12 @@ filesystem:
 
   # Working directory for the sandbox - used as the root for virtual path normalization
   # Agent sees virtual paths like /results/file.txt which map to {working_directory}/results/file.txt
-  working_directory: "/home/daytona"
+  working_directory: "/home/workspace"
 
-  allowed_directories:
-    - "/home/daytona"
-    - "/tmp"
-
-  denied_directories:
-    - "/home/daytona/_internal" # Internal SDKs/packages uploaded to sandbox
+  # allowed_directories and denied_directories are auto-derived from working_directory:
+  #   allowed: [working_directory, "/tmp"]
+  #   denied:  [working_directory/_internal]
+  # Override only if you need custom values.
 
   enable_path_validation: true # Validate paths against allowed_directories
 
@@ -178,7 +193,7 @@ summarization:
   truncate_args_max_length: 2000 # Per-arg-value max chars before truncation
 
 # =============================================================================
-# TOOL CONFIGURATION (moved from conf.yaml)
+# TOOL CONFIGURATION
 # =============================================================================
 
 # Search API Configuration

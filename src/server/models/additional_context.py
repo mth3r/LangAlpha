@@ -5,7 +5,7 @@ Supports flexible context types that can be passed along with user queries.
 Contexts are fetched, formatted, and appended to user messages before processing.
 """
 
-from typing import Annotated, Literal, Optional, List, Dict, Any, Union
+from typing import Annotated, Literal, Optional, List, Union
 from pydantic import BaseModel, Discriminator, Field, Tag
 
 

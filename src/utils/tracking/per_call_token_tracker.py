@@ -13,7 +13,7 @@ accurate pricing where rates vary based on token counts.
 import logging
 import threading
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from langchain_core.callbacks.base import BaseCallbackHandler

@@ -7,7 +7,6 @@ and produces a grouped summary for LLM context injection.
 Uses httpx + stdlib xml.etree.ElementTree (no crawl4ai dependency).
 """
 
-import asyncio
 import logging
 import xml.etree.ElementTree as ET
 from typing import Optional

@@ -320,20 +320,20 @@ class TokenUsageTracker:
             avg_output = summary['total_output_tokens'] / summary['total_calls']
             avg_total = summary['total_tokens'] / summary['total_calls']
             
-            print(f"\nTotal Token Usage:")
+            print("\nTotal Token Usage:")
             print(f"  Total Input:      {summary['total_input_tokens']:,}")
             if summary.get('total_cached_tokens', 0) > 0:
                 print(f"    - Cached:       {summary['total_cached_tokens']:,}")
                 print(f"    - Regular:      {summary['total_input_tokens'] - summary['total_cached_tokens']:,}")
             else:
                 # Always show cached status even if 0
-                print(f"    - Cached:       0")
+                print("    - Cached:       0")
             print(f"  Total Output:     {summary['total_output_tokens']:,}")
             print(f"  Total Combined:   {summary['total_tokens']:,}")
             if summary.get('total_reasoning_tokens', 0) > 0:
                 print(f"  Total Reasoning:  {summary['total_reasoning_tokens']:,}")
             
-            print(f"\nAverage per Call:")
+            print("\nAverage per Call:")
             print(f"  Avg Input:        {avg_input:.0f}")
             print(f"  Avg Output:       {avg_output:.0f}")
             print(f"  Avg Total:        {avg_total:.0f}")

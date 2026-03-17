@@ -10,7 +10,7 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # Agent system directories (toggleable in file listings, hidden in completions)
 # ---------------------------------------------------------------------------
-# These are agent-infrastructure dirs at the sandbox root (/home/daytona/).
+# These are agent-infrastructure dirs at the sandbox root (/home/workspace/).
 # Update this set when adding new agent infrastructure directories.
 AGENT_SYSTEM_DIRS: frozenset[str] = frozenset({
     "code",
@@ -27,5 +27,10 @@ AGENT_SYSTEM_DIRS: frozenset[str] = frozenset({
 HIDDEN_DIR_NAMES: frozenset[str] = frozenset({"_internal"})
 
 ALWAYS_HIDDEN_PATH_SEGMENTS: tuple[str, ...] = ("/__pycache__/",)
-ALWAYS_HIDDEN_BASENAMES: tuple[str, ...] = ("__init__.py",)
+ALWAYS_HIDDEN_BASENAMES: tuple[str, ...] = (
+    "__init__.py",
+    ".bash_logout",
+    ".bashrc",
+    ".profile",
+)
 ALWAYS_HIDDEN_SUFFIXES: tuple[str, ...] = (".pyc",)

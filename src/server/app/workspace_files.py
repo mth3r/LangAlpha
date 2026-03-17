@@ -8,7 +8,7 @@ Design goals:
 - Auto-start stopped workspaces for write operations.
 - Serve files from PostgreSQL when sandbox is stopped (read-only).
 - Support both virtual paths ("results/foo.txt") and absolute sandbox paths
-  ("/home/daytona/results/foo.txt").
+  ("/home/workspace/results/foo.txt").
 - Return virtual paths to clients for a consistent UX.
 
 Endpoints:
@@ -203,15 +203,22 @@ def _is_always_hidden_path(client_path: str) -> bool:
     return False
 
 
-def _normalize_requested_path(path: str) -> str:
+def _get_work_dir() -> str:
+    """Return the configured working directory from WorkspaceManager config."""
+    manager = WorkspaceManager.get_instance()
+    return manager.config.to_core_config().filesystem.working_directory
+
+
+def _normalize_requested_path(path: str, work_dir: str) -> str:
     """Normalize a requested path for comparison."""
     raw = (path or "").strip()
     if raw in {"", ".", "./"}:
         return ""
 
     normalized = raw
-    if normalized.startswith("/home/daytona/"):
-        normalized = normalized[len("/home/daytona/") :]
+    work_dir_prefix = work_dir.rstrip("/") + "/"
+    if normalized.startswith(work_dir_prefix):
+        normalized = normalized[len(work_dir_prefix):]
     if normalized.startswith("/"):
         normalized = normalized[1:]
     if normalized.startswith("./"):
@@ -220,17 +227,17 @@ def _normalize_requested_path(path: str) -> str:
     return normalized
 
 
-def _requested_hidden_ok(path: str) -> bool:
+def _requested_hidden_ok(path: str, work_dir: str) -> bool:
     """Return True if caller explicitly requested a hidden directory."""
-    normalized = _normalize_requested_path(path)
+    normalized = _normalize_requested_path(path, work_dir)
     if not normalized:
         return False
     return normalized == "_internal" or normalized.startswith("_internal/")
 
 
-def _requested_system_ok(path: str) -> bool:
+def _requested_system_ok(path: str, work_dir: str) -> bool:
     """Return True if caller explicitly requested a system directory."""
-    normalized = _normalize_requested_path(path)
+    normalized = _normalize_requested_path(path, work_dir)
     if not normalized:
         return False
     return any(
@@ -268,11 +275,13 @@ async def list_workspace_files(
     if _is_flash_workspace(workspace):
         return {"files": [], "sandbox_ready": False, "flash_workspace": True}
 
+    work_dir = _get_work_dir()
+
     # DB fallback for stopped workspaces (unless auto_start requested)
     if not auto_start and workspace.get("status") in ("stopped", "stopping"):
         file_tree = await FilePersistenceService.get_file_tree(workspace_id)
         # Filter by path prefix if specified
-        normalized_path = _normalize_requested_path(path)
+        normalized_path = _normalize_requested_path(path, work_dir)
         if normalized_path:
             file_tree = [
                 f
@@ -280,7 +289,7 @@ async def list_workspace_files(
                 if f["path"].startswith(normalized_path + "/")
                 or f["path"] == normalized_path
             ]
-        allow_hidden = _requested_hidden_ok(path)
+        allow_hidden = _requested_hidden_ok(path, work_dir)
         files = [
             f["path"]
             for f in file_tree
@@ -317,7 +326,7 @@ async def list_workspace_files(
 
     # aglob_files returns absolute sandbox paths.
     # Allow explicit listing of hidden internal paths (e.g. /view _internal/...).
-    allow_denied = _requested_hidden_ok(path)
+    allow_denied = _requested_hidden_ok(path, work_dir)
     try:
         absolute_paths: list[str] = await sandbox.aglob_files(
             pattern, path=path, allow_denied=allow_denied
@@ -325,7 +334,7 @@ async def list_workspace_files(
     except RuntimeError:
         raise HTTPException(status_code=503, detail="Sandbox is still starting")
 
-    allow_hidden = _requested_hidden_ok(path)
+    allow_hidden = _requested_hidden_ok(path, work_dir)
 
     files: list[str] = []
     for absolute_path in absolute_paths:
@@ -343,7 +352,7 @@ async def list_workspace_files(
         if (
             not include_system
             and _is_system_path(client_path)
-            and not _requested_system_ok(path)
+            and not _requested_system_ok(path, work_dir)
         ):
             continue
 
@@ -386,7 +395,8 @@ async def read_workspace_file(
 
     # DB fallback for stopped workspaces
     if workspace.get("status") in ("stopped", "stopping"):
-        normalized_path = _normalize_requested_path(path)
+        work_dir = _get_work_dir()
+        normalized_path = _normalize_requested_path(path, work_dir)
         if not normalized_path:
             raise HTTPException(status_code=400, detail="File path is required")
 
@@ -586,7 +596,8 @@ async def download_workspace_file(
 
     # DB fallback for stopped workspaces
     if workspace.get("status") in ("stopped", "stopping"):
-        normalized_path = _normalize_requested_path(path)
+        work_dir = _get_work_dir()
+        normalized_path = _normalize_requested_path(path, work_dir)
         if not normalized_path:
             raise HTTPException(status_code=400, detail="File path is required")
 

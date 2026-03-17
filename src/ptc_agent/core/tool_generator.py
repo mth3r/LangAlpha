@@ -358,7 +358,11 @@ except ImportError:
 
         return doc
 
-    def generate_mcp_client_code(self, server_configs: list[MCPServerConfig]) -> str:
+    def generate_mcp_client_code(
+        self,
+        server_configs: list[MCPServerConfig],
+        working_dir: str = "/home/workspace",
+    ) -> str:
         """Generate standalone MCP client code for sandbox.
 
         This generates a complete MCP client that can run inside the sandbox,
@@ -366,6 +370,7 @@ except ImportError:
 
         Args:
             server_configs: List of MCP server configurations
+            working_dir: Sandbox working directory for path resolution
 
         Returns:
             Python code for complete MCP client
@@ -404,7 +409,7 @@ except ImportError:
                     env_keys_repr = repr(list(server.env.keys()))
 
                 # Transform Python MCP servers for sandbox execution
-                # uv run python mcp_servers/xxx.py -> uv run python /home/daytona/mcp_servers/xxx.py
+                # uv run python mcp_servers/xxx.py -> uv run python {working_dir}/mcp_servers/xxx.py
                 command = server.command
                 args = list(server.args)
 
@@ -419,7 +424,7 @@ except ImportError:
                     filename = Path(local_path).name
                     # Keep uv run, just fix the path to sandbox
                     command = "uv"
-                    args = ["run", "python", f"/home/daytona/mcp_servers/{filename}"]
+                    args = ["run", "python", f"{working_dir}/mcp_servers/{filename}"]
                     logger.info(
                         "Transformed MCP server command for sandbox",
                         server=server.name,
@@ -505,12 +510,12 @@ def _start_mcp_server(server_name: str) -> subprocess.Popen:
     proc_env = os.environ.copy()
 
     # Ensure sandbox-internal packages are importable by Python MCP servers.
-    # We upload them under /home/daytona/_internal/src and add paths to PYTHONPATH.
+    # We upload them under {working_dir}/_internal/src and add paths to PYTHONPATH.
     # - _internal/src: allows `from data_client.fmp import ...` (bare package name)
     # - _internal:     allows `from src.data_client.fmp import ...` (qualified)
-    internal_root = "/home/daytona/_internal"
+    internal_root = "{working_dir}/_internal"
     existing_pythonpath = proc_env.get("PYTHONPATH", "")
-    extra_paths = ["/home/daytona", f"{{internal_root}}/src", internal_root]
+    extra_paths = ["{working_dir}", f"{{internal_root}}/src", internal_root]
     proc_env["PYTHONPATH"] = ":".join([p for p in [existing_pythonpath, *extra_paths] if p])
 
     # Resolve env vars by key name from os.environ (values are injected

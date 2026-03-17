@@ -236,9 +236,9 @@ async def adiscover_skills(
     the filesystem but absent from ``known_skills`` trigger a download.
 
     Args:
-        backend: DaytonaBackend for sandbox I/O (must support ``als_info``
+        backend: SandboxBackend for sandbox I/O (must support ``als_info``
             and ``adownload_files``).
-        source_path: Sandbox path to scan (e.g. ``/home/daytona/skills/``).
+        source_path: Sandbox path to scan (e.g. ``/home/workspace/skills/``).
         known_skills: Pre-parsed skill metadata from the upload manifest.
             Skills present here are returned as-is without re-downloading.
 

@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from langchain_core.messages import AIMessage
 
-from .core import ExecutionTracker, add_cost_to_token_usage, calculate_cost_from_per_call_records
+from .core import ExecutionTracker, calculate_cost_from_per_call_records
 
 logger = logging.getLogger(__name__)
 

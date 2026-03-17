@@ -11,14 +11,10 @@ This module handles miscellaneous endpoints:
 - Custom metrics
 """
 
-import base64
 import logging
-import os
 from datetime import datetime
-from typing import Optional, List, Annotated
 
-from fastapi import APIRouter, HTTPException, WebSocket, Request, Query
-from fastapi.responses import Response
+from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)
 INTERNAL_SERVER_ERROR_DETAIL = "Internal Server Error"

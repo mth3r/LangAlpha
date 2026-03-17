@@ -72,8 +72,9 @@ _BINARY_EXTENSIONS = frozenset(
     }
 )
 
-# Marker file written after restore to avoid duplicate restores
-_SYNC_MARKER = "/home/daytona/.file_sync_marker"
+def _sync_marker_path(work_dir: str) -> str:
+    """Return the sync marker file path for the given working directory."""
+    return f"{work_dir}/.file_sync_marker"
 
 
 def _is_binary_extension(file_path: str) -> bool:
@@ -99,7 +100,7 @@ class FilePersistenceService:
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB per file
     MAX_WORKSPACE_SIZE = 1024 * 1024 * 1024  # 1GB total per workspace
 
-    # Directories to exclude from sync (relative to /home/daytona/).
+    # Directories to exclude from sync (relative to /home/workspace/).
     # Built from shared AGENT_SYSTEM_DIRS (source of truth: ptc_agent.core.paths)
     # plus environment/tool dirs that should never be persisted.
     # Note: .agent is NOT excluded wholesale — only sub-paths .agent/user and
@@ -134,6 +135,10 @@ class FilePersistenceService:
             Dict mapping virtual_path to {abs_path, file_name, file_size, mtime}.
             Empty dict if no files found.
         """
+        work_dir = sandbox.working_dir
+        work_dir_prefix = work_dir + "/"
+        sync_marker = _sync_marker_path(work_dir)
+
         exclude_flags = []
         for d in cls.EXCLUDE_DIRS:
             exclude_flags.append(f"-not -path '*/{d}/*'")
@@ -143,7 +148,7 @@ class FilePersistenceService:
             exclude_flags.append(f"-not -name '{name}'")
 
         find_cmd = (
-            f"find /home/daytona -type f "
+            f"find {work_dir} -type f "
             f"{' '.join(exclude_flags)} "
             f"-printf '%s\\t%T@\\t%p\\n' 2>/dev/null"
         )
@@ -172,12 +177,12 @@ class FilePersistenceService:
                 continue
 
             virtual_path = abs_path
-            if virtual_path.startswith("/home/daytona/"):
-                virtual_path = virtual_path[len("/home/daytona/") :]
-            elif virtual_path == "/home/daytona":
+            if virtual_path.startswith(work_dir_prefix):
+                virtual_path = virtual_path[len(work_dir_prefix):]
+            elif virtual_path == work_dir:
                 continue
 
-            if abs_path == _SYNC_MARKER:
+            if abs_path == sync_marker:
                 continue
 
             try:
@@ -477,8 +482,9 @@ class FilePersistenceService:
 
             # Write sync marker
             try:
+                work_dir = sandbox.working_dir
                 marker_content = datetime.now(timezone.utc).isoformat().encode("utf-8")
-                await sandbox.aupload_file_bytes(_SYNC_MARKER, marker_content)
+                await sandbox.aupload_file_bytes(_sync_marker_path(work_dir), marker_content)
             except Exception:
                 pass  # Non-critical
 
@@ -514,11 +520,12 @@ class FilePersistenceService:
     @classmethod
     async def _restore_single_file(cls, sandbox: Any, file_record: dict) -> bool:
         """Restore a single file to sandbox."""
-        abs_path = f"/home/daytona/{file_record['file_path']}"
+        work_dir = sandbox.working_dir
+        abs_path = f"{work_dir}/{file_record['file_path']}"
 
         # Ensure parent directory exists
         parent_dir = os.path.dirname(abs_path)
-        if parent_dir and parent_dir != "/home/daytona":
+        if parent_dir and parent_dir != work_dir:
             await sandbox.acreate_directory(parent_dir)
 
         # Get content
@@ -541,7 +548,9 @@ class FilePersistenceService:
         Checks for sync marker file. If absent, files were lost and need restore.
         """
         try:
-            marker = await sandbox.adownload_file_bytes(_SYNC_MARKER)
+            work_dir = sandbox.working_dir
+            sync_marker = _sync_marker_path(work_dir)
+            marker = await sandbox.adownload_file_bytes(sync_marker)
             if marker is not None:
                 # Marker exists — sandbox still has its files
                 return
@@ -554,7 +563,7 @@ class FilePersistenceService:
                     marker_content = (
                         datetime.now(timezone.utc).isoformat().encode("utf-8")
                     )
-                    await sandbox.aupload_file_bytes(_SYNC_MARKER, marker_content)
+                    await sandbox.aupload_file_bytes(sync_marker, marker_content)
                 except Exception:
                     pass
                 return

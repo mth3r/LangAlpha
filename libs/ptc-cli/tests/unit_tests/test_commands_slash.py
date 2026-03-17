@@ -33,8 +33,8 @@ def mock_client():
 
 class TestNormalizePath:
     def test_removes_home_prefix(self):
-        assert _normalize_path("/home/daytona/test.py") == "test.py"
-        assert _normalize_path("/home/daytona/src/main.py") == "src/main.py"
+        assert _normalize_path("/home/workspace/test.py") == "test.py"
+        assert _normalize_path("/home/workspace/src/main.py") == "src/main.py"
 
     def test_preserves_other_paths(self):
         assert _normalize_path("/tmp/config") == "/tmp/config"

@@ -67,8 +67,8 @@ def fake_home_with_config(tmp_path, monkeypatch):
         },
         "logging": {"level": "WARNING", "file": "logs/test.log"},
         "filesystem": {
-            "working_directory": "/home/daytona",
-            "allowed_directories": ["/home/daytona", "/tmp"],
+            "working_directory": "/home/workspace",
+            "allowed_directories": ["/home/workspace", "/tmp"],
             "enable_path_validation": True,
         },
     }

@@ -48,7 +48,7 @@ class ProtectedPathMiddleware(AgentMiddleware):
 
     def __init__(self, denied_directories: list[str] | None = None) -> None:
         # Build match fragments from full paths, e.g.:
-        #   "/home/daytona/_internal" → ["_internal/", "_internal\\", "_internal"]
+        #   "/home/workspace/_internal" → ["_internal/", "_internal\\", "_internal"]
         fragments: set[str] = set()
         for path in denied_directories or []:
             basename = os.path.basename(path.rstrip("/"))
