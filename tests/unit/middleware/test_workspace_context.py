@@ -122,8 +122,14 @@ class TestGetWorkspaceContextBlock:
         session = _make_session(agent_md=agent_md)
         mw = WorkspaceContextMiddleware(session=session)
 
+        def _close_coro(coro):
+            """Prevent 'coroutine was never awaited' by closing it."""
+            coro.close()
+            return MagicMock()
+
         with patch(
-            "ptc_agent.agent.middleware.workspace_context.asyncio.create_task"
+            "ptc_agent.agent.middleware.workspace_context.asyncio.create_task",
+            side_effect=_close_coro,
         ) as mock_task:
             await mw._get_workspace_context_block()
             mock_task.assert_called_once()
@@ -134,8 +140,14 @@ class TestGetWorkspaceContextBlock:
         session = _make_session(agent_md=agent_md)
         mw = WorkspaceContextMiddleware(session=session)
 
+        def _close_coro(coro):
+            """Prevent 'coroutine was never awaited' by closing it."""
+            coro.close()
+            return MagicMock()
+
         with patch(
-            "ptc_agent.agent.middleware.workspace_context.asyncio.create_task"
+            "ptc_agent.agent.middleware.workspace_context.asyncio.create_task",
+            side_effect=_close_coro,
         ) as mock_task:
             # First call triggers sync
             await mw._get_workspace_context_block()
