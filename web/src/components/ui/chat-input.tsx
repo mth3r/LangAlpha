@@ -11,6 +11,7 @@ import { TokenUsageRing, type TokenUsageData } from './token-usage-ring';
 import { usePreferences } from '@/hooks/usePreferences';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { getSkills, getModelMetadata } from '../../pages/ChatAgent/utils/api';
+import { safeLocalStorage } from '@/lib/utils';
 import { useToast } from './use-toast';
 import './chat-input.css';
 
@@ -318,7 +319,9 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   // Voice Input (Speech Recognition)
   const [isListening, setIsListening] = useState(false);
   const [speechLang, setSpeechLang] = useState<string>(() => {
-    // Basic initial guess from browser/app, will be auto-updated by keyboard interaction
+    // Priority: Persisted > App Locale
+    const persisted = safeLocalStorage.getItem('chat_input_speech_lang');
+    if (persisted) return persisted;
     return i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
   });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -336,6 +339,11 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       setSpeechLang(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US');
     }
   }, [i18n.language]);
+
+  // Persist speech language preference
+  useEffect(() => {
+    safeLocalStorage.setItem('chat_input_speech_lang', speechLang);
+  }, [speechLang]);
 
   // Stop recognition when loading starts (ghost text fix)
   useEffect(() => {
@@ -928,18 +936,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
   }, [hasContent, disabled, message, planMode, attachedFiles, chartImage, onSend, mentionedFiles, slashCommands]);
 
   // --- Keyboard & Language Detection ---
-  useEffect(() => {
-    // If there's content, use it as a signal for the primary language
-    if (message) {
-      const hasChinese = /[\u4e00-\u9fa5]/.test(message);
-      if (hasChinese) {
-        setSpeechLang('zh-CN');
-      } else if (/[a-zA-Z]/.test(message)) {
-        setSpeechLang('en-US');
-      }
-    }
-  }, [message]);
-
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Automatic language detection based on direct keyboard input
     // Only switch to English if it's a direct Latin key AND we are not currently in an IME composition.
@@ -1210,7 +1206,11 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
               onPaste={handlePaste}
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
-              onCompositionStart={() => setSpeechLang('zh-CN')}
+              onCompositionStart={() => {
+                if (i18n.language.startsWith('zh')) {
+                  setSpeechLang('zh-CN');
+                }
+              }}
               placeholder={placeholder}
               className={`w-full bg-transparent border-0 outline-none text-[var(--color-text-primary)] ${isMobile ? 'text-base' : 'text-sm'} placeholder:text-[var(--color-text-tertiary)] resize-none overflow-hidden leading-relaxed block`}
               rows={1}
