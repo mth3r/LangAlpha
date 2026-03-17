@@ -49,13 +49,8 @@ from ptc_agent.core.sandbox.runtime import SandboxProvider, SandboxRuntime
 
 from .memory_provider import MemoryProvider, MemoryRuntime
 
-# Metrics plugin registration -- ensures --sandbox-metrics flag is available
-# even though metrics/ has no test files for auto-discovery.
-pytest_plugins = ["tests.integration.sandbox.metrics.conftest"]
-
 # Prevent pytest from descending into metrics/ during collection (it has no
-# test files). Without this, pytest discovers the conftest.py a second time
-# and raises "Plugin already registered under a different name".
+# test files and its conftest is registered via root conftest pytest_plugins).
 collect_ignore = [os.path.join(os.path.dirname(__file__), "metrics")]
 
 # ---------------------------------------------------------------------------
