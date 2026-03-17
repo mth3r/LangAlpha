@@ -1084,9 +1084,27 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     >
       {/* Main Container */}
       <div
-        className="flex flex-col items-stretch transition-all duration-200 relative z-10 rounded-2xl cursor-text border border-[hsl(var(--primary))] bg-[var(--color-bg-card)]"
+        className={`chat-input-container flex flex-col items-stretch transition-all duration-200 relative z-10 rounded-2xl cursor-text border border-[hsl(var(--primary))] bg-[var(--color-bg-card)] ${isListening ? 'recording' : ''}`}
         onClick={() => textareaRef.current?.focus()}
       >
+        {isListening && (
+          <>
+            <div className="recording-overlay" />
+            <div className="voice-status-hint">
+              <div className="waveform">
+                <div className="waveform-bar" style={{ animationDelay: '0s' }} />
+                <div className="waveform-bar" style={{ animationDelay: '0.1s' }} />
+                <div className="waveform-bar" style={{ animationDelay: '0.2s' }} />
+                <div className="waveform-bar" style={{ animationDelay: '0.3s' }} />
+                <div className="waveform-bar" style={{ animationDelay: '0.4s' }} />
+                <div className="waveform-bar" style={{ animationDelay: '0.5s' }} />
+                <div className="waveform-bar" style={{ animationDelay: '0.6s' }} />
+                <div className="waveform-bar" style={{ animationDelay: '0.7s' }} />
+              </div>
+              <span className="animate-pulse">{t('chat.voice.listening', { defaultValue: 'Listening... (Type to cancel)' })}</span>
+            </div>
+          </>
+        )}
         <div className="flex flex-col px-3 pt-3 pb-2 gap-2">
 
           {/* Slash command pills + Mention pills */}
@@ -1238,8 +1256,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                   setSpeechLang('zh-CN');
                 }
               }}
-              placeholder={placeholder}
-              className={`w-full bg-transparent border-0 outline-none text-[var(--color-text-primary)] ${isMobile ? 'text-base' : 'text-sm'} placeholder:text-[var(--color-text-tertiary)] resize-none overflow-hidden leading-relaxed block`}
+              placeholder={isListening ? "" : placeholder}
+              className={`w-full bg-transparent border-0 outline-none text-[var(--color-text-primary)] ${isMobile ? 'text-base' : 'text-sm'} placeholder:text-[var(--color-text-tertiary)] resize-none overflow-hidden leading-relaxed block transition-opacity duration-300 ${isListening ? 'opacity-20' : 'opacity-100'}`}
               rows={1}
               disabled={disabled}
               style={{ minHeight: '1.5em' }}
