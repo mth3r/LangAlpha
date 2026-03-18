@@ -318,18 +318,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
   // Voice Input (Speech Recognition)
   const [isListening, setIsListening] = useState(false);
-  const [speechMode, setSpeechMode] = useState<'en-US' | 'zh-CN' | 'auto'>(() => {
-    return (safeLocalStorage.getItem('chat_input_speech_mode') as 'en-US' | 'zh-CN' | 'auto') || 'auto';
-  });
-  const [speechLang, setSpeechLang] = useState<string>(() => {
-    // Current effective language used by the recognition engine
-    const mode = (safeLocalStorage.getItem('chat_input_speech_mode') as 'en-US' | 'zh-CN' | 'auto') || 'auto';
-    if (mode !== 'auto') {
-      const persisted = safeLocalStorage.getItem('chat_input_speech_lang');
-      if (persisted) return persisted;
-    }
-    return i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
-  });
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isStartingRef = useRef(false);
   const finalTranscriptRef = useRef('');
@@ -338,19 +326,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
 
   // Sync message ref
   useEffect(() => { messageRef.current = message; }, [message]);
-
-  // Sync speechLang with app locale change if in auto mode and message is empty
-  useEffect(() => {
-    if (speechMode === 'auto' && !message) {
-      setSpeechLang(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US');
-    }
-  }, [i18n.language, message, speechMode]);
-
-  // Persist speech language preference and mode
-  useEffect(() => {
-    safeLocalStorage.setItem('chat_input_speech_mode', speechMode);
-    safeLocalStorage.setItem('chat_input_speech_lang', speechLang);
-  }, [speechMode, speechLang]);
 
   // Stop recognition when loading starts (ghost text fix)
   useEffect(() => {
@@ -385,7 +360,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       const recognition = new SpeechRecognitionAPI();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = speechLang;
+      // Derived purely from current UI locale
+      recognition.lang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
 
       // Capture message BEFORE starting recognition
       const startMessage = messageRef.current.trim();
@@ -450,7 +426,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       recognitionRef.current = null; // Prevent stale ref if start() throws
       setIsListening(false);
     }
-  }, [isListening, speechLang, toast, t]);
+  }, [isListening, toast, t, i18n.language]);
 
   // Clean up recognition on unmount
   useEffect(() => {
@@ -730,16 +706,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     const val = e.target.value;
     setMessage(val);
 
-    // Automatic language detection based on the newest character (Only in Auto mode)
-    if (speechMode === 'auto' && val.length > message.length) {
-      const lastChar = val[e.target.selectionStart - 1] || val.slice(-1);
-      if (/[\u4e00-\u9fa5]/.test(lastChar)) {
-        setSpeechLang('zh-CN');
-      } else if (/[a-zA-Z]/.test(lastChar)) {
-        setSpeechLang('en-US');
-      }
-    }
-
     // Remove pills whose /{command} or @mention text was deleted from the textarea
     setSlashCommands((prev) => prev.filter((cmd) => val.includes(`/${cmd.name}`)));
     setMentionedFiles((prev) => prev.filter((f) => val.includes(`@${f.path}`)));
@@ -960,14 +926,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
       recognitionRef.current.stop();
     }
 
-    // Automatic language detection based on direct keyboard input (Only in Auto mode)
-    if (speechMode === 'auto' && !e.repeat && !e.nativeEvent.isComposing &&
-      e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
-      if (speechLang !== 'en-US') {
-        setSpeechLang('en-US');
-      }
-    }
-
     // Slash command menu keyboard navigation
     if (showSlashMenu && filteredSlashCommands.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -1024,7 +982,7 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
     if (e.key === 'Escape' && showAutocomplete) {
       setShowAutocomplete(false);
     }
-  }, [showSlashMenu, filteredSlashCommands, slashActiveIndex, selectSlashCommand, showAutocomplete, filteredMentionFiles, activeIndex, selectFile, handleSend, isListening, speechMode, speechLang]);
+  }, [showSlashMenu, filteredSlashCommands, slashActiveIndex, selectSlashCommand, showAutocomplete, filteredMentionFiles, activeIndex, selectFile, handleSend, isListening]);
 
   // Workspace selector helpers
   const selectedWorkspaceName = useMemo(() => {
@@ -1253,10 +1211,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                 // Terminate voice input if IME starts
                 if (isListening && recognitionRef.current) {
                   recognitionRef.current.stop();
-                }
-                // If user starts IME, it's highly likely they want Chinese recognition
-                if (speechMode === 'auto' && speechLang !== 'zh-CN') {
-                  setSpeechLang('zh-CN');
                 }
               }}
               placeholder={isListening ? "" : placeholder}
@@ -1541,8 +1495,8 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                   )}
                 </div>
               )}
-              {/* Voice Input Button & Language Toggle */}
-              {speechSupported && !isLoading && (
+              {/* Voice Input Button (Show only if enabled in user settings) */}
+              {speechSupported && !isLoading && !!otherPref?.voice_input_enabled && (
                 <div className="flex items-center">
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleListening(); }}
@@ -1558,40 +1512,6 @@ const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput
                       <Mic className="w-4 h-4" />
                     )}
                   </button>
-
-                  {/* Voice Language Indicator (3 states: Auto, EN, CN) */}
-                  {(i18n.language.startsWith('en') || i18n.language.startsWith('zh')) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isListening) return;
-
-                        // Calculate next mode and lang purely
-                        const nextMode = speechMode === 'auto' ? 'en-US' : (speechMode === 'en-US' ? 'zh-CN' : 'auto');
-                        let nextLang = speechLang;
-
-                        if (nextMode === 'auto') {
-                          nextLang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
-                        } else {
-                          nextLang = nextMode;
-                        }
-
-                        setSpeechMode(nextMode);
-                        setSpeechLang(nextLang);
-                      }}
-                      disabled={isListening}
-                      className={`inline-flex items-center justify-center px-1.5 h-6 rounded-md text-[10px] font-bold transition-all border border-[var(--color-border-muted)] ${isListening ? 'opacity-50 cursor-not-allowed' : 'hover:bg-foreground/5 cursor-pointer'}`}
-                      style={{
-                        color: 'var(--color-text-tertiary)',
-                        marginLeft: '-4px',
-                        zIndex: 10,
-                        backgroundColor: 'transparent',
-                      }}
-                      title={isListening ? t('chat.voice.cannotChangeLang') : t('chat.voice.detectedKeyboardLang')}
-                    >
-                      {speechMode === 'auto' ? 'AUTO' : (speechMode === 'en-US' ? 'EN' : 'CN')}
-                    </button>
-                  )}
                 </div>
               )}
               {/* Send / Stop Button */}
