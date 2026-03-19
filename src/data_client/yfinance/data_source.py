@@ -111,17 +111,6 @@ def _fetch_single_snapshot(sym: str) -> dict[str, Any] | None:
         return None
 
 
-def _fetch_snapshots(symbols: list[str]) -> list[dict[str, Any]]:
-    """Synchronous helper for batch snapshots — parallelized across symbols."""
-    if not symbols:
-        return []
-    from concurrent.futures import ThreadPoolExecutor
-
-    with ThreadPoolExecutor(max_workers=min(len(symbols), 10)) as pool:
-        results = list(pool.map(_fetch_single_snapshot, symbols))
-    return [r for r in results if r is not None]
-
-
 class YFinanceDataSource:
     """Market data source backed by Yahoo Finance (yfinance library)."""
 
@@ -167,7 +156,12 @@ class YFinanceDataSource:
             (f"^{s}" if asset_type == "indices" and not s.startswith("^") else s)
             for s in symbols
         ]
-        return await asyncio.to_thread(_fetch_snapshots, prepared)
+        if not prepared:
+            return []
+        results = await asyncio.gather(
+            *(asyncio.to_thread(_fetch_single_snapshot, s) for s in prepared)
+        )
+        return [r for r in results if r is not None]
 
     async def get_market_status(
         self,

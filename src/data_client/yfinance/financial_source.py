@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -289,8 +290,17 @@ def _get_financial_ratios(symbol: str) -> list[dict[str, Any]]:
     return [{k: _clean_value(v) for k, v in ratios.items()}]
 
 
+_perf_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_PERF_CACHE_TTL = 300  # 5 minutes
+
+
 def _get_price_performance(symbol: str) -> list[dict[str, Any]]:
     """Compute price returns over standard periods from daily history."""
+    now_ts = time.monotonic()
+    cached = _perf_cache.get(symbol)
+    if cached and (now_ts - cached[0]) < _PERF_CACHE_TTL:
+        return cached[1]
+
     ticker = yf.Ticker(symbol)
     now = datetime.now(_ET)
     try:
@@ -311,7 +321,7 @@ def _get_price_performance(symbol: str) -> list[dict[str, Any]]:
         ref = float(subset.iloc[-1])
         return round((latest - ref) / ref * 100, 4) if ref else None
 
-    return [
+    result = [
         {
             "symbol": symbol,
             "1D": _pct(1),
@@ -326,6 +336,8 @@ def _get_price_performance(symbol: str) -> list[dict[str, Any]]:
             "10Y": _pct(3650),
         }
     ]
+    _perf_cache[symbol] = (time.monotonic(), result)
+    return result
 
 
 def _get_analyst_price_targets(symbol: str) -> list[dict[str, Any]]:
