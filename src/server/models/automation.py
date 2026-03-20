@@ -6,10 +6,77 @@ automations and their execution history.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+# =============================================================================
+# Price Trigger Models
+# =============================================================================
+
+
+class PriceConditionType(str, Enum):
+    """Supported price condition types (extensible)."""
+    PRICE_ABOVE = "price_above"
+    PRICE_BELOW = "price_below"
+    PCT_CHANGE_ABOVE = "pct_change_above"
+    PCT_CHANGE_BELOW = "pct_change_below"
+
+
+class PriceCondition(BaseModel):
+    """A single price condition to evaluate."""
+    type: PriceConditionType
+    value: float = Field(..., gt=0, description="Threshold: dollar amount or percentage")
+    reference: Literal["previous_close", "day_open"] = Field(
+        default="previous_close",
+        description="Reference price for percentage conditions",
+    )
+
+
+class RetriggerMode(str, Enum):
+    """How the automation re-arms after triggering."""
+    ONE_SHOT = "one_shot"
+    RECURRING = "recurring"
+
+
+class RetriggerConfig(BaseModel):
+    """Retrigger behavior configuration."""
+    mode: RetriggerMode = RetriggerMode.ONE_SHOT
+    cooldown_seconds: Optional[int] = Field(
+        default=None,
+        description="Cooldown period in seconds for 'recurring' mode. "
+        "None = default to next trading day. Minimum 4 hours (14400s) when set.",
+    )
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def normalize_cooldown_mode(cls, v):
+        """Backward compat: 'cooldown' -> 'recurring'."""
+        if v == "cooldown":
+            return "recurring"
+        return v
+
+    @model_validator(mode="after")
+    def validate_cooldown(self):
+        if self.mode == RetriggerMode.ONE_SHOT:
+            self.cooldown_seconds = None
+        elif self.mode == RetriggerMode.RECURRING and self.cooldown_seconds is not None:
+            if self.cooldown_seconds < 14400:
+                raise ValueError("cooldown_seconds must be >= 14400 (4 hours) when set")
+        return self
+
+
+class PriceTriggerConfig(BaseModel):
+    """Configuration stored in trigger_config for price-triggered automations."""
+    symbol: str = Field(..., min_length=1, max_length=10, description="Stock ticker symbol")
+    conditions: List[PriceCondition] = Field(
+        ..., min_length=1,
+        description="Price conditions to evaluate (AND logic for multiple)",
+    )
+    retrigger: RetriggerConfig = Field(default_factory=RetriggerConfig)
 
 
 # =============================================================================
@@ -37,8 +104,8 @@ class AutomationCreate(BaseModel):
     description: Optional[str] = Field(None, description="Optional description")
 
     # Trigger
-    trigger_type: Literal["cron", "once"] = Field(
-        ..., description="'cron' for recurring, 'once' for one-time"
+    trigger_type: Literal["cron", "once", "price"] = Field(
+        ..., description="'cron' for recurring, 'once' for one-time, 'price' for price-triggered"
     )
     cron_expression: Optional[str] = Field(
         None, description="Cron expression (required for trigger_type='cron')"
@@ -47,7 +114,8 @@ class AutomationCreate(BaseModel):
         default="UTC", description="IANA timezone (e.g., 'America/New_York')"
     )
     trigger_config: Optional[Dict[str, Any]] = Field(
-        default=None, description="Future: event trigger parameters"
+        default=None,
+        description="Trigger parameters. Required for 'price' type (PriceTriggerConfig schema).",
     )
 
     # Scheduling for one-time triggers
