@@ -455,7 +455,7 @@ class DaytonaProvider(SandboxProvider):
                 " fonts-noto-cjk",
                 "curl -LsSf https://astral.sh/uv/install.sh | sh",
                 "mv /root/.local/bin/uv /usr/local/bin/uv",
-                "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
+                "curl -fsSL https://deb.nodesource.com/setup_24.x | bash -",
                 "apt-get install -y nodejs",
                 *[f"npm install -g {pkg}" for pkg in pkgs],
                 "npm install -g docx pptxgenjs",
