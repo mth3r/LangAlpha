@@ -22,6 +22,7 @@ export { removeStoredThreadId } from './utils/threadStorage';
 import { createUserMessage, createAssistantMessage, createNotificationMessage, appendMessage, updateMessage, type AttachmentMeta } from './utils/messageHelpers';
 import type { ChatMessage, AssistantMessage } from '@/types/chat';
 import type { ActionRequest, ToolCallData, TodoItem } from '@/types/sse';
+import type { PreviewData } from './utils/types';
 import { createRecentlySentTracker } from './utils/recentlySentTracker';
 import {
   handleReasoningSignal,
@@ -420,6 +421,7 @@ export function useChatMessages(
   finalizePendingTodos: (() => void) | null = null,
   onOnboardingRelatedToolComplete: (() => void) | null = null,
   onFileArtifact: ((event: SSEEvent) => void) | null = null,
+  onPreviewUrl: ((data: PreviewData) => void) | null = null,
   agentMode: string = 'ptc',
   clearSubagentCards: (() => void) | null = null,
   onWorkspaceCreated: ((info: { workspaceId: string; question: string }) => void) | null = null,
@@ -2624,6 +2626,15 @@ export function useChatMessages(
           console.log('[Stream] handleTodoUpdate result:', result);
         } else if (artifactType === 'file_operation' && onFileArtifact) {
           onFileArtifact(event);
+        } else if (artifactType === 'preview_url' && onPreviewUrl) {
+          const payload = (event.payload || {}) as Record<string, unknown>;
+          onPreviewUrl({
+            url: '',  // resolved by ChatView via authenticated endpoint
+            port: payload.port as number,
+            title: payload.title as string | undefined,
+            command: payload.command as string | undefined,
+            loading: true,
+          });
         } else if (artifactType === 'task') {
           const payload = (event.payload || {}) as Record<string, unknown>;
           const { task_id, action: rawAction, description, prompt, type } = payload;

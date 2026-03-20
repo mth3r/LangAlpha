@@ -803,6 +803,82 @@ class WorkspaceManager:
                                 user_id=workspace_user_id,
                                 lazy_init=True,
                             )
+
+                    # Still "stopping" after 10s — check actual sandbox state
+                    # from the provider. If the sandbox is actually running or
+                    # stopped, the DB status is stale (e.g. process crashed
+                    # mid-stop). Recover by correcting the DB.
+                    sandbox_id = workspace.get("sandbox_id")
+                    if sandbox_id:
+                        try:
+                            from ptc_agent.core.sandbox.providers import create_provider
+
+                            provider = create_provider(self.config.to_core_config())
+                            try:
+                                runtime = await provider.get(sandbox_id)
+                                actual_state = await runtime.get_state()
+                            finally:
+                                await provider.close()
+
+                            logger.warning(
+                                "Workspace %s stuck in 'stopping' but sandbox "
+                                "is actually '%s', recovering",
+                                workspace_id,
+                                actual_state.value,
+                            )
+                            # Correct the DB status based on actual sandbox state
+                            # Only treat definitively stopped/archived as "stopped";
+                            # transient states (starting, stopping, archiving) should
+                            # not trigger a restart — let them finish naturally.
+                            stopped_states = {"stopped", "archived"}
+                            if actual_state.value in stopped_states:
+                                corrected = "stopped"
+                            elif actual_state.value == "running":
+                                corrected = "running"
+                            else:
+                                logger.info(
+                                    "Workspace %s sandbox in transient state '%s', "
+                                    "not correcting — will retry on next request",
+                                    workspace_id,
+                                    actual_state.value,
+                                )
+                                raise RuntimeError(
+                                    f"Workspace {workspace_id} sandbox is in transient "
+                                    f"state '{actual_state.value}'. Please wait and try again."
+                                )
+                            workspace = await update_workspace_status(
+                                workspace_id=workspace_id,
+                                status=corrected,
+                            )
+                            if corrected == "stopped":
+                                return await self._restart_workspace(
+                                    workspace,
+                                    user_id=workspace_user_id,
+                                    lazy_init=True,
+                                )
+                            # Sandbox is running — create session inline
+                            # (cannot recurse into get_session_for_workspace
+                            # because the per-workspace asyncio.Lock is held
+                            # and is not reentrant)
+                            core_config = self.config.to_core_config()
+                            session = SessionManager.get_session(workspace_id, core_config)
+                            if not session._initialized:
+                                await session.initialize(sandbox_id=sandbox_id)
+                                await self._sync_sandbox_assets(
+                                    workspace_id,
+                                    workspace_user_id,
+                                    session.sandbox,
+                                    reusing_sandbox=True,
+                                )
+                            self._sessions[workspace_id] = session
+                            return session
+                        except Exception as e:
+                            logger.error(
+                                "Failed to check actual sandbox state for %s: %s",
+                                workspace_id,
+                                e,
+                            )
+
                     raise RuntimeError(
                         f"Workspace {workspace_id} is still stopping after timeout. "
                         "Please wait and try again."

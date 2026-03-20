@@ -18,6 +18,7 @@ import {
   InlineStockScreenerCard,
 } from './charts/InlineMarketCharts';
 import { InlineAutomationCard } from './charts/InlineAutomationCards';
+import { InlinePreviewCard } from './charts/InlinePreviewCard';
 import { extractFilePaths, FileMentionCards } from './FileCard';
 import { useUser } from '@/hooks/useUser';
 import ReasoningMessageContent from './ReasoningMessageContent';
@@ -127,6 +128,7 @@ const INLINE_ARTIFACT_MAP: Record<string, React.ComponentType<{ artifact: Record
   sec_filing: InlineSecFilingCard,
   stock_screener: InlineStockScreenerCard,
   automations: InlineAutomationCard,
+  preview_url: InlinePreviewCard,
 };
 
 /* --- Attachment helpers --- */
