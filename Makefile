@@ -1,12 +1,10 @@
-# Provider flag: daytona (default), docker, or future providers
-# Usage: make up PROVIDER=docker
-PROVIDER ?= daytona
-
-.PHONY: help up down clean dev dev-web install test test-sandbox test-web test-all lint setup-db migrate deploy deploy-sync
+.PHONY: help configup down clean dev dev-web install test test-sandbox test-web test-all lint setup-db migrate
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
+config: ## Interactive setup wizard (LLM, data, sandbox, search)
+	@bash scripts/configure.sh
 # ---------------------------------------------------------------------------
 # Docker Compose (full-stack)
 # ---------------------------------------------------------------------------
@@ -71,12 +69,3 @@ setup-db: ## Start PostgreSQL + Redis in Docker and initialize tables
 
 migrate: ## Run database migrations
 	uv run alembic upgrade head
-
-# ---------------------------------------------------------------------------
-# Deployment (internal — requires deploy.sh, not distributed)
-# ---------------------------------------------------------------------------
-deploy: ## Deploy (use ARGS= for options, e.g. make deploy ARGS=web)
-	./deploy.sh $(ARGS)
-
-deploy-sync: ## Deploy with sync
-	./deploy.sh sync
