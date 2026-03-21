@@ -1,7 +1,18 @@
 import type { PriceTriggerConfig } from '@/types/automation';
 
+export function isPriceTriggerConfig(v: unknown): v is PriceTriggerConfig {
+  return (
+    v != null &&
+    typeof v === 'object' &&
+    'symbol' in v &&
+    typeof (v as Record<string, unknown>).symbol === 'string' &&
+    'conditions' in v &&
+    Array.isArray((v as Record<string, unknown>).conditions)
+  );
+}
+
 export function formatPriceTrigger(triggerConfig: PriceTriggerConfig | null | undefined): string {
-  if (!triggerConfig) return 'Price alert';
+  if (!triggerConfig || !isPriceTriggerConfig(triggerConfig)) return 'Price alert';
   const symbol = triggerConfig.symbol || '???';
   const condition = triggerConfig.conditions?.[0];
   if (!condition) return `${symbol} price alert`;

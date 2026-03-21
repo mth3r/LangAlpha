@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Clock, Timer, TrendingUp, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cronToHuman } from '../../../Automations/utils/cron';
-import { formatPriceTrigger, formatRetriggerMode } from '../../../Automations/utils/price';
+import { isPriceTriggerConfig, formatPriceTrigger, formatRetriggerMode } from '../../../Automations/utils/price';
 import type { PriceTriggerConfig } from '@/types/automation';
 import { formatRelativeTime, formatDateTime, formatDuration } from '../../../Automations/utils/time';
 
@@ -122,6 +122,10 @@ function ConfigRow({ label, value }: ConfigRowProps): React.ReactElement {
   );
 }
 
+function asPriceTrigger(v: unknown): PriceTriggerConfig | null {
+  return isPriceTriggerConfig(v) ? v : null;
+}
+
 function marketI18nKey(triggerConfig: PriceTriggerConfig | null | undefined): string | null {
   if (!triggerConfig) return null;
   return triggerConfig.market === 'index' ? 'automation.marketIndex' : null;
@@ -129,7 +133,7 @@ function marketI18nKey(triggerConfig: PriceTriggerConfig | null | undefined): st
 
 function scheduleLabel(auto: Record<string, unknown> | null | undefined): string {
   if (!auto) return '\u2014';
-  if (auto.trigger_type === 'price') return formatPriceTrigger(auto.trigger_config as PriceTriggerConfig) || '\u2014';
+  if (auto.trigger_type === 'price') return formatPriceTrigger(asPriceTrigger(auto.trigger_config)) || '\u2014';
   if (auto.trigger_type === 'cron' && auto.schedule) return cronToHuman(auto.schedule as string);
   if (auto.next_run_at) return formatRelativeTime(auto.next_run_at as string);
   return (auto.schedule as string) || '\u2014';
@@ -285,13 +289,13 @@ function DetailPanel({ automation, executions, totalExecutions }: DetailPanelPro
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
           <StatCard
             label={t('toolArtifact.trigger')}
-            value={formatPriceTrigger(automation.trigger_config as PriceTriggerConfig) || '\u2014'}
-            sub={(automation.trigger_config as PriceTriggerConfig)?.symbol || null}
-            badge={(() => { const k = marketI18nKey(automation.trigger_config as PriceTriggerConfig); return k ? t(k) : null; })()}
+            value={formatPriceTrigger(asPriceTrigger(automation.trigger_config)) || '\u2014'}
+            sub={asPriceTrigger(automation.trigger_config)?.symbol || null}
+            badge={(() => { const k = marketI18nKey(asPriceTrigger(automation.trigger_config)); return k ? t(k) : null; })()}
           />
           <StatCard
             label={t('toolArtifact.retrigger')}
-            value={formatRetriggerMode(automation.trigger_config as PriceTriggerConfig)}
+            value={formatRetriggerMode(asPriceTrigger(automation.trigger_config))}
           />
           <StatCard
             label={t('toolArtifact.lastRun')}
@@ -441,8 +445,8 @@ function CreatedPanel({ data }: CreatedPanelProps): React.ReactElement {
       {/* Details */}
       {isPrice ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <StatCard label={t('toolArtifact.trigger')} value={formatPriceTrigger(data.trigger_config as PriceTriggerConfig) || '\u2014'} sub={(data.trigger_config as PriceTriggerConfig)?.symbol || null} badge={(() => { const k = marketI18nKey(data.trigger_config as PriceTriggerConfig); return k ? t(k) : null; })()} />
-          <StatCard label={t('toolArtifact.retrigger')} value={formatRetriggerMode(data.trigger_config as PriceTriggerConfig)} />
+          <StatCard label={t('toolArtifact.trigger')} value={formatPriceTrigger(asPriceTrigger(data.trigger_config)) || '\u2014'} sub={asPriceTrigger(data.trigger_config)?.symbol || null} badge={(() => { const k = marketI18nKey(asPriceTrigger(data.trigger_config)); return k ? t(k) : null; })()} />
+          <StatCard label={t('toolArtifact.retrigger')} value={formatRetriggerMode(asPriceTrigger(data.trigger_config))} />
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
