@@ -13,7 +13,69 @@ Thanks for your interest in contributing to LangAlpha! This guide covers how to 
 - Docker (for PostgreSQL and Redis)
 - Node.js 22+ and pnpm (for the web UI)
 
-See the [README](README.md#getting-started) for full setup instructions.
+See the [README](README.md#getting-started) for the Docker-based quick start.
+
+## Manual Setup
+
+If you prefer running services directly on your machine instead of Docker:
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/ginlix-ai/langalpha.git
+cd langalpha
+
+# Install Python dependencies (includes dev + test deps)
+uv sync --group dev --extra test
+
+# Install frontend dependencies
+cd web && pnpm install && cd ..
+
+# Optional: install browser dependencies for web crawling
+source .venv/bin/activate
+crawl4ai-setup
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+make config   # interactive wizard, or edit .env and agent_config.yaml manually
+```
+
+No keys are strictly required — see [Data Provider Fallback Chain](README.md#data-provider-fallback-chain). For the full experience, set `DAYTONA_API_KEY` and `FMP_API_KEY`. For LLM access, set an API key or connect via OAuth in the UI.
+
+### 3. Start infrastructure
+
+```bash
+make setup-db   # starts PostgreSQL + Redis in Docker and runs migrations
+```
+
+### 4. Run the backend
+
+```bash
+make dev   # port 8000, with hot-reload
+```
+
+### 5. Run the frontend
+
+```bash
+make dev-web   # port 5173
+```
+
+### 6. Or use the CLI
+
+```bash
+ptc-agent              # interactive session
+ptc-agent --plan-mode  # with plan approval
+```
+
+### Verify your setup
+
+```bash
+curl http://localhost:8000/health
+# → {"status": "healthy"}
+```
 
 ## Development Workflow
 

@@ -11,7 +11,7 @@
 </p>
 
 > [!NOTE]
-> **Gemini 3 Hackathon** — If you're a judge or reviewer for the [Gemini 3 Hackathon](https://gemini3.devpost.com/), please refer to the [`hackathon/gemini-3`](https://github.com/ginlix-ai/stealth-agent/tree/hackathon/gemini-3) branch for the frozen submission. This `main` branch contains ongoing development beyond the submission.
+> **Gemini 3 Hackathon** — If you're a judge or reviewer for the [Gemini 3 Hackathon](https://gemini3.devpost.com/), please refer to the [`hackathon/gemini-3`](https://github.com/ginlix-ai/langalpha/tree/hackathon/gemini-3) branch for the frozen submission. This `main` branch contains ongoing development beyond the submission.
 
 ---
 
@@ -27,18 +27,35 @@
 </p>
 
 ## Why LangAlpha
+
 Every AI finance tool today treats investing as one-shot: ask a question, get an answer, move on. But real investing is Bayesian — you start with a thesis, new data arrives daily, and you update your conviction accordingly. It's an iterative process that unfolds over weeks and months: refining theses, revisiting positions, layering new analysis on top of old. No single prompt captures that.
 
 ### *From vibe coding to vibe investing*
+
 Inspired by software engineering: a codebase persists, and every commit builds on what came before. Code agent harnesses like Claude Code and OpenCode succeeded by building agents that embrace this pattern, exploring existing context and building on prior work. LangAlpha brings that same insight: give the agent a persistent workspace, and research naturally compounds.
 
 In practice, you create a workspace per research goal ("Q2 rebalance", "data center demand deep dive", "energy sector rotation"). The agent interviews you about your goals and style, produces its first deliverable, and saves everything to the workspace filesystem. Come back tomorrow and your files, threads, and accumulated research are still there.
 
+## Features Highlights
+
+- **Progressive Tool Discovery** — Any MCP tools loaded as summary in context and full documentation dumped into the workspace, allowing the agent to discover and use tools truly on demand. Also supports binding json tools with skills and only expose to agent when skill is activated.
+- **Programmatic Tool Calling (PTC)** — The agent writes and executes Python to process financial data from mcp servers instead of pouring raw data into the LLM context window, enabling complex multi-step analysis while dramatically reducing token waste.
+- **Financial data ecosystem** — Multi-tier provider hierarchy with native tools for quick lookups and MCP servers for bulk data processing, charting, and multi-year analysis in sandboxes.
+- **Persistent workspaces** — Each workspace maps to a dedicated sandbox with structured directories and a persistent memory file (`agent.md`) that compounds research across sessions and threads.
+- **Skills for Financial Research** — Pre-built workflows for DCF models, initiating coverage reports, earnings analysis, morning notes, document generation, and more — activatable by slash command or auto-detection.
+- **Finance Research Workbench** — Web UI with inline financial charts, multi-format file viewer, TradingView charting, real-time WebSocket market data, shareable conversations, and subagent monitoring.
+- **Multi-provider model layer** — Provider-agnostic LLM abstraction and automatic failover on error.
+- **Automations** — Schedule recurring or one-shot tasks, or set price-triggered automations that fire when a stock or index hits a real-time price condition.
+- **Agent swarm** — Parallel async subagents with isolated context windows, preloaded toolset/skills, mid-execution steering, checkpoint-based resume, and live progress monitoring in the UI.
+- **Live steering** — Send follow-up messages while the agent/subagent is working to course-correct, clarify, or redirect without waiting for it to finish.
+- **Middleware stack** — 24 composable layers handling skill loading, plan mode, multimodal input, auto-summarization, and context management support long-running agent sessions.
+- **Security & workspace vault** — Encryption at rest via pgcrypto, automatic credential leak detection and redaction, sandboxed execution, and per-workspace secret storage for safe agent access
+- **Channel integrations** — Use LangAlpha from Slack, Discord with complete feature support.
+- **Production-ready infrastructure** — SSE-streamed agent activity with Redis-buffered reconnection replay, background execution decoupled from HTTP connections, and PostgreSQL-backed state persistence.
+
 ## What Powers It
 
-<details open>
-<summary><b>System Architecture</b></summary>
-<br/>
+**System Architecture**
 
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
@@ -77,7 +94,7 @@ flowchart TB
     WSP -. "WebSocket" .-> GData["ginlix-data<br/>Polygon.io · Massive"]
 ```
 
-</details>
+
 
 ### Multi-Provider Model Layer
 
@@ -94,9 +111,7 @@ LangAlpha runs on a provider-agnostic model layer that abstracts across multiple
 
 Most AI agents interact with data through one-off JSON tool calls which dump the result into the context window directly. Programmatic Tool Calling flips this: instead of passing raw data through the LLM, the agent writes and executes code inside a [Daytona](https://www.daytona.io/) cloud sandbox that processes data locally and returns only the final result. This dramatically reduces token waste while enabling analysis that would otherwise exceed context limits.
 
-<details open>
-<summary><b>PTC Execution Flow</b></summary>
-<br/>
+**PTC Execution Flow**
 
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
@@ -116,7 +131,7 @@ flowchart LR
     EC -- "8 — Result" --> LLM
 ```
 
-</details>
+
 
 In addition, the workspace environment enables persistence beyond a single session. Each sandbox has a structured directory layout — `work/<task>/` for per-task working areas (data, charts, code), `results/` for finalized reports, and `data/` for shared datasets — so intermediate results survive across sessions. At the root sits `agent.md`, a persistent memory file that the agent maintains across threads: workspace goals, key findings, a thread index, and a file index of important artifacts. A middleware layer injects `agent.md` into every model call, so the agent always has full context of prior work without re-reading files. Each workspace supports multiple conversation threads tied to a single research goal.
 
@@ -125,34 +140,51 @@ In addition, the workspace environment enables persistence beyond a single sessi
 While PTC excels at complex work like multi-step data processing, financial modeling, and chart creation, spinning up code execution for every data lookup is overkill. So we also built a native financial data toolset that transforms frequently used data into an LLM-digestible format. These tools also come with artifacts that render directly in the frontend, giving the human layer immediate visual context alongside the agent's analysis.
 
 **Native tools** for quick reference via direct tool calls:
+
 - **Company overview** with real-time quotes, price performance, key financial metrics, analyst consensus, and revenue breakdown
 - **SEC filings** (10-K, 10-Q, 8-K) with earnings call transcripts and formatted markdown for citation
 - **Market indices** and **sector performance** for broad market context
 - **Web search** (Tavily, Serper, Bocha) and **web crawling** with circuit breaker fault tolerance
 
 **MCP servers** for raw data consumed through PTC code execution:
+
 - **Price data** for OHLCV time series across stocks, commodities, crypto, and forex
 - **Fundamentals** for multi-year financial statements, ratios, growth metrics, and valuation
 - **Macro economics** for GDP, CPI, unemployment, Fed funds rate, treasury yield curve (1M–30Y), country risk premiums, economic calendar, and earnings calendar
 - **Options** for options chain with filtering, historical OHLCV for option contracts, and real-time bid/ask snapshots
-- **Yahoo Finance** for options chains, institutional holdings, insider transactions, ESG data, and cross-company comparisons
 
-The agent picks the right layer automatically: native tools for fast lookups that fit in context, MCP servers when the task requires bulk data processing, charting, or multi-year trend analysis in the sandbox.
+The agent picks the right layer automatically: native tools for fast lookups that fit in context, MCP tools when the task requires bulk data processing, charting, or multi-year trend analysis in the sandbox.
+
+#### Data Provider Fallback Chain
+
+LangAlpha supports a three-tier data provider hierarchy. Each tier is optional — the system gracefully degrades when higher tiers are unavailable:
+
+
+| Tier | Provider                          | Key Required      | What It Adds                                                                               |
+| ---- | --------------------------------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| 1    | **ginlix-data** (hosted proxy)    | `GINLIX_DATA_URL` | Real-time WebSocket price feed, intraday data, extented trading hour data, options data    |
+| 2    | **FMP** (Financial Modeling Prep) | `FMP_API_KEY`     | High-quality fundamentals, financial statements, macro data, analyst data                  |
+| 3    | **Yahoo Finance** (yfinance)      | *None — free*     | Price history, basic fundamentals, earnings, holdings, insider transactions, ESG, screener |
+
+
+All tiers are enabled by default. To run with **free data only** (Yahoo Finance), run `make config` with prompted selection. You can also edit `agent_config.yaml` manually.
 
 > [!NOTE]
->Most native tools and MCP servers use [Financial Modeling Prep](https://site.financialmodelingprep.com/) as the data provider (`FMP_API_KEY` required).
+> Yahoo Finance data is community-sourced and has limitations: no intraday data below 1-hour intervals, delayed quotes, limited macro coverage, and occasional rate limiting. An `FMP_API_KEY` is strongly recommended ([free tier available](https://site.financialmodelingprep.com/)).
 
 ### Financial Research Skills
 
 The agent ships with 23 pre-built financial research skills, each activatable by slash command or automatic detection. Skills follow the [Agent Skills Spec](https://agentskills.io/specification) and can be extended by dropping a `SKILL.md` file into the workspace.
 
-| Category | Skills |
-|---|---|
-| **Valuation & Modeling** | DCF Model, Comps Analysis, 3-Statement Model, Model Update, Model Audit |
-| **Equity Research** | Initiating Coverage (30–50pg report), Earnings Preview, Earnings Analysis, Thesis Tracker |
-| **Market Intelligence** | Morning Note, Catalyst Calendar, Sector Overview, Competitive Analysis, Idea Generation |
-| **Document Generation** | PDF, DOCX, PPTX, XLSX — create, edit, extract |
-| **Operations** | Investment Deck QC, Scheduled Automations, User Profile & Portfolio |
+
+| Category                 | Skills                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------- |
+| **Valuation & Modeling** | DCF Model, Comps Analysis, 3-Statement Model, Model Update, Model Audit                   |
+| **Equity Research**      | Initiating Coverage (30–50pg report), Earnings Preview, Earnings Analysis, Thesis Tracker |
+| **Market Intelligence**  | Morning Note, Catalyst Calendar, Sector Overview, Competitive Analysis, Idea Generation   |
+| **Document Generation**  | PDF, DOCX, PPTX, XLSX — create, edit, extract                                             |
+| **Operations**           | Investment Deck QC, Scheduled Automations, User Profile & Portfolio                       |
+
 
 Acknowledgement: some of skills are adapted from [anthropics/financial-services-plugins](https://github.com/anthropics/financial-services-plugins).
 
@@ -160,13 +192,27 @@ Acknowledgement: some of skills are adapted from [anthropics/financial-services-
 
 The agent natively reads images (PNG, JPG, GIF, WebP) and PDFs — the multimodal middleware intercepts file reads, downloads content from the sandbox or URLs, and injects it as base64 into the conversation for direct visual interpretation. In MarketView, the user's live candlestick chart can be captured and sent to the agent as multimodal context — the capture includes both the chart image and structured metadata (symbol, interval, OHLCV, moving averages, RSI, 52-week range) so the agent can reason about both the visual pattern and the underlying data.
 
-### Scheduled Automations
+### Automations
 
-The agent can schedule its own recurring tasks from within a conversation. Say "run this analysis every Monday at 9 AM" and the agent creates a cron-based automation that executes on schedule — no separate UI needed. Automations support standard cron expressions and one-shot datetime scheduling, configurable agent mode (PTC or Flash), and automatic disabling after consecutive failures. Users can also manage automations from the dedicated Automations page with full CRUD, execution history, and manual trigger.
+The agent can schedule its own tasks from within a conversation — no separate UI needed. Users can also manage automations from the dedicated Automations page with full CRUD, execution history, and manual trigger. All automation types share the same `AutomationExecutor`, configurable agent mode (PTC or Flash), and automatic disabling after consecutive failures.
 
-<details open>
-<summary><b>Agent Architecture</b></summary>
-<br/>
+**Time-based** — Standard cron expressions for recurring schedules ("run this analysis every Monday at 9 AM") and one-shot datetime scheduling for single future executions.
+
+**Price-triggered** — Set a price target or percentage move on any stock or major index, and the agent executes your instructions the moment the condition is met. A `PriceMonitorService` subscribes to a shared upstream WebSocket connection to [ginlix-data](https://github.com/ginlix-ai/ginlix-data) for real-time ticks (stocks on the realtime tier, indices on the delayed tier). Redis-based deduplication prevents duplicate triggers across server instances.
+
+
+| Condition                    | Example                                        |
+| ---------------------------- | ---------------------------------------------- |
+| Price above / below          | Trigger when AAPL crosses $200                 |
+| Percent change above / below | Trigger when SPX moves +2% from previous close |
+
+
+Conditions can be combined (AND logic), and each price automation supports **one-shot** (fire once) or **recurring** mode with a configurable cooldown (minimum 4 hours, or once per trading day by default).
+
+> [!NOTE]
+> Price-triggered automations require the real-time WebSocket feed from ginlix-data. During the beta, this feature is available exclusively on the hosted platform at [beta.langalpha.com](https://beta.langalpha.com). Broader WebSocket data source support is planned for future releases.
+
+**Agent Architecture**
 
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
@@ -220,7 +266,7 @@ flowchart TB
     end
 ```
 
-</details>
+
 
 ### Agent Swarm
 
@@ -231,6 +277,7 @@ Beyond simple dispatch, the main agent can send follow-up instructions to a stil
 ### Middleware Stack
 
 The agent ships with a middleware stack, including:
+
 - **Live steering** — agents can take wrong turns, chase irrelevant data, or misunderstand your intent mid-analysis. Steering lets you course-correct without waiting. Send a follow-up message at any time while the agent is working — updated instructions, clarifications, or entirely new questions — and the middleware injects it into the conversation before the next LLM call. The agent sees your message as if you had said it in real time, adjusts its plan, and continues from there. Steering works at every level: redirect the main agent, send follow-up instructions to individual background subagents via `Task(action="update")`, or let the system gracefully return unconsumed messages to your input box if the workflow finishes before picking them up. No work is lost, no restarts required.
 - **Dynamic skill loading** via a `LoadSkill` tool that lets the agent discover and activate skill toolsets on demand, keeping the default tool surface lean while making specialized capabilities available when needed
 - **Multimodal** intercepts file reads for images and PDFs, downloads content from the sandbox or URLs, and injects it as base64 into the conversation so multimodal models can interpret them natively
@@ -242,7 +289,6 @@ See [`src/ptc_agent/agent/middleware/`](src/ptc_agent/agent/middleware/) for the
 
 Acknowledgement: some of middleware components are adapted or inspired by the implementation in [LangChain DeepAgents](https://github.com/langchain-ai/deepagents).
 
-
 ### Streaming and Infrastructure
 
 The server streams all agent activity over SSE: text chunks, tool calls with arguments and results, subagent status updates, file operation artifacts, and human-in-the-loop interrupts. Every agent decision is fully traceable in the UI.
@@ -251,19 +297,29 @@ Workflows run as independent background tasks behind `asyncio.shield()`, fully d
 
 PostgreSQL backs LangGraph checkpointing, conversation history, and user data (watchlists, portfolios, preferences), so agent state and user context persist across sessions. Redis buffers SSE events so that browser refreshes and network drops do not lose in-flight messages: the client reconnects and replays automatically. The server also handles synchronization between local data and sandbox data, keeping MCP, skills, and user context in sync. See the full [API reference](docs/api/README.md) for details.
 
-## Security
+## Security & Workspace Vault
 
-### Credential Leak Detection
+LangAlpha applies a layered security model across credentials, code execution, and user-supplied secrets.
 
-Every tool output is scanned before it reaches the LLM context. The middleware resolves all API key values from MCP server configurations, sorts them by length to prevent partial-match issues, and redacts any match as `[REDACTED:KEY_NAME]`. A regex pattern additionally catches dynamically refreshed sandbox tokens that weren't in the original configuration. API keys never appear in the agent's reasoning or in logged conversations, even if a tool accidentally echoes them.
+**Encryption at rest** — All sensitive data (BYOK API keys, OAuth tokens, vault secrets) is encrypted inside PostgreSQL using `pgcrypto` (`pgp_sym_encrypt` / `pgp_sym_decrypt`). Plaintext never exists in the database or in application memory during persistence.
 
-### BYOK Encryption at Rest
+**Credential leak detection** — Every tool output is scanned before it reaches the LLM context. The middleware resolves all known secret values (MCP server keys, sandbox tokens, vault secrets) and redacts any match as `[REDACTED:KEY_NAME]`. The same redaction applies to human-facing surfaces — file reads and downloads are scrubbed before reaching the client.
 
-User-supplied API keys are encrypted inside PostgreSQL using the `pgcrypto` extension (`pgp_sym_encrypt` / `pgp_sym_decrypt`). Encryption and decryption happen at the database layer — plaintext keys never exist in application memory during persistence. The same pattern covers OAuth tokens (access + refresh).
+**Sandboxed code execution** — Each workspace runs in its own [Daytona](https://www.daytona.io/) cloud sandbox with a dedicated filesystem and network boundary. Protected path guards prevent the agent from accessing internal system directories — blocking both tool input (short-circuiting the call before execution) and tool output (redacting leaked paths).
 
-### Sandboxed Code Execution
+### Workspace Vault
 
-Code execution is double-isolated. At the infrastructure level, each workspace runs in its own [Daytona](https://www.daytona.io/) cloud sandbox with a dedicated filesystem and network boundary. At the agent level, the middleware stack adds a second layer: credential leak detection scans all outputs, and protected path guards prevent the agent from accessing internal system directories — blocking both tool input (short-circuiting the call before execution) and tool output (redacting leaked paths).
+Each workspace has a built-in secret vault for storing API keys and credentials that the agent can use during code execution — useful for accessing third-party data sources (brokerage APIs, external data vendors, etc.) or building LLM-powered workflows inside the workspace. Store a secret once in the UI, and it's available to every agent session in that workspace via a simple Python API:
+
+```python
+from vault import get, list_names, load_env
+
+api_key = get("MY_API_KEY")       # retrieve a single secret
+names = list_names()               # list available secret names
+load_env()                         # bulk-load all secrets as env vars
+```
+
+Vault secrets inherit every protection layer above — encrypted at rest, redacted from all agent and human-facing output, and blocked from direct file access. Only the workspace owner can create, update, reveal, or delete secrets.
 
 ## Frontend
 
@@ -274,129 +330,76 @@ The web UI is more than a chat interface — it's a full research workbench:
 - **TradingView charting** — full TradingView Advanced Chart with drawing tools, indicators, and professional candlestick styling
 - **Live market data** — real-time WebSocket price feed with 1-second tick resolution, extended hours visualization, and multiple moving average overlays
 - **Shareable conversations** — one-click sharing with granular permissions (toggle file browsing and download access), replay via public URL
-- **Sandbox control panel** — live resource metrics (CPU/memory/disk), installed package management, MCP server status, and workspace start/stop — all from the UI
 - **Real-time subagent monitoring** — watch each background task's streaming output and tool calls live, with the ability to send mid-execution instructions
-- **Scheduled automations** — CRUD management with cron builder, execution history, and manual trigger
+- **Automations** — CRUD management with cron builder, execution history, manual trigger, and price-triggered automations that fire when a stock or index hits a real-time price condition
+
+## Channel Integrations
+
+Use LangAlpha from the tools you already work in. The integration gateway relays messages between messaging platforms and the core agent, with each channel receiving responses in its native format. Channel integrations are available exclusively on our hosted service with one-click setup and quick account binding — visit [integrations](https://beta.langalpha.com/account/integrations) to get started.
+
+
+| Feature                        | Slack | Discord | Feishu | Telegram | WhatsApp |
+| ------------------------------ | ----- | ------- | ------ | -------- | -------- |
+| Rich text / markdown           | ✅     | ✅       | ✅      | ✅        | 🔜       |
+| File upload (user → agent)     | ✅     | ✅       | ✅      | ❌        | ➖        |
+| File download (agent → user)   | ✅     | ✅       | ✅      | ❌        | ➖        |
+| Image rendering                | ✅     | ✅       | ✅      | ❌        | ➖        |
+| Human-in-the-loop interrupts   | ✅     | ✅       | ✅      | ⚠️       | ➖        |
+| Subagent tracking              | ✅     | ✅       | ✅      | ✅        | 🔜       |
+| Workspace / model selection    | ✅     | ✅       | ✅      | ✅        | 🔜       |
+| Automation delivery (outbound) | ✅     | ✅       | ❌      | ➖        | ➖        |
+| Simplified account linking     | ✅     | ✅       | ❌      | ❌        | ➖        |
+| Slash commands                 | ✅     | ✅       | ✅      | ✅        | ➖        |
+
+
+Slack and Discord offer native channels and thread-level groups, which map naturally to LangAlpha workspaces and threads — context is managed natively. Telegram and WhatsApp lack these primitives, so they run a simplified orchestration mode. Feishu has full messaging and card-based UI with OAuth coming soon. Telegram has partial support with full coverage coming soon. WhatsApp is planned.
 
 ## Getting Started
 
-### Quick Start (Docker)
+> [!TIP]
+> **Don't want to self-host?** Try [beta.langalpha.com](https://beta.langalpha.com) — our hosted beta includes full data infrastructure (FMP, real-time market data, cloud sandboxes) out of the box. Bring your own LLM key (BYOK) and start immediately with no setup.
 
-The fastest way to get LangAlpha running — just Docker and an API key:
+You can start LangAlpha with **nothing but Docker** — no API keys for data, no cloud sandbox. Just Docker for infrastructure and your own LLM subscription for the AI model.
 
 ```bash
 git clone https://github.com/ginlix-ai/langalpha.git
 cd langalpha
-cp .env.example .env
+make config   # interactive wizard — creates .env, configures LLM, data sources, sandbox, and search
+make up       # starts PostgreSQL, Redis, backend, and frontend
 ```
 
-Edit `.env` and set the required keys:
-
-- `DAYTONA_API_KEY` — cloud sandboxes for code execution ([daytona.io](https://www.daytona.io/))
-- `FMP_API_KEY` — financial data for tools and MCP servers ([free tier available](https://site.financialmodelingprep.com/))
-
-For LLM access, either set an API key (e.g. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`) or connect your existing AI subscription (ChatGPT, Claude) via OAuth in the UI.
-
-```bash
-docker compose up
-```
-
-This starts PostgreSQL, Redis, the backend, and the frontend. Database tables are initialized automatically on first run.
-
-- **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:8000 (interactive docs at `/docs`)
+- **Frontend:** [http://localhost:5173](http://localhost:5173)
+- **Backend API:** [http://localhost:8000](http://localhost:8000) (interactive docs at `/docs`)
 - **Verify:** `curl http://localhost:8000/health`
 
-> [!TIP]
-> **Optional keys for more capabilities:**
-> - `SERPER_API_KEY` or `TAVILY_API_KEY` — web search
-> - `LANGSMITH_API_KEY` — tracing and observability
+For the full experience, the wizard will prompt you for optional keys — or add them to `.env` later:
 
-Run `make help` to see all available commands.
 
-### Manual Setup (Advanced)
+| Key                                  | What It Unlocks                                                                                                         |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `DAYTONA_API_KEY`                    | Persistent cloud sandboxes with cross-session workspace support ([daytona.io](https://www.daytona.io/))                 |
+| `FMP_API_KEY`                        | High-quality fundamentals, macro, SEC filings, options ([free tier available](https://site.financialmodelingprep.com/)) |
+| `SERPER_API_KEY` or `TAVILY_API_KEY` | Web search                                                                                                              |
+| `LANGSMITH_API_KEY`                  | Tracing and observability                                                                                               |
 
-If you prefer running services directly on your machine instead of Docker:
 
-<details>
-<summary>Expand manual setup instructions</summary>
+> [!NOTE]
+> Without external service keys you get a functional but reduced experience: Yahoo Finance provides free price history, fundamentals, earnings, and analyst data, but lacks real-time quotes, intraday tick data, macro economics, and options analytics. The Docker sandbox replaces Daytona cloud sandboxes — full PTC code execution works, but with a downgraded security and isolation. Add keys incrementally to unlock more capabilities.
 
-#### Prerequisites
-
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) package manager
-- Docker (for PostgreSQL and Redis)
-- Node.js 22+ and pnpm (for the web UI)
-
-#### 1. Clone and install
-
-```bash
-git clone https://github.com/ginlix-ai/langalpha.git
-cd langalpha
-
-# Install Python dependencies (includes dev + test deps)
-uv sync --group dev --extra test
-
-# Install frontend dependencies
-cd web && pnpm install && cd ..
-
-# Optional: install browser dependencies for web crawling
-source .venv/bin/activate
-crawl4ai-setup
-```
-
-#### 2. Configure environment
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` — set `DAYTONA_API_KEY` and `FMP_API_KEY` at minimum, plus an LLM API key (or use OAuth). Database and Redis defaults work with `make setup-db`.
-
-#### 3. Start infrastructure
-
-```bash
-make setup-db
-```
-
-This starts PostgreSQL and Redis in Docker containers and initializes the database tables.
-
-#### 4. Run the backend
-
-```bash
-make dev
-```
-
-API available at **http://localhost:8000** (interactive docs at `/docs`).
-
-#### 5. Run the frontend
-
-```bash
-make dev-web
-```
-
-Open **http://localhost:5173** for the full workspace UI.
-
-#### 6. Or use the CLI
-
-```bash
-ptc-agent              # interactive session
-ptc-agent --plan-mode  # with plan approval
-```
-
-#### Verify your setup
-
-```bash
-curl http://localhost:8000/health
-# → {"status": "healthy"}
-```
-
-</details>
+Run `make help` to see all available commands. For manual setup without Docker, see [CONTRIBUTING.md](CONTRIBUTING.md#manual-setup).
 
 ## Documentation
 
 - **[API Reference](docs/api/README.md)** with endpoints for chat streaming, workspaces, workflow state, and more
 - **Interactive API docs** at `http://localhost:8000/docs` when the server is running
+
+## Contact
+
+For partnerships, collaborations, or general inquiries, reach out to [contact@ginlix.ai](mailto:contact@ginlix.ai).
+
+## Disclaimer
+
+LangAlpha is a research tool, not a financial advisor. Nothing produced by this software constitutes investment advice, a recommendation, or a solicitation to buy or sell any security. All output is for informational and educational purposes only. Use at your own discretion — always do your own due diligence before making investment decisions.
 
 ## License
 
