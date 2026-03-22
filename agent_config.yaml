@@ -14,7 +14,7 @@ llm:
   fallback:
     - "kimi-k2.5"
     - "minimax-m2.7"
-    - "glm-5-turbo"
+    #- "glm-5-turbo"
 
 sandbox:
   # Provider selection: "daytona" (cloud) or "docker" (local).
@@ -207,10 +207,13 @@ agent:
 
 # Subagent configuration
 subagents:
-  # List of enabled subagents (available: research, general-purpose, plus user-defined)
+  # List of enabled subagents (available: research, general-purpose, data-prep, equity-analyst, report-builder, plus user-defined)
   enabled:
     - general-purpose
     - research
+    - data-prep
+    - equity-analyst
+    - report-builder
 
   # User-defined subagents (optional). Each key becomes a subagent name.
   # definitions:
