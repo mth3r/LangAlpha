@@ -238,6 +238,7 @@ function Settings() {
     if (urlTab && urlTab !== activeTab) {
       setActiveTab(urlTab);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // Initialize form state from user data (provided by useUser hook)
@@ -256,6 +257,7 @@ function Settings() {
     if (activeTab === 'model') {
       loadModelTabData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Cleanup device code polling on unmount
@@ -932,14 +934,14 @@ function Settings() {
                   onClick={handleVoiceInputToggle}
                   className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
                   style={{
-                    backgroundColor: !!(prefsData as any)?.other_preference?.voice_input_enabled ? 'var(--color-accent-primary)' : 'var(--color-bg-elevated)',
+                    backgroundColor: (prefsData as any)?.other_preference?.voice_input_enabled ? 'var(--color-accent-primary)' : 'var(--color-bg-elevated)',
                     borderColor: 'var(--color-border-muted)',
                   }}
                 >
                   <span
                     className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
                     style={{
-                      transform: !!(prefsData as any)?.other_preference?.voice_input_enabled ? 'translateX(16px)' : 'translateX(0)',
+                      transform: (prefsData as any)?.other_preference?.voice_input_enabled ? 'translateX(16px)' : 'translateX(0)',
                     }}
                   />
                 </button>
