@@ -187,6 +187,16 @@ def get_redis_max_connections() -> int:
     return get_infrastructure_config().redis.max_connections
 
 
+def get_redis_socket_timeout() -> int:
+    """Get Redis socket read/write timeout in seconds."""
+    return get_infrastructure_config().redis.socket_timeout
+
+
+def get_redis_socket_connect_timeout() -> int:
+    """Get Redis socket connect timeout in seconds."""
+    return get_infrastructure_config().redis.socket_connect_timeout
+
+
 def get_redis_ttl_results_list() -> int:
     """Get Redis TTL for results list (seconds)."""
     return get_infrastructure_config().redis.ttl.results_list
@@ -205,6 +215,21 @@ def get_redis_ttl_metadata() -> int:
 def get_redis_ttl_metadata_summary() -> int:
     """Get Redis TTL for metadata summary (seconds)."""
     return get_infrastructure_config().redis.ttl.metadata_summary
+
+
+def get_redis_ttl_workflow_status() -> int:
+    """Get Redis TTL for completed/cancelled workflow status keys (seconds)."""
+    return get_infrastructure_config().redis.ttl.workflow_status
+
+
+def get_redis_ttl_cancel_flag() -> int:
+    """Get Redis TTL for workflow cancel flag (seconds)."""
+    return get_infrastructure_config().redis.ttl.cancel_flag
+
+
+def get_redis_ttl_steering() -> int:
+    """Get Redis TTL for steering message keys (seconds)."""
+    return get_infrastructure_config().redis.ttl.steering
 
 
 def is_cache_invalidate_on_write_enabled() -> bool:
@@ -268,12 +293,12 @@ def get_max_stored_messages_per_agent() -> int:
     return get_infrastructure_config().background_execution.max_stored_messages_per_agent
 
 
-def get_subagent_collector_timeout() -> int:
+def get_subagent_collector_timeout() -> float:
     """Get initial subagent collector timeout in seconds."""
     return get_infrastructure_config().background_execution.subagent_collector_timeout
 
 
-def get_subagent_orphan_collector_timeout() -> int:
+def get_subagent_orphan_collector_timeout() -> float:
     """Get orphan subagent collector idle timeout in seconds."""
     return get_infrastructure_config().background_execution.subagent_orphan_collector_timeout
 
@@ -286,6 +311,61 @@ def get_event_storage_backend() -> str:
 def is_event_storage_fallback_enabled() -> bool:
     """Check if fallback to memory storage is enabled on Redis failure."""
     return get_infrastructure_config().background_execution.event_storage_fallback_to_memory
+
+
+def get_live_queue_maxsize() -> int:
+    """Get max backpressure for live SSE subscriber queues."""
+    return get_infrastructure_config().background_execution.live_queue_maxsize
+
+
+def get_subagent_event_buffer_size() -> int:
+    """Get max events per subagent task in Redis buffer."""
+    return get_infrastructure_config().background_execution.subagent_event_buffer_size
+
+
+def get_subagent_event_buffer_ttl() -> int:
+    """Get TTL (seconds) for per-task subagent Redis event buffer."""
+    return get_infrastructure_config().background_execution.subagent_event_buffer_ttl
+
+
+def get_subagent_task_max_wait() -> int:
+    """Get max seconds to wait for subagent task to appear in registry."""
+    return get_infrastructure_config().background_execution.subagent_task_max_wait
+
+
+def get_sse_drain_timeout() -> float:
+    """Get seconds to wait for per-task SSE drain before clearing events."""
+    return get_infrastructure_config().background_execution.sse_drain_timeout
+
+
+def get_shutdown_timeout() -> float:
+    """Get max seconds for graceful shutdown of running workflows."""
+    return get_infrastructure_config().background_execution.shutdown_timeout
+
+
+def get_checkpoint_flush_timeout() -> float:
+    """Get timeout (seconds) for checkpoint state reads/writes."""
+    return get_infrastructure_config().background_execution.checkpoint_flush_timeout
+
+
+def get_wait_for_persistence_timeout() -> float:
+    """Get max seconds callers block waiting for persistence completion."""
+    return get_infrastructure_config().background_execution.wait_for_persistence_timeout
+
+
+def get_soft_interrupt_wait_timeout() -> float:
+    """Get max seconds to wait for soft-interrupted workflow to finish."""
+    return get_infrastructure_config().background_execution.soft_interrupt_wait_timeout
+
+
+def get_max_workflow_retries() -> int:
+    """Get max transient-error retry count for workflow execution."""
+    return get_infrastructure_config().background_execution.max_workflow_retries
+
+
+def get_merged_chunk_max_bytes() -> int:
+    """Get max bytes for merged SSE event chunks before split."""
+    return get_infrastructure_config().background_execution.merged_chunk_max_bytes
 
 
 def get_redis_ttl_workflow_events() -> int:

@@ -18,6 +18,7 @@ from typing import Optional, Dict, Any
 from enum import Enum
 
 from src.utils.cache.redis_cache import get_cache_client
+from src.config.settings import get_redis_ttl_workflow_status, get_redis_ttl_cancel_flag
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,9 @@ class WorkflowTracker:
     Gracefully degrades if Redis is unavailable.
 
     Redis Key Structure:
-    - workflow:status:{thread_id} -> JSON status object (TTL: 1 hour after completion)
+    - workflow:status:{thread_id} -> JSON status object (TTL: redis.ttl.workflow_status)
       - Includes retry_count and last_retry_at for error handling
-    - workflow:cancel:{thread_id} -> "true" (TTL: 5 minutes)
+    - workflow:cancel:{thread_id} -> "true" (TTL: redis.ttl.cancel_flag)
 
     Retry Tracking:
     - Increments retry_count on each transient error
@@ -56,10 +57,6 @@ class WorkflowTracker:
     # Redis key prefixes
     STATUS_PREFIX = "workflow:status:"
     CANCEL_PREFIX = "workflow:cancel:"
-
-    # TTL values (seconds)
-    COMPLETED_TTL = 3600  # 1 hour - keep completed workflow info briefly
-    CANCEL_TTL = 300  # 5 minutes - cancel flags are short-lived
 
     def __init__(self):
         """Initialize workflow tracker with Redis client."""
@@ -231,7 +228,7 @@ class WorkflowTracker:
         """
         Mark workflow as completed (finished executing).
 
-        Sets TTL so entry expires after 1 hour (keeps brief history).
+        Sets TTL per redis.ttl.workflow_status config (keeps brief history).
 
         Args:
             thread_id: Thread/workflow identifier
@@ -243,18 +240,19 @@ class WorkflowTracker:
         if not self.enabled:
             return False
 
+        ttl = get_redis_ttl_workflow_status()
         success = await self._update_status_with_metadata(
             thread_id=thread_id,
             new_status=WorkflowStatus.COMPLETED,
             timestamp_field="completed_at",
             metadata=metadata,
-            ttl=self.COMPLETED_TTL
+            ttl=ttl
         )
 
         if success:
             logger.info(
                 f"[WorkflowTracker] Marked workflow as completed: {thread_id} "
-                f"(TTL: {self.COMPLETED_TTL}s)"
+                f"(TTL: {ttl}s)"
             )
 
         return success
@@ -313,7 +311,7 @@ class WorkflowTracker:
             new_status=WorkflowStatus.CANCELLED,
             timestamp_field="cancelled_at",
             metadata=None,
-            ttl=self.COMPLETED_TTL
+            ttl=get_redis_ttl_workflow_status()
         )
 
         if success:
@@ -342,7 +340,7 @@ class WorkflowTracker:
         try:
             key = f"{self.CANCEL_PREFIX}{thread_id}"
 
-            success = await self.cache.set(key, "true", ttl=self.CANCEL_TTL)
+            success = await self.cache.set(key, "true", ttl=get_redis_ttl_cancel_flag())
 
             if success:
                 logger.debug(f"[WorkflowTracker] Set cancel flag: {thread_id}")

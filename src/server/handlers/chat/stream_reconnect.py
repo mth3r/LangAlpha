@@ -19,6 +19,13 @@ from src.server.services.background_task_manager import (
 )
 from src.server.services.workflow_tracker import WorkflowTracker
 
+from src.config.settings import (
+    get_live_queue_maxsize,
+    get_subagent_event_buffer_size,
+    get_subagent_event_buffer_ttl,
+    get_subagent_task_max_wait,
+)
+
 from ._common import _SSE_LOG_ENABLED, _sse_logger, logger
 from .steering import drain_steering_return_event
 
@@ -74,7 +81,7 @@ async def reconnect_to_workflow_stream(
     # Attach to live stream if still running or tailing
     status = await manager.get_task_status(thread_id)
     if status == TaskStatus.RUNNING:
-        live_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        live_queue: asyncio.Queue = asyncio.Queue(maxsize=get_live_queue_maxsize())
         await manager.subscribe_to_live_events(thread_id, live_queue)
         await manager.increment_connection(thread_id)
 
@@ -137,7 +144,7 @@ async def stream_subagent_task_events(
     redis_key = f"subagent:events:{thread_id}:{task_id}"
     seq = 0
     cursor = 0
-    max_wait, waited = 30, 0
+    max_wait, waited = get_subagent_task_max_wait(), 0
 
     def _format_sse(seq_id: int, event_type: str, data: dict) -> str:
         result = f"id: {seq_id}\nevent: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -202,7 +209,7 @@ async def stream_subagent_task_events(
             sse = _format_sse(seq, ev["event"], data)
             # Buffer to per-task Redis key
             try:
-                await cache.list_append(redis_key, sse, max_size=100, ttl=3600)
+                await cache.list_append(redis_key, sse, max_size=get_subagent_event_buffer_size(), ttl=get_subagent_event_buffer_ttl())
             except Exception:
                 pass  # Non-fatal: live delivery still works
             yield sse

@@ -331,7 +331,7 @@ async def lifespan(app: FastAPI):
     # 6. Gracefully shutdown background workflows
     try:
         manager = BackgroundTaskManager.get_instance()
-        await manager.shutdown(timeout=50.0)  # Leave 10s for pool cleanup
+        await manager.shutdown()  # Uses shutdown_timeout from config.yaml
     except Exception as e:
         logger.error(f"Error during BackgroundTaskManager shutdown: {e}")
 

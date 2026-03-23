@@ -22,7 +22,9 @@ from fastapi import HTTPException
 from src.config.settings import (
     get_langsmith_metadata,
     get_langsmith_tags,
+    get_live_queue_maxsize,
     get_locale_config,
+    get_max_workflow_retries,
     is_sse_event_log_enabled,
 )
 from src.server.app import setup
@@ -701,9 +703,7 @@ async def wait_or_steer(
     # module level, so _common must not import steering at module level.
     from src.server.handlers.chat.steering import steer_thread
 
-    ready_for_new_request = await manager.wait_for_soft_interrupted(
-        thread_id, timeout=30.0
-    )
+    ready_for_new_request = await manager.wait_for_soft_interrupted(thread_id)
     if ready_for_new_request:
         return True, None
 
@@ -753,7 +753,7 @@ async def stream_live_events(
     # module level, so _common must not import steering at module level.
     from src.server.handlers.chat.steering import drain_steering_return_event
 
-    live_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+    live_queue: asyncio.Queue = asyncio.Queue(maxsize=get_live_queue_maxsize())
     await manager.subscribe_to_live_events(thread_id, live_queue)
     await manager.increment_connection(thread_id)
 
@@ -840,7 +840,7 @@ async def handle_workflow_error(
     error occurred before the workspace was resolved.
     ``timezone_str`` is the resolved timezone; falls back to ``request.timezone``.
     """
-    MAX_RETRIES = 3
+    MAX_RETRIES = get_max_workflow_retries()
 
     # Release burst slot on error (setup errors before background task starts)
     await release_burst_slot(user_id)

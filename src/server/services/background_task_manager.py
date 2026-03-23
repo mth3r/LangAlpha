@@ -56,6 +56,13 @@ from src.config.settings import (
     get_event_storage_backend,
     is_event_storage_fallback_enabled,
     get_redis_ttl_workflow_events,
+    get_shutdown_timeout,
+    get_checkpoint_flush_timeout,
+    get_sse_drain_timeout,
+    get_wait_for_persistence_timeout,
+    get_soft_interrupt_wait_timeout,
+    get_subagent_collector_timeout,
+    get_subagent_orphan_collector_timeout,
 )
 from src.utils.cache.redis_cache import get_cache_client
 from src.server.utils.persistence_utils import (
@@ -240,7 +247,7 @@ class BackgroundTaskManager:
                 pass
             logger.info("[BackgroundTaskManager] Stopped cleanup task")
 
-    async def shutdown(self, timeout: float = 25.0):
+    async def shutdown(self, timeout: float | None = None):
         """
         Gracefully shutdown background task manager.
 
@@ -250,6 +257,8 @@ class BackgroundTaskManager:
         Args:
             timeout: Maximum time to wait for tasks to complete (seconds)
         """
+        if timeout is None:
+            timeout = get_shutdown_timeout()
         logger.info("[BackgroundTaskManager] Starting graceful shutdown...")
 
         # Stop cleanup task first
@@ -571,14 +580,14 @@ class BackgroundTaskManager:
             graph_any: Any = graph
 
             snapshot = await asyncio.wait_for(
-                graph_any.aget_state(config), timeout=10.0
+                graph_any.aget_state(config), timeout=get_checkpoint_flush_timeout()
             )
             values = getattr(snapshot, "values", None)
             if not values:
                 return
 
             await asyncio.wait_for(
-                graph_any.aupdate_state(config, values), timeout=10.0
+                graph_any.aupdate_state(config, values), timeout=get_checkpoint_flush_timeout()
             )
             logger.info(f"[BackgroundTaskManager] Flushed checkpoint for {thread_id}")
         except asyncio.TimeoutError:
@@ -763,8 +772,7 @@ class BackgroundTaskManager:
         import copy
 
         if timeout is None:
-            from src.config.settings import get_subagent_collector_timeout
-            timeout = float(get_subagent_collector_timeout())
+            timeout = get_subagent_collector_timeout()
 
         try:
             # Sync completion status: asyncio_task may be done but completed flag
@@ -902,7 +910,7 @@ class BackgroundTaskManager:
             )
 
     async def _await_drain_and_cleanup_tasks(
-        self, tasks: list, thread_id: str, timeout: float = 10.0
+        self, tasks: list, thread_id: str, timeout: float | None = None
     ) -> None:
         """Wait for per-task SSE streams to finish emitting, then clear buffers.
 
@@ -914,6 +922,8 @@ class BackgroundTaskManager:
         If no SSE consumer is connected (event never set), the timeout ensures
         cleanup still happens — persistence has already succeeded at this point.
         """
+        if timeout is None:
+            timeout = get_sse_drain_timeout()
         async def _wait_one(event: "asyncio.Event") -> None:
             try:
                 await asyncio.wait_for(event.wait(), timeout=timeout)
@@ -956,9 +966,8 @@ class BackgroundTaskManager:
         collector), preventing other collectors from double-claiming.
         """
         import copy
-        from src.config.settings import get_subagent_orphan_collector_timeout
 
-        idle_timeout = float(get_subagent_orphan_collector_timeout())
+        idle_timeout = get_subagent_orphan_collector_timeout()
         # How often to poll for progress when no task completes
         poll_interval = min(30.0, idle_timeout)
 
@@ -1140,7 +1149,7 @@ class BackgroundTaskManager:
             if graph:
                 snapshot = await asyncio.wait_for(
                     graph.aget_state({"configurable": {"thread_id": thread_id}}),
-                    timeout=10.0,
+                    timeout=get_checkpoint_flush_timeout(),
                 )
                 if snapshot and snapshot.next:
                     # Workflow has pending nodes = interrupted, not completed
@@ -1290,11 +1299,13 @@ class BackgroundTaskManager:
             if task_info:
                 task_info.persistence_complete.set()
 
-    async def wait_for_persistence(self, thread_id: str, timeout: float = 30.0) -> bool:
+    async def wait_for_persistence(self, thread_id: str, timeout: float | None = None) -> bool:
         """Wait until _mark_completed has finished persisting for *thread_id*.
 
         Returns True if persistence completed, False on timeout or missing task.
         """
+        if timeout is None:
+            timeout = get_wait_for_persistence_timeout()
         async with self.task_lock:
             task_info = self.tasks.get(thread_id)
         if not task_info:
@@ -1334,7 +1345,6 @@ class BackgroundTaskManager:
                     logger.error(f"Error sending completion signal: {e}")
 
             # Copy refs needed for persistence phase
-            graph = task_info.graph
             metadata = task_info.metadata
 
         # Phase 2: Heavy I/O outside lock
@@ -1421,7 +1431,6 @@ class BackgroundTaskManager:
                     queue.put_nowait(None)
 
             # Copy refs needed for persistence phase
-            graph = task_info.graph
             metadata = task_info.metadata
 
         # Phase 2: Heavy I/O outside lock
@@ -1485,7 +1494,6 @@ class BackgroundTaskManager:
                         f"[WorkflowPersistence] {bg_registry.pending_count} subagents still running, "
                         f"spawning result collector for thread_id={thread_id}"
                     )
-                    from src.config.settings import get_subagent_collector_timeout
                     asyncio.create_task(
                         self._collect_subagent_results_after_interrupt(
                             thread_id=thread_id,
@@ -1494,7 +1502,7 @@ class BackgroundTaskManager:
                             bg_registry=bg_registry,
                             workspace_id=workspace_id,
                             user_id=user_id,
-                            timeout=float(get_subagent_collector_timeout()),
+                            timeout=get_subagent_collector_timeout(),
                             is_byok=metadata.get("is_byok", False),
                         ),
                         name=f"subagent-collector-{thread_id}",
@@ -1513,7 +1521,7 @@ class BackgroundTaskManager:
         bg_registry: Any,
         workspace_id: str,
         user_id: str,
-        timeout: float = 120.0,
+        timeout: float | None = None,
         is_byok: bool = False,
     ) -> None:
         """Wait for subagents incrementally, persist as each completes.
@@ -1524,6 +1532,9 @@ class BackgroundTaskManager:
         Uses asyncio.FIRST_COMPLETED so each subagent's events are persisted
         to DB as soon as that subagent finishes, rather than waiting for all.
         """
+        if timeout is None:
+            timeout = get_subagent_collector_timeout()
+
         import copy
 
         try:
@@ -1832,7 +1843,6 @@ class BackgroundTaskManager:
                     logger.error(f"Error sending completion signal: {e}")
 
             # Copy refs needed for persistence phase
-            graph = task_info.graph
             metadata = task_info.metadata
 
         # Phase 2: Heavy I/O outside lock
@@ -2314,7 +2324,7 @@ class BackgroundTaskManager:
     async def wait_for_soft_interrupted(
         self,
         thread_id: str,
-        timeout: float = 30.0
+        timeout: float | None = None
     ) -> bool:
         """
         Wait for a soft-interrupted workflow to complete.
@@ -2329,6 +2339,8 @@ class BackgroundTaskManager:
         Returns:
             True if workflow completed (or wasn't running), False if timed out
         """
+        if timeout is None:
+            timeout = get_soft_interrupt_wait_timeout()
         async with self.task_lock:
             task_info = self.tasks.get(thread_id)
             if not task_info:

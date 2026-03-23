@@ -37,11 +37,48 @@ class BackgroundExecutionConfig(BaseModel):
     event_storage_fallback_to_memory: bool = Field(
         default=True, description="Fallback to in-memory storage if Redis fails"
     )
-    subagent_collector_timeout: int = Field(
+    subagent_collector_timeout: float = Field(
         default=120, description="Initial subagent collector timeout in seconds"
     )
-    subagent_orphan_collector_timeout: int = Field(
+    subagent_orphan_collector_timeout: float = Field(
         default=600, description="Orphan subagent collector idle timeout in seconds"
+    )
+
+    # Streaming & queue settings
+    live_queue_maxsize: int = Field(
+        default=5000, description="Max backpressure for live SSE subscriber queues"
+    )
+    subagent_event_buffer_size: int = Field(
+        default=2000, description="Max events per subagent task in Redis buffer"
+    )
+    subagent_event_buffer_ttl: int = Field(
+        default=7200, description="TTL (seconds) for per-task subagent Redis event buffer"
+    )
+    subagent_task_max_wait: int = Field(
+        default=30, description="Max seconds to wait for subagent task to appear in registry"
+    )
+
+    # Timeout settings
+    sse_drain_timeout: float = Field(
+        default=30.0, description="Seconds to wait for per-task SSE drain before clearing events"
+    )
+    shutdown_timeout: float = Field(
+        default=50.0, description="Max seconds for graceful shutdown of running workflows"
+    )
+    checkpoint_flush_timeout: float = Field(
+        default=10.0, description="Timeout (seconds) for checkpoint state reads/writes"
+    )
+    wait_for_persistence_timeout: float = Field(
+        default=30.0, description="Max seconds callers block waiting for persistence completion"
+    )
+    soft_interrupt_wait_timeout: float = Field(
+        default=30.0, description="Max seconds to wait for soft-interrupted workflow to finish"
+    )
+    max_workflow_retries: int = Field(
+        default=3, description="Max transient-error retry count for workflow execution"
+    )
+    merged_chunk_max_bytes: int = Field(
+        default=16384, description="Max bytes for merged SSE event chunks before split"
     )
 
 
@@ -59,6 +96,15 @@ class RedisTTLConfig(BaseModel):
     )
     ohlcv: Dict[str, int] = Field(
         default_factory=dict, description="Per-interval OHLCV cache TTLs"
+    )
+    workflow_status: int = Field(
+        default=3600, description="TTL for completed/cancelled workflow status keys (1 hour)"
+    )
+    cancel_flag: int = Field(
+        default=300, description="TTL for workflow cancel flag (5 minutes)"
+    )
+    steering: int = Field(
+        default=3600, description="TTL for steering message Redis keys (1 hour)"
     )
 
 
@@ -80,6 +126,12 @@ class RedisConfig(BaseModel):
 
     cache_enabled: bool = Field(default=True, description="Enable/disable caching globally")
     max_connections: int = Field(default=10, description="Connection pool size")
+    socket_timeout: int = Field(
+        default=5, description="Redis socket read/write timeout in seconds"
+    )
+    socket_connect_timeout: int = Field(
+        default=5, description="Redis socket connect timeout in seconds"
+    )
     ttl: RedisTTLConfig = Field(default_factory=RedisTTLConfig)
     cache_invalidate_on_write: bool = Field(
         default=True, description="Invalidate cache on writes"

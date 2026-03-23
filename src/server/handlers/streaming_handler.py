@@ -38,13 +38,14 @@ from src.config.settings import (
     get_workflow_timeout,
     get_sse_keepalive_interval,
     is_sse_event_log_enabled,
+    get_merged_chunk_max_bytes,
 )
 
 WORKFLOW_TIMEOUT = get_workflow_timeout()  # seconds
 SSE_KEEPALIVE_INTERVAL = get_sse_keepalive_interval()  # seconds
 SSE_EVENT_LOG_ENABLED = is_sse_event_log_enabled()
 
-MERGED_STREAM_CHUNK_MAX_BYTES_DEFAULT = 16 * 1024
+MERGED_STREAM_CHUNK_MAX_BYTES_DEFAULT = get_merged_chunk_max_bytes()
 
 
 class StreamEventAccumulator:

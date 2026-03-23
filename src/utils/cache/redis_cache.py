@@ -16,7 +16,13 @@ from uuid import UUID
 import redis.asyncio as redis
 from redis.asyncio.connection import ConnectionPool
 
-from src.config.settings import is_redis_cache_enabled, get_nested_config, get_redis_max_connections
+from src.config.settings import (
+    is_redis_cache_enabled,
+    get_nested_config,
+    get_redis_max_connections,
+    get_redis_socket_timeout,
+    get_redis_socket_connect_timeout,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +54,8 @@ class RedisCacheClient:
         self,
         url: Optional[str] = None,
         max_connections: int = 50,
-        socket_timeout: int = 5,
-        socket_connect_timeout: int = 5,
+        socket_timeout: int | None = None,
+        socket_connect_timeout: int | None = None,
         decode_responses: bool = False,  # We handle JSON encoding manually
     ):
         """
@@ -69,6 +75,9 @@ class RedisCacheClient:
             or os.getenv("REDIS_URL", "redis://localhost:6379/0")
         )
         self.max_connections = max_connections
+
+        self.socket_timeout = socket_timeout if socket_timeout is not None else get_redis_socket_timeout()
+        self.socket_connect_timeout = socket_connect_timeout if socket_connect_timeout is not None else get_redis_socket_connect_timeout()
 
         # Check if caching is enabled (config.yaml and env var)
         cache_enabled_env = os.getenv("REDIS_CACHE_ENABLED", "true").lower() in ["true", "1", "yes"]
@@ -99,7 +108,9 @@ class RedisCacheClient:
             self.pool = ConnectionPool.from_url(
                 self.url,
                 max_connections=self.max_connections,
-                decode_responses=False,  # We handle JSON encoding
+                socket_timeout=self.socket_timeout,
+                socket_connect_timeout=self.socket_connect_timeout,
+                decode_responses=False,
             )
 
             self.client = redis.Redis(connection_pool=self.pool)

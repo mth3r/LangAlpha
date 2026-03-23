@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from src.server.services.background_registry_store import BackgroundRegistryStore
+from src.config.settings import get_redis_ttl_steering
 
 from ._common import logger
 
@@ -151,7 +152,7 @@ async def steer_thread(
         pipe = cache.client.pipeline()
         pipe.rpush(key, message)
         pipe.llen(key)
-        pipe.expire(key, 3600)  # 1h TTL
+        pipe.expire(key, get_redis_ttl_steering())
         results = await pipe.execute()
         position = results[1]
         logger.info(
@@ -224,7 +225,7 @@ async def steer_subagent(
         pipe = cache.client.pipeline()
         pipe.rpush(key, payload)
         pipe.llen(key)
-        pipe.expire(key, 3600)  # 1h TTL
+        pipe.expire(key, get_redis_ttl_steering())
         results = await pipe.execute()
         position = results[1]
 

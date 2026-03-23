@@ -71,6 +71,21 @@ background_execution:
   subagent_collector_timeout: 120        # Initial collector deadline in seconds (waits for subagents after main turn ends)
   subagent_orphan_collector_timeout: 600 # Idle timeout in seconds for orphan collector — resets on any subagent progress (new events, tool calls)
 
+  # Streaming & queue settings
+  live_queue_maxsize: 5000              # Max backpressure for live SSE subscriber queues
+  subagent_event_buffer_size: 2000      # Max events per subagent task in Redis buffer
+  subagent_event_buffer_ttl: 7200       # Per-task subagent Redis event buffer TTL in seconds (2 hours)
+  subagent_task_max_wait: 30            # Max seconds to wait for subagent task to appear in registry
+
+  # Timeout settings
+  sse_drain_timeout: 30                 # Seconds to wait for per-task SSE drain before clearing events
+  shutdown_timeout: 50                  # Max seconds for graceful shutdown of running workflows
+  checkpoint_flush_timeout: 10          # Timeout for checkpoint state reads/writes
+  wait_for_persistence_timeout: 30      # Max seconds callers block waiting for persistence
+  soft_interrupt_wait_timeout: 30       # Max seconds to wait for soft-interrupted workflow to finish
+  max_workflow_retries: 3               # Max transient-error retry count
+  merged_chunk_max_bytes: 16384         # Max bytes for merged SSE event chunks (16 KB)
+
 
 # =============================================================================
 # REDIS CACHE CONFIGURATION
@@ -80,6 +95,8 @@ background_execution:
 redis:
   cache_enabled: true  # Enable/disable caching globally
   max_connections: 50  # Connection pool size
+  socket_timeout: 5           # Redis socket read/write timeout (seconds)
+  socket_connect_timeout: 5   # Redis socket connect timeout (seconds)
 
   # Cache TTL settings (seconds)
   ttl:
@@ -88,6 +105,9 @@ redis:
     metadata: 900  # Metadata tags/tickers cache TTL (15 minutes)
     metadata_summary: 600  # Metadata summary cache TTL (10 minutes)
     workflow_events: 86400  # Workflow event buffer TTL (24 hours)
+    workflow_status: 3600   # Completed/cancelled workflow status key TTL (1 hour)
+    cancel_flag: 300        # Workflow cancel flag TTL (5 minutes)
+    steering: 3600          # Steering message key TTL (1 hour)
 
     # Per-interval OHLCV cache TTLs (≈ interval_seconds × 1.5)
     # SWR soft threshold stays at 50% of these values
