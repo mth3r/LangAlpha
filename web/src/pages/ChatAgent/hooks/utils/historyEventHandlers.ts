@@ -6,6 +6,8 @@
 import { normalizeAction } from './eventUtils';
 import type { MessageRecord, SetMessages, ToolCallRecord, ToolCallResultRecord, TodoPayload } from './types';
 
+let _steeringIdCounter = 0;
+
 /** Per-pair mutable state tracked during history replay. */
 interface PairState {
   contentOrderCounter: number;
@@ -612,9 +614,11 @@ export function handleHistorySteeringDelivered({
   const steeringMessages = (event.messages || []) as Array<Record<string, unknown>>;
 
   // Create user message bubble(s) for each steering message
-  for (const qMsg of steeringMessages) {
+  const batchId = ++_steeringIdCounter;
+  for (let sIdx = 0; sIdx < steeringMessages.length; sIdx++) {
+    const qMsg = steeringMessages[sIdx];
     if (!qMsg.content) continue;
-    const userMsgId = `history-steering-user-${pairIndex}-${Date.now()}`;
+    const userMsgId = `history-steering-user-${pairIndex}-${batchId}-${sIdx}`;
     const userMessage: MessageRecord = {
       id: userMsgId,
       role: 'user',
@@ -635,7 +639,7 @@ export function handleHistorySteeringDelivered({
   }
 
   // Create new assistant message placeholder
-  const newAssistantId = `history-assistant-steering-${pairIndex}-${Date.now()}`;
+  const newAssistantId = `history-assistant-steering-${pairIndex}-${batchId}`;
   assistantMessagesByPair.set(pairIndex, newAssistantId);
 
   // Reset pair state for the new assistant message
