@@ -166,6 +166,99 @@ story.append(Paragraph("Content for page 2", styles['Normal']))
 doc.build(story)
 ```
 
+#### Image Embedding Best Practices
+
+**IMPORTANT**: Always follow these steps when embedding images (charts, screenshots, etc.) in ReportLab PDFs. Skipping them causes browser PDF viewers (Chrome PDFium, Firefox pdf.js) to show "too big to view" or fail to render, even for small files.
+
+##### Fix 1 — Strip the alpha channel before embedding (required)
+
+ReportLab preserves RGBA alpha channels as a separate SMask object in the PDF. Even when the image has no real transparency (alpha is entirely opaque), this adds ~1.7 MB of unnecessary decoded data per image. Browser PDF viewers must decode this useless mask before they can render the page.
+
+Always convert RGBA PNGs to RGB with a white background before saving for embedding:
+
+```python
+from PIL import Image
+
+def prepare_image_for_pdf(input_path: str, output_path: str) -> str:
+    """Convert image to RGB (strip alpha), downscale if needed, save for PDF embedding."""
+    img = Image.open(input_path)
+    if img.mode == "RGBA":
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[3])  # use alpha channel as mask
+        img = background
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    # Downscale to max 1200px wide to match typical PDF display size (see Fix 3)
+    max_width = 1200
+    if img.width > max_width:
+        ratio = max_width / img.width
+        img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+
+    img.save(output_path, format="PNG", optimize=True)
+    return output_path
+```
+
+Use `prepare_image_for_pdf("chart.png", "chart_rgb.png")` before passing the path to `Image(...)` or `canvas.drawImage(...)`.
+
+##### Fix 2 — Disable ASCII85 stream encoding (required)
+
+ReportLab defaults to `useA85 = 1`, which wraps all PDF image streams in ASCII85 text encoding before compression. This is a legacy format that expands binary data by ~25% and adds an extra decode pass. Set this to `0` at the top of every script that generates a PDF:
+
+```python
+import reportlab.rl_config
+reportlab.rl_config.useA85 = 0  # use raw binary streams — smaller files, faster browser rendering
+```
+
+This must be set **before** importing any `reportlab.platypus` or `reportlab.pdfgen` modules, as the config is read at import time.
+
+##### Fix 3 — Match image resolution to display size
+
+Charts saved at high DPI (150–300) embed far more pixels than the PDF displays. A chart shown at 5" wide in a PDF only needs 500px (at 100 DPI screen resolution). Saving at 100 DPI or resizing before embedding reduces the decoded bitmap from 5+ MB to under 1 MB.
+
+```python
+# When saving matplotlib charts for PDF embedding, use dpi=100 (not 150 or 300)
+fig.savefig("chart.png", dpi=100, bbox_inches="tight")
+```
+
+##### Complete example — PDF with embedded chart
+
+```python
+import reportlab.rl_config
+reportlab.rl_config.useA85 = 0  # must be set before other reportlab imports
+
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Image as RLImage, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from PIL import Image
+
+# Prepare image: strip alpha, downscale
+def prepare_image_for_pdf(input_path: str, output_path: str) -> str:
+    img = Image.open(input_path)
+    if img.mode == "RGBA":
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[3])
+        img = bg
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+    if img.width > 1200:
+        ratio = 1200 / img.width
+        img = img.resize((1200, int(img.height * ratio)), Image.LANCZOS)
+    img.save(output_path, format="PNG", optimize=True)
+    return output_path
+
+doc = SimpleDocTemplate("report.pdf", pagesize=letter)
+styles = getSampleStyleSheet()
+story = []
+
+story.append(Paragraph("Chart Analysis", styles["Title"]))
+
+chart_path = prepare_image_for_pdf("chart.png", "chart_rgb.png")
+story.append(RLImage(chart_path, width=400, height=240))
+
+doc.build(story)
+```
+
 #### Subscripts and Superscripts
 
 **IMPORTANT**: Never use Unicode subscript/superscript characters (₀₁₂₃₄₅₆₇₈₉, ⁰¹²³⁴⁵⁶⁷⁸⁹) in ReportLab PDFs. The built-in fonts do not include these glyphs, causing them to render as solid black boxes.
