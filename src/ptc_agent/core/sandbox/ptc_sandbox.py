@@ -2191,19 +2191,53 @@ class PTCSandbox:
         port: int,
         *,
         expires_in: int = 3600,
-        startup_delay: float = 2.0,
+        startup_delay: float = 10.0,
     ) -> PreviewInfo:
         """Start a server command in background and return a signed preview URL.
 
-        Combines start_preview_server + sleep + get_preview_url into a single call.
-        If the server command fails (e.g. port already in use), the preview URL
-        is still generated — the existing server keeps serving.
+        Combines start_preview_server + readiness poll + get_preview_url.
+        Polls for up to ``startup_delay`` seconds to confirm the port is
+        actually listening before generating the URL.  If the port never
+        becomes reachable (e.g. command failed to start) the URL is still
+        returned so the caller can surface a useful preview panel — the
+        frontend health-check polling handles dead-server detection.
+
+        If the server command fails (e.g. port already in use), the preview
+        URL is still generated — the existing server keeps serving.
         """
         try:
             await self.start_preview_server(command)
         except Exception as e:
             logger.warning("Failed to start preview server", command=command, error=str(e))
-        await asyncio.sleep(startup_delay)
+
+        # Poll until the port is actually listening (or deadline exceeded).
+        # Uses `nc -z` inside the sandbox — available on all Daytona images.
+        import time as _time
+
+        poll_interval = 0.5
+        deadline = _time.monotonic() + startup_delay
+        port_ready = False
+        while _time.monotonic() < deadline:
+            remaining = deadline - _time.monotonic()
+            await asyncio.sleep(min(poll_interval, max(remaining, 0)))
+            try:
+                result = await self.execute_bash_command(
+                    f"nc -z localhost {port} 2>/dev/null && echo READY || echo WAITING",
+                    timeout=3,
+                )
+                if result.get("stdout", "").strip() == "READY":
+                    port_ready = True
+                    break
+            except Exception:
+                pass
+
+        if not port_ready:
+            logger.warning(
+                "Preview server port not reachable after startup delay",
+                port=port,
+                startup_delay=startup_delay,
+            )
+
         return await self.get_preview_url(port, expires_in=expires_in)
 
     async def _ensure_bg_session(self) -> str:

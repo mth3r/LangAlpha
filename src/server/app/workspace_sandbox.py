@@ -705,6 +705,29 @@ async def _resolve_preview_url(sandbox_id: str, port: int) -> str:
         await provider.close()
 
 
+async def _preview_redirect(workspace_id: str, port: int, path: str = "") -> Response:
+    """Shared logic for preview redirect with optional path suffix."""
+    workspace = await db_get_workspace(workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    sandbox_id = workspace.get("sandbox_id")
+    if not sandbox_id:
+        raise HTTPException(status_code=404, detail="No sandbox for this workspace")
+
+    signed_url = await _resolve_preview_url(sandbox_id, port)
+
+    # Append path suffix to the signed URL (preserve existing query string)
+    if path:
+        from urllib.parse import urlsplit, urlunsplit
+        parts = urlsplit(signed_url)
+        # Normalise: remove any trailing slash on the base before appending
+        new_path = parts.path.rstrip("/") + "/" + path.lstrip("/")
+        signed_url = urlunsplit(parts._replace(path=new_path))
+
+    return RedirectResponse(url=signed_url, status_code=302)
+
+
 @preview_redirect_router.get("/preview/{workspace_id}/{port}")
 async def preview_redirect_by_workspace(
     workspace_id: str,
@@ -715,13 +738,18 @@ async def preview_redirect_by_workspace(
     Resolves to a cached signed URL via 302 redirect.
     The workspace UUID (128-bit) acts as the access credential.
     """
-    workspace = await db_get_workspace(workspace_id)
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    return await _preview_redirect(workspace_id, port)
 
-    sandbox_id = workspace.get("sandbox_id")
-    if not sandbox_id:
-        raise HTTPException(status_code=404, detail="No sandbox for this workspace")
 
-    signed_url = await _resolve_preview_url(sandbox_id, port)
-    return RedirectResponse(url=signed_url, status_code=302)
+@preview_redirect_router.get("/preview/{workspace_id}/{port}/{path:path}")
+async def preview_redirect_by_workspace_with_path(
+    workspace_id: str,
+    port: int = PathParam(ge=3000, le=9999),
+    path: str = "",
+) -> Response:
+    """Stable preview URL with path suffix — for serving non-index files.
+
+    E.g. /api/v1/preview/{workspace_id}/8080/timeline.html
+    Appends the path to the signed Daytona URL before redirecting.
+    """
+    return await _preview_redirect(workspace_id, port, path)
