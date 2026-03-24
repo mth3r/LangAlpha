@@ -163,7 +163,7 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
                 padding: isHovered ? '4px 6px' : '2px 0',
                 borderRadius: 4,
                 border: 'none',
-                background: isHovered && isActive ? 'var(--color-bg-elevated, rgba(0,0,0,0.04))' : 'transparent',
+                background: isHovered && isActive ? 'var(--color-bg-surface)' : 'transparent',
                 cursor: 'pointer',
                 width: '100%',
                 textAlign: 'left',
@@ -171,7 +171,7 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
               }}
               onMouseEnter={(e) => {
                 if (isHovered && !isActive) {
-                  e.currentTarget.style.background = 'var(--color-bg-subtle, rgba(0,0,0,0.02))';
+                  e.currentTarget.style.background = 'var(--color-bg-subtle)';
                 }
               }}
               onMouseLeave={(e) => {
@@ -192,8 +192,8 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
                     fontSize: 12,
                     lineHeight: '18px',
                     color: isActive
-                      ? 'var(--color-text-primary, #000)'
-                      : 'var(--color-text-tertiary, #888)',
+                      ? 'var(--color-text-primary)'
+                      : 'var(--color-text-tertiary)',
                     fontWeight: isActive ? 500 : 400,
                     transition: 'color 150ms ease',
                     textAlign: 'right',
@@ -211,7 +211,7 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
                   width: isActive ? 28 : 14,
                   height: isActive ? 3 : 2,
                   borderRadius: 2,
-                  background: 'var(--color-foreground, #000)',
+                  background: 'var(--color-text-primary)',
                   opacity: isActive ? 0.7 : 0.2,
                   transition: 'width 150ms ease, height 150ms ease, opacity 150ms ease',
                 }}
@@ -232,7 +232,7 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
             marginTop: 4,
             borderRadius: 4,
             border: 'none',
-            background: isHovered && isAtBottom ? 'var(--color-bg-elevated, rgba(0,0,0,0.04))' : 'transparent',
+            background: isHovered && isAtBottom ? 'var(--color-bg-surface)' : 'transparent',
             cursor: 'pointer',
             width: '100%',
             textAlign: 'left',
@@ -240,7 +240,7 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
           }}
           onMouseEnter={(e) => {
             if (isHovered && !isAtBottom) {
-              e.currentTarget.style.background = 'var(--color-bg-subtle, rgba(0,0,0,0.02))';
+              e.currentTarget.style.background = 'var(--color-bg-subtle)';
             }
           }}
           onMouseLeave={(e) => {
@@ -257,8 +257,8 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
                 fontSize: 12,
                 lineHeight: '18px',
                 color: isAtBottom
-                  ? 'var(--color-text-primary, #000)'
-                  : 'var(--color-text-tertiary, #888)',
+                  ? 'var(--color-text-primary)'
+                  : 'var(--color-text-tertiary)',
                 fontWeight: isAtBottom ? 500 : 400,
                 transition: 'color 150ms ease',
                 textAlign: 'right',
@@ -274,7 +274,7 @@ export default function ChatMinimap({ messages, scrollAreaRef }: ChatMinimapProp
               width: isAtBottom ? 28 : 14,
               height: isAtBottom ? 3 : 2,
               borderRadius: 2,
-              background: 'var(--color-foreground, #000)',
+              background: 'var(--color-text-primary)',
               opacity: isAtBottom ? 0.7 : 0.2,
               transition: 'width 150ms ease, height 150ms ease, opacity 150ms ease',
             }}
