@@ -1283,6 +1283,7 @@ const MessageContentSegments = memo(function MessageContentSegments({ segments, 
               <InlineWidget
                 key={block.key}
                 html={widgetData.html}
+                title={widgetData.title}
                 onSendPrompt={onWidgetSendPrompt}
                 data={widgetData.data}
               />

@@ -119,7 +119,7 @@ window.sendPrompt = function(text) {
 </head><body>${html}</body></html>`;
 }
 
-export default function InlineWidget({ html, onSendPrompt, data }: InlineWidgetProps) {
+export default function InlineWidget({ html, title, onSendPrompt, data }: InlineWidgetProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState<number | null>(null);
 
@@ -173,7 +173,7 @@ export default function InlineWidget({ html, onSendPrompt, data }: InlineWidgetP
         ref={iframeRef}
         srcDoc={srcDoc}
         sandbox="allow-scripts"
-        title="Widget"
+        title={title || 'Widget'}
         className="inline-widget-frame"
         style={{
           height: height != null ? `${height}px` : '150px',
