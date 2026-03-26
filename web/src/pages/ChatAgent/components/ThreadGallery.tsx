@@ -113,7 +113,7 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
   const [showSandboxPanel, setShowSandboxPanel] = useState(false);
   const [filePanelWidth, setFilePanelWidth] = useState(850);
   const [filePanelTargetFile, setFilePanelTargetFile] = useState<string | null>(null);
-  // Show system files in FilePanel (.agent/, code/, tools/, etc.)
+  // Show system files in FilePanel (.agents/, code/, tools/, etc.)
   const [showSystemFiles, setShowSystemFiles] = useState(
     () => localStorage.getItem('filePanel.showSystemFiles') === 'true'
   );
@@ -644,7 +644,7 @@ function ThreadGallery({ workspaceId, onBack, onThreadSelect }: ThreadGalleryPro
                     {showFilePanel ? t('common.close') : t('thread.viewAll')}
                   </div>
                 </div>
-                {/* Show first two user file names -- system dirs (.agent/, code/, etc.) are excluded */}
+                {/* Show first two user file names -- system dirs (.agents/, code/, etc.) are excluded */}
                 {files.length > 0 && (
                   <div className="flex flex-col gap-0.5">
                     {files.filter((fp) => {

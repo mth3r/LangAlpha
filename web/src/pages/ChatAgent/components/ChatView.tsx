@@ -361,7 +361,7 @@ function ChatView({ workspaceId, threadId, initialTaskId, onBack, workspaceName:
   const [detailPlanData, setDetailPlanData] = useState<PlanData | null>(null);
   // Track hidden agents (removed from sidebar, but not from state)
   const [hiddenAgentIds, setHiddenAgentIds] = useState<Set<string>>(new Set());
-  // Show system files in FilePanel (.agent/, code/, tools/, etc.)
+  // Show system files in FilePanel (.agents/, code/, tools/, etc.)
   const [showSystemFiles, setShowSystemFiles] = useState(
     () => localStorage.getItem('filePanel.showSystemFiles') === 'true'
   );

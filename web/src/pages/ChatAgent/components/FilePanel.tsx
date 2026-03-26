@@ -212,7 +212,7 @@ const DIR_PRIORITY: Record<string, number> = { '/': 0, 'results': 1, 'data': 2 }
 /** System directory prefixes -- collapsed by default when visible.
  *  Source of truth: src/ptc_agent/core/paths.py -> AGENT_SYSTEM_DIRS */
 // eslint-disable-next-line react-refresh/only-export-components
-export const SYSTEM_DIR_PREFIXES = ['code', 'tools', 'mcp_servers', 'skills', '.agent', '.self-improve'];
+export const SYSTEM_DIR_PREFIXES = ['.system', 'code', 'tools', 'mcp_servers', '.agents', '.self-improve'];
 
 function dirSortKey(dir: string): number {
   if (DIR_PRIORITY[dir] != null) return DIR_PRIORITY[dir];
@@ -1581,7 +1581,7 @@ function FilePanel({
             <button
               className={`file-panel-chip ${showSystemFiles ? 'active' : ''}`}
               onClick={onToggleSystemFiles}
-              title="Show system directories (.agent/, code/, tools/, etc.)"
+              title="Show system directories (.agents/, .system/, tools/, etc.)"
             >
               System
             </button>
