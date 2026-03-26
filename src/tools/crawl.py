@@ -22,7 +22,12 @@ async def _crawl_impl(
     """
     Use this to crawl a url and get readable content in markdown format.
 
-    Uses a tiered fetching strategy with automatic fallback:
+    Supports multiple content types with dedicated extractors:
+    - PDF files: text extraction via pdfplumber
+    - YouTube videos: transcript extraction with timestamps
+    - X/Twitter posts: tweet text, media, and engagement stats
+
+    For regular web pages, uses a tiered fetching strategy:
     - Tier 1: Fast HTTP fetch with TLS impersonation
     - Tier 2: Browser-based fetch for JS-rendered pages
     - Tier 3: Stealth fetch for anti-bot protected pages
@@ -52,7 +57,12 @@ crawl_tool = StructuredTool.from_function(
     name="crawl",
     description="""Use this to crawl a url and get readable content in markdown format.
 
-Uses a tiered fetching strategy with automatic fallback:
+Supports multiple content types with dedicated extractors:
+- PDF files: text extraction via pdfplumber
+- YouTube videos: transcript extraction with timestamps
+- X/Twitter posts: tweet text, media, and engagement stats
+
+For regular web pages, uses tiered fetching with automatic fallback:
 - Fast HTTP fetch for static pages
 - Browser-based fetch for JS-rendered pages
 - Stealth fetch for anti-bot protected pages

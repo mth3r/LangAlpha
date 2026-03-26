@@ -324,11 +324,16 @@ web_fetch_tool = StructuredTool.from_function(
     name="WebFetch",
     description="""Fetches content from a specified URL and processes it using an AI model.
 
-Takes a URL and a prompt as input. Fetches the URL content, converts HTML
-to markdown, then processes the content with the prompt using a small,
+Takes a URL and a prompt as input. Fetches the URL content, converts to
+markdown, then processes the content with the prompt using a small,
 fast model. Returns the model's response about the content.
 
-Use this tool when you need to retrieve and analyze web content.
+Supports multiple content types with dedicated extractors:
+- Regular web pages: tiered HTML fetching with anti-bot bypass
+- URL-based PDF files: text extraction (no LLM needed for parsing)
+- YouTube videos: transcript extraction with timestamps
+- X/Twitter posts: tweet text, media, and engagement stats
+
 
 Usage notes:
 - Run multiple in parallel if needed
