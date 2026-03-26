@@ -33,7 +33,7 @@ def _validate_url(url: str) -> None:
     # Try to parse as IP address and check for private ranges
     try:
         addr = ipaddress.ip_address(hostname)
-        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_unspecified:
             raise ExtractorError(f"Access to private/reserved IP is not allowed: {url}")
     except ValueError:
         # Not a raw IP — hostname is fine, DNS resolution happens later

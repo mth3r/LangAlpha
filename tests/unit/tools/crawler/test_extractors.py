@@ -221,6 +221,10 @@ class TestSSRFValidation:
         with pytest.raises(ExtractorError, match="private"):
             _validate_url("http://[::1]/file")
 
+    def test_unspecified_address_blocked(self):
+        with pytest.raises(ExtractorError, match="private"):
+            _validate_url("http://0.0.0.0/internal")
+
     def test_file_scheme(self):
         with pytest.raises(ExtractorError, match="Unsupported URL scheme"):
             _validate_url("file:///etc/passwd")
