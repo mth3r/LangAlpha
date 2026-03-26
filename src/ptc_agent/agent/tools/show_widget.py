@@ -135,6 +135,25 @@ def _is_text_file(path: str) -> bool:
     return ext.lower() in _TEXT_EXTENSIONS
 
 
+async def _read_one_file(
+    sandbox: Any,
+    path: str,
+) -> tuple[str, str | bytes | None]:
+    """Read a single file from the sandbox, returning (path, content_or_None)."""
+    is_text = _is_text_file(path)
+    try:
+        if is_text:
+            content = await sandbox.aread_file_text(path)
+        else:
+            content = await sandbox.adownload_file_bytes(path)
+        if content is None:
+            logger.warning("ShowWidget data_files: file not found", path=path)
+        return path, content
+    except Exception:
+        logger.warning("ShowWidget data_files: failed to read", path=path, exc_info=True)
+        return path, None
+
+
 async def _resolve_data_files(
     sandbox: Any,
     data_files: list[str],
@@ -144,31 +163,41 @@ async def _resolve_data_files(
     Returns a mapping of filename → content string.  Text files are
     returned as raw strings; binary files as ``data:{mime};base64,...``
     data-URLs.  A cumulative size cap of ``_INLINE_DATA_CAP`` is enforced.
+
+    All sandbox reads are dispatched concurrently via ``asyncio.gather``
+    to avoid sequential-await latency.
     """
+    import asyncio
+
+    # Filter out empty basenames before issuing I/O
+    valid_paths = [p for p in data_files if os.path.basename(p)]
+    if not valid_paths:
+        return {}
+
+    # Read all files concurrently
+    results = await asyncio.gather(
+        *(_read_one_file(sandbox, p) for p in valid_paths)
+    )
+
+    # Post-process: encode and apply size cap (order-preserving)
     inline_data: dict[str, str] = {}
     inline_total = 0
+    seen_basenames: set[str] = set()
 
-    for path in data_files:
-        filename = os.path.basename(path)
-        if not filename:
+    for path, content in results:
+        if content is None:
             continue
+        filename = os.path.basename(path)
         is_text = _is_text_file(path)
 
-        try:
-            if is_text:
-                content_str = await sandbox.aread_file_text(path)
-                if content_str is None:
-                    logger.warning("ShowWidget data_files: file not found", path=path)
-                    continue
-            else:
-                content_bytes = await sandbox.adownload_file_bytes(path)
-                if content_bytes is None:
-                    logger.warning("ShowWidget data_files: file not found", path=path)
-                    continue
-                content_str = None  # will build data-URL below
-        except Exception:
-            logger.warning("ShowWidget data_files: failed to read", path=path, exc_info=True)
+        if filename in seen_basenames:
+            logger.warning(
+                "ShowWidget data_files: duplicate basename, skipping",
+                path=path,
+                basename=filename,
+            )
             continue
+        seen_basenames.add(filename)
 
         mime = mimetypes.guess_type(filename)[0] or (
             "text/plain" if is_text else "application/octet-stream"
@@ -176,9 +205,9 @@ async def _resolve_data_files(
 
         # Build inline value
         if is_text:
-            value = content_str  # type: ignore[assignment]
+            value = content  # type: ignore[assignment]
         else:
-            b64 = base64.b64encode(content_bytes).decode()  # type: ignore[arg-type]
+            b64 = base64.b64encode(content).decode()  # type: ignore[arg-type]
             value = f"data:{mime};base64,{b64}"
 
         entry_size = len(value.encode())

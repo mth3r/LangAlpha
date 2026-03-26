@@ -31,7 +31,7 @@ The HTML is rendered in a sandboxed iframe with:
 - **CSS theme variables**: automatically injected (see Theme section)
 - **`sendPrompt('text')`**: global function to trigger follow-up chat messages
 - **`window.__WIDGET_DATA__`**: dict of filename→content for files passed via `data_files`
-- **No network**: `fetch()` / `XMLHttpRequest` are blocked — use `data_files` for sandbox files, or embed small data directly in HTML
+- **No network to non-CDN origins**: `fetch()` / `XMLHttpRequest` to arbitrary URLs are blocked by CSP — only CDN domains (cdnjs, jsdelivr, unpkg, esm.sh) are allowed. Use `data_files` for sandbox files, or embed small data directly in HTML
 
 ## Layout Rules (CRITICAL)
 
