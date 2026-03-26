@@ -323,7 +323,7 @@ class PTCAgent:
         preview_url_tool = create_preview_url_tool(sandbox, workspace_id=workspace_id, on_signed_url=on_signed_url)
 
         # Create the show widget tool for inline HTML visualizations
-        show_widget_tool = create_show_widget_tool()
+        show_widget_tool = create_show_widget_tool(sandbox)
 
         # Start with base tools
         tools: list[Any] = [execute_code_tool, bash_tool, bash_output_tool, preview_url_tool, show_widget_tool, TodoWrite]

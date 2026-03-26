@@ -1,5 +1,8 @@
 """Show interactive HTML/SVG widgets inline in the chat."""
 
+import base64
+import mimetypes
+import os
 import re
 from typing import Any
 from uuid import uuid4
@@ -8,6 +11,16 @@ import structlog
 from langchain_core.tools import BaseTool, tool
 
 logger = structlog.get_logger(__name__)
+
+# Max total size for inline-embedded data when cloud storage is unavailable.
+_INLINE_DATA_CAP = 500 * 1024  # 500 KB
+
+# Extensions treated as text (everything else is binary).
+_TEXT_EXTENSIONS = frozenset({
+    ".json", ".csv", ".txt", ".html", ".xml", ".svg",
+    ".md", ".yaml", ".yml", ".tsv", ".geojson", ".topojson",
+})
+
 
 # ---------------------------------------------------------------------------
 # Validation rules — each returns (violation_name, detail) or None
@@ -116,13 +129,81 @@ def _load_widget_guidelines() -> str:
     )
 
 
-def create_show_widget_tool() -> BaseTool:
+def _is_text_file(path: str) -> bool:
+    """Return True if *path* should be read as text based on its extension."""
+    _, ext = os.path.splitext(path)
+    return ext.lower() in _TEXT_EXTENSIONS
+
+
+async def _resolve_data_files(
+    sandbox: Any,
+    data_files: list[str],
+) -> dict[str, str]:
+    """Read *data_files* from *sandbox* and return inline data dict.
+
+    Returns a mapping of filename → content string.  Text files are
+    returned as raw strings; binary files as ``data:{mime};base64,...``
+    data-URLs.  A cumulative size cap of ``_INLINE_DATA_CAP`` is enforced.
+    """
+    inline_data: dict[str, str] = {}
+    inline_total = 0
+
+    for path in data_files:
+        filename = os.path.basename(path)
+        if not filename:
+            continue
+        is_text = _is_text_file(path)
+
+        try:
+            if is_text:
+                content_str = await sandbox.aread_file_text(path)
+                if content_str is None:
+                    logger.warning("ShowWidget data_files: file not found", path=path)
+                    continue
+            else:
+                content_bytes = await sandbox.adownload_file_bytes(path)
+                if content_bytes is None:
+                    logger.warning("ShowWidget data_files: file not found", path=path)
+                    continue
+                content_str = None  # will build data-URL below
+        except Exception:
+            logger.warning("ShowWidget data_files: failed to read", path=path, exc_info=True)
+            continue
+
+        mime = mimetypes.guess_type(filename)[0] or (
+            "text/plain" if is_text else "application/octet-stream"
+        )
+
+        # Build inline value
+        if is_text:
+            value = content_str  # type: ignore[assignment]
+        else:
+            b64 = base64.b64encode(content_bytes).decode()  # type: ignore[arg-type]
+            value = f"data:{mime};base64,{b64}"
+
+        entry_size = len(value.encode())
+        if inline_total + entry_size > _INLINE_DATA_CAP:
+            logger.warning(
+                "ShowWidget data_files: inline cap exceeded, skipping",
+                path=path,
+                cap=_INLINE_DATA_CAP,
+                current=inline_total,
+            )
+            continue
+        inline_total += entry_size
+        inline_data[filename] = value
+
+    return inline_data
+
+
+def create_show_widget_tool(sandbox: Any = None) -> BaseTool:
     """Factory function to create ShowWidget tool."""
 
     @tool(response_format="content_and_artifact")
     async def ShowWidget(
         html: str,
         title: str | None = None,
+        data_files: list[str] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """Render an interactive HTML/SVG widget inline in the chat.
 
@@ -134,10 +215,15 @@ def create_show_widget_tool() -> BaseTool:
         - CDN libraries: cdnjs.cloudflare.com, cdn.jsdelivr.net, unpkg.com, esm.sh
         - CSS variables: var(--color-bg-page), var(--color-text-primary), etc. for theme matching
         - sendPrompt('text'): trigger a follow-up chat message from a button click
+        - window.__WIDGET_DATA__: dict of filename→content for files passed via data_files
 
         Args:
             html: Raw HTML string to render. No DOCTYPE/html/head/body tags needed.
             title: Optional display title shown above the widget.
+            data_files: Optional list of sandbox file paths whose contents will be
+                made available in the widget as ``window.__WIDGET_DATA__["filename"]``.
+                Text files (json/csv/txt/…) are strings; binary files (png/jpg/…)
+                become data-URL strings.
 
         Returns:
             Confirmation message and artifact dict for inline rendering.
@@ -166,17 +252,27 @@ def create_show_widget_tool() -> BaseTool:
         widget_id = f"widget_{uuid4().hex[:8]}"
         display_title = title or ""
 
-        artifact = {
+        artifact: dict[str, Any] = {
             "type": "html_widget",
             "html": html,
             "title": display_title,
         }
 
+        # Resolve data files — inline only in the stream event, not the
+        # tool return, so we don't duplicate large payloads in the
+        # LangGraph checkpointer state.
+        resolved_data: dict[str, str] | None = None
+        if data_files and sandbox is not None:
+            resolved_data = await _resolve_data_files(sandbox, data_files) or None
+
         if writer:
+            stream_payload = artifact
+            if resolved_data:
+                stream_payload = {**artifact, "data": resolved_data}
             writer({
                 "artifact_type": "html_widget",
                 "artifact_id": widget_id,
-                "payload": artifact,
+                "payload": stream_payload,
             })
 
         logger.info("Rendered inline widget", widget_id=widget_id, title=display_title)

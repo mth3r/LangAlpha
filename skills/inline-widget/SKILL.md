@@ -19,17 +19,19 @@ Render interactive HTML/SVG widgets directly inside the chat conversation using 
 ## ShowWidget API
 
 ```
-ShowWidget(html: str, title: str | None = None)
+ShowWidget(html: str, title: str | None = None, data_files: list[str] | None = None)
 ```
 
 - `html`: Raw HTML fragment — no `<!DOCTYPE>`, `<html>`, `<head>`, or `<body>` tags
 - `title`: Optional metadata (not displayed to user)
+- `data_files`: Optional list of sandbox file paths to make available as `window.__WIDGET_DATA__`
 
 The HTML is rendered in a sandboxed iframe with:
 - **CDN libraries**: `cdnjs.cloudflare.com`, `cdn.jsdelivr.net`, `unpkg.com`, `esm.sh`
 - **CSS theme variables**: automatically injected (see Theme section)
 - **`sendPrompt('text')`**: global function to trigger follow-up chat messages
-- **No network**: `fetch()` / `XMLHttpRequest` are blocked — all data must be embedded
+- **`window.__WIDGET_DATA__`**: dict of filename→content for files passed via `data_files`
+- **No network**: `fetch()` / `XMLHttpRequest` are blocked — use `data_files` for sandbox files, or embed small data directly in HTML
 
 ## Layout Rules (CRITICAL)
 
@@ -187,6 +189,52 @@ setInterval(function() {
   updateDisplay();
 }, 3000);
 ```
+
+## File Data
+
+Use `data_files` to load data from sandbox files instead of inlining everything in the HTML string. This is especially useful for larger datasets produced by `execute_code`.
+
+### Workflow
+
+1. Use `execute_code` to generate data files in the sandbox
+2. Pass file paths to `ShowWidget` via `data_files`
+3. Access data in the widget via `window.__WIDGET_DATA__["filename"]`
+
+```python
+# Step 1: Agent generates data via execute_code
+execute_code("""
+import json
+data = {"labels": ["Q1", "Q2", "Q3"], "values": [100, 150, 200]}
+with open("/home/workspace/work/chart_data.json", "w") as f:
+    json.dump(data, f)
+""")
+
+# Step 2: Agent calls ShowWidget with data_files
+ShowWidget(
+    html='<div id="chart">...</div><script>var d = JSON.parse(__WIDGET_DATA__["chart_data.json"]); ...</script>',
+    data_files=["/home/workspace/work/chart_data.json"]
+)
+```
+
+### Widget access
+
+```javascript
+// Text files (json, csv, txt, etc.) — returned as strings
+var data = JSON.parse(window.__WIDGET_DATA__["chart_data.json"]);
+var csvText = window.__WIDGET_DATA__["results.csv"];
+
+// Binary files (png, jpg, etc.) — returned as data URLs
+document.getElementById("img").src = window.__WIDGET_DATA__["chart.png"];
+```
+
+### Supported file types
+
+- **Text** (returned as strings): `.json`, `.csv`, `.txt`, `.html`, `.xml`, `.svg`, `.md`, `.yaml`, `.yml`, `.tsv`, `.geojson`, `.topojson`
+- **Binary** (returned as data URLs): `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.ico`
+
+### Size limits
+
+When cloud storage is configured, files are uploaded to CDN — no size limit. When cloud storage is unavailable, files are embedded inline with a 500KB total cap.
 
 ## Blocked Patterns
 
