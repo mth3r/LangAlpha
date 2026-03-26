@@ -23,15 +23,27 @@ class TestBackendSelection:
         from src.tools.crawler.scrapling_crawler import ScraplingCrawler
         assert isinstance(crawler, ScraplingCrawler)
 
-    @pytest.mark.asyncio
-    async def test_unknown_backend_raises(self):
-        wrapper = SafeCrawlerWrapper(backend="nonexistent")
+    def test_unknown_backend_raises(self):
         with pytest.raises(ValueError, match="Unknown crawler backend"):
-            await wrapper._get_crawler()
+            SafeCrawlerWrapper(backend="nonexistent")
 
     @pytest.mark.asyncio
     async def test_crawler_is_cached(self):
         wrapper = SafeCrawlerWrapper(backend="scrapling")
+        crawler1 = await wrapper._get_crawler()
+        crawler2 = await wrapper._get_crawler()
+        assert crawler1 is crawler2
+
+    @pytest.mark.asyncio
+    async def test_router_backend(self):
+        wrapper = SafeCrawlerWrapper(backend="router")
+        crawler = await wrapper._get_crawler()
+        from src.tools.crawler.router import ContentRouter
+        assert isinstance(crawler, ContentRouter)
+
+    @pytest.mark.asyncio
+    async def test_router_backend_cached(self):
+        wrapper = SafeCrawlerWrapper(backend="router")
         crawler1 = await wrapper._get_crawler()
         crawler2 = await wrapper._get_crawler()
         assert crawler1 is crawler2
