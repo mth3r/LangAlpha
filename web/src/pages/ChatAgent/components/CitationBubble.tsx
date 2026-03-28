@@ -1,0 +1,212 @@
+import React, { useState, useCallback, useRef } from 'react';
+import * as HoverCard from '@radix-ui/react-hover-card';
+import { useCitationMetadata } from './CitationMetadataContext';
+import './CitationBubble.css';
+
+type MarkdownComponentProps = Record<string, any>;
+
+function Monogram({ letter, size = 14 }: { letter: string; size?: number }): React.ReactElement {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        background: 'var(--color-bg-surface)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: size * 0.65,
+        fontWeight: 600,
+        color: 'var(--color-text-secondary)',
+        flexShrink: 0,
+        textTransform: 'uppercase',
+      }}
+    >
+      {letter}
+    </span>
+  );
+}
+
+function Favicon({ domain, size = 14 }: { domain: string; size?: number }): React.ReactElement {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return <Monogram letter={domain.charAt(0)} size={size} />;
+  }
+
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`}
+      alt=""
+      width={size}
+      height={size}
+      style={{ borderRadius: size > 14 ? 3 : 2, flexShrink: 0 }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function CitationBubble({ node: _node, label, href, ...props }: MarkdownComponentProps): React.ReactElement {
+  const meta = useCitationMetadata(href || '');
+  const domain = label || '';
+  const displayName = meta?.source || domain;
+  const url = href || '';
+
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const handlePillEnter = useCallback(() => {
+    if (pillRef.current) pillRef.current.style.background = 'var(--color-bg-input)';
+  }, []);
+  const handlePillLeave = useCallback(() => {
+    if (pillRef.current) pillRef.current.style.background = 'var(--color-bg-elevated)';
+  }, []);
+
+  const handlePillClick = useCallback(() => {
+    if (url && /^https?:\/\//.test(url)) window.open(url, '_blank', 'noopener,noreferrer');
+  }, [url]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handlePillClick();
+    }
+  }, [handlePillClick]);
+
+  // Note: Radix HoverCard is mouse-only by design. Keyboard/screen-reader users
+  // can still click through via Enter/Space but won't see the preview card.
+  // Switch to Popover if keyboard preview becomes a requirement.
+  return (
+    <HoverCard.Root openDelay={300} closeDelay={100}>
+      <HoverCard.Trigger asChild>
+        <span
+          ref={pillRef}
+          role="link"
+          tabIndex={0}
+          aria-label={`Source: ${displayName}`}
+          onClick={handlePillClick}
+          onKeyDown={handleKeyDown}
+          onMouseEnter={handlePillEnter}
+          onMouseLeave={handlePillLeave}
+          className="cite-bubble-pill"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '1px 8px 1px 6px',
+            borderRadius: 9999,
+            background: 'var(--color-bg-elevated)',
+            fontSize: '0.8125rem',
+            fontWeight: 400,
+            color: 'var(--color-text-secondary)',
+            lineHeight: 1.4,
+            verticalAlign: 'baseline',
+            cursor: 'pointer',
+            transition: 'background 150ms ease',
+            marginLeft: 2,
+            maxWidth: 200,
+            whiteSpace: 'nowrap' as const,
+          }}
+          {...props}
+        >
+          <Favicon domain={domain} size={14} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {displayName}
+          </span>
+        </span>
+      </HoverCard.Trigger>
+
+      <HoverCard.Portal>
+        <HoverCard.Content
+          sideOffset={5}
+          style={{
+            width: 320,
+            borderRadius: 10,
+            overflow: 'hidden',
+            boxShadow: 'var(--shadow-card, 0 4px 16px rgba(0,0,0,0.12))',
+            border: '1px solid var(--color-border-muted)',
+            background: 'var(--color-bg-card)',
+            zIndex: 100,
+            animationDuration: '150ms',
+          }}
+        >
+          <div style={{ padding: '12px 14px' }}>
+            {/* Source row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Favicon domain={domain} size={16} />
+              <span style={{
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--color-text-tertiary)',
+                letterSpacing: '0.01em',
+              }}>
+                {displayName}
+              </span>
+            </div>
+
+            {/* Title or fallback URL */}
+            {meta?.title ? (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 500,
+                  lineHeight: 1.45,
+                  color: 'var(--color-text-primary)',
+                  textDecoration: 'none',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical' as const,
+                  overflow: 'hidden',
+                }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.color = 'var(--color-accent-primary)'; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.color = 'var(--color-text-primary)'; }}
+              >
+                {meta.title}
+              </a>
+            ) : (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: 12,
+                  color: 'var(--color-accent-primary)',
+                  textDecoration: 'none',
+                  display: 'block',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap' as const,
+                  lineHeight: 1.5,
+                }}
+              >
+                {url}
+              </a>
+            )}
+
+            {/* Date + Snippet */}
+            {(meta?.date || meta?.snippet) && (
+              <div style={{
+                fontSize: 12,
+                color: 'var(--color-text-tertiary)',
+                marginTop: 6,
+                lineHeight: 1.5,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical' as const,
+                overflow: 'hidden',
+              }}>
+                {meta.date && meta.snippet
+                  ? `${meta.date} – ${meta.snippet}`
+                  : meta.date || meta.snippet}
+              </div>
+            )}
+          </div>
+        </HoverCard.Content>
+      </HoverCard.Portal>
+    </HoverCard.Root>
+  );
+}
+
+export default CitationBubble;
