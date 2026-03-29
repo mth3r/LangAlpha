@@ -124,14 +124,15 @@ class ModelConfig:
         return info.get("parent_provider", provider)
 
     def get_display_name(self, provider: str) -> str:
-        """Return display name, resolving through parent if needed."""
+        """Return display name, preferring own name then resolving through parent."""
         info = self.get_provider_info(provider)
-        parent = info.get("parent_provider")
-        if parent:
-            info = self.get_provider_info(parent)
-        else:
-            parent = provider
-        return info.get("display_name", parent.title())
+        if info.get("display_name"):
+            return info["display_name"]
+        parent = info.get("parent_provider", provider)
+        if parent != provider:
+            parent_info = self.get_provider_info(parent)
+            return parent_info.get("display_name", parent.title())
+        return provider.title()
 
     def get_model_metadata(self) -> dict[str, dict[str, str]]:
         """Return {model_key: {sdk, provider}} for all visible models."""
