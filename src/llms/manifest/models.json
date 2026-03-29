@@ -344,17 +344,17 @@
       "enable_thinking": true
     }
   },
-  "qwen3.5-plus-sg": {
+  "qwen3.5-plus-intl": {
     "model_id": "qwen3.5-plus",
-    "provider": "dashscope-sg",
+    "provider": "dashscope-intl",
     "visible": true,
     "extra_body": {
       "enable_thinking": true
     }
   },
-  "qwen3.5-flash-sg": {
+  "qwen3.5-flash-intl": {
     "model_id": "qwen3.5-flash",
-    "provider": "dashscope-sg",
+    "provider": "dashscope-intl",
     "visible": true,
     "extra_body": {
       "enable_thinking": true

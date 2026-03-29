@@ -218,3 +218,28 @@ class TestFlattenProviders:
 
         with pytest.raises(ValueError, match="sdk"):
             ModelConfig._flatten_providers(grouped)
+
+    def test_get_display_name_prefers_own_over_parent(self):
+        """Variant with its own display_name should use it, not parent's."""
+        grouped = {
+            "parent-brand": {
+                "sdk": "openai",
+                "display_name": "Parent Brand",
+                "env_key": "PARENT_KEY",
+                "variants": {
+                    "child-variant": {
+                        "display_name": "Child Display Name",
+                        "access_type": "oauth",
+                    }
+                },
+            }
+        }
+        flat = ModelConfig._flatten_providers(grouped)
+
+        # Simulate what get_display_name does: prefer own display_name
+        child = flat["child-variant"]
+        assert child.get("display_name") == "Child Display Name"
+        assert child.get("parent_provider") == "parent-brand"
+        # The parent's display_name should NOT override the child's
+        parent = flat["parent-brand"]
+        assert parent.get("display_name") == "Parent Brand"

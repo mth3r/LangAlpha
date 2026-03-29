@@ -820,7 +820,7 @@
         }
       }
     ],
-    "dashscope-sg": [
+    "dashscope-intl": [
       {
         "id": "qwen3.5-plus",
         "name": "Qwen3.5 Plus (SG)",
@@ -1058,14 +1058,21 @@
         "dashscope": {
           "sdk": "openai",
           "base_url": "https://dashscope.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1",
-          "use_response_api": true
+          "use_response_api": true,
+          "default_headers": {
+            "x-dashscope-session-cache": "enabled"
+          }
         },
-        "dashscope-sg": {
-          "sdk": "qwq",
+        "dashscope-intl": {
+          "sdk": "openai",
           "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
           "env_key": "DASHSCOPE_API_KEY_INT",
-          "region": "sg",
-          "display_name": "DashScope (SG)"
+          "use_response_api": true,
+          "default_headers": {
+            "x-dashscope-session-cache": "enabled"
+          },
+          "region": "intl",
+          "display_name": "DashScope (Intl)"
         },
         "dashscope-coding": {
           "sdk": "anthropic",
@@ -1100,14 +1107,12 @@
     },
     "moonshot": {
       "sdk": "anthropic",
-      "base_url": "https://api.kimi.com/coding",
+      "base_url": "https://api.moonshot.ai/anthropic",
       "env_key": "MOONSHOT_API_KEY",
       "access_type": "coding_plan",
-      "region": "cn",
       "display_name": "Moonshot (Kimi)",
       "variants": {
         "moonshot-api": {
-          "base_url": "TODO",
           "access_type": "api_key"
         }
       }
@@ -1126,7 +1131,7 @@
           "region": "cn"
         },
         "z-ai-coding": {
-          "base_url": "TODO",
+          "base_url": "https://api.z.ai/api/anthropic",
           "env_key": "ZAI_CODING_API_KEY",
           "access_type": "coding_plan"
         }
@@ -1141,7 +1146,7 @@
       "display_name": "MiniMax",
       "variants": {
         "minimax-coding": {
-          "base_url": "TODO",
+          "base_url": "https://api.minimax.io/anthropic",
           "env_key": "MINIMAX_CODING_API_KEY",
           "access_type": "coding_plan"
         }

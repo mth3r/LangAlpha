@@ -111,7 +111,11 @@ class ModelConfig:
         return None
 
     def get_byok_eligible_providers(self) -> list[str]:
-        """Return list of provider names that have byok_eligible=true."""
+        """Return list of provider names that have byok_eligible=true.
+
+        Includes all access types (api_key, oauth, coding_plan) since all
+        represent user-provided model access for credit tracking purposes.
+        """
         return [
             name
             for name, cfg in self._flat_providers.items()
