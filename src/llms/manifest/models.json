@@ -389,8 +389,18 @@
     }
   },
   "kimi-k2.5": {
-    "model_id": "kimi-for-coding",
+    "model_id": "kimi-k2.5",
     "provider": "moonshot",
+    "visible": true,
+    "parameters": {
+      "thinking": {
+        "type": "enabled"
+      }
+    }
+  },
+  "kimi-k2.5-coding": {
+    "model_id": "kimi-for-coding",
+    "provider": "moonshot-coding",
     "visible": true,
     "parameters": {
       "thinking": {

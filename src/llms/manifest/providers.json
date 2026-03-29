@@ -932,6 +932,21 @@
     ],
     "moonshot": [
       {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5",
+        "is_reasoning": true,
+        "description": "Moonshot AI's Kimi K2.5 multi-modal model with extended context",
+        "context_window": 262144,
+        "pricing": {
+          "input": 0.6,
+          "cached_input": 0.1,
+          "output": 3.0,
+          "unit": "per_1m_tokens"
+        }
+      }
+    ],
+    "moonshot-coding": [
+      {
         "id": "kimi-for-coding",
         "name": "Kimi for Coding",
         "is_reasoning": true,
@@ -1109,11 +1124,12 @@
       "sdk": "anthropic",
       "base_url": "https://api.moonshot.ai/anthropic",
       "env_key": "MOONSHOT_API_KEY",
-      "access_type": "coding_plan",
+      "access_type": "api_key",
       "display_name": "Moonshot (Kimi)",
       "variants": {
-        "moonshot-api": {
-          "access_type": "api_key"
+        "moonshot-coding": {
+          "base_url": "https://api.kimi.com/coding",
+          "access_type": "coding_plan"
         }
       }
     },
