@@ -18,6 +18,12 @@ from src.server.utils.db import UpdateQueryBuilder
 
 logger = logging.getLogger(__name__)
 
+# Computed columns appended to user SELECT queries for gate logic.
+# Uses "users" as the default table alias; the get_user_with_preferences
+# query uses "u" and must substitute manually.
+_HAS_API_KEY = "EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key"
+_HAS_OAUTH = "EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token"
+
 
 # ==================== User Operations ====================
 
@@ -71,8 +77,8 @@ async def create_user(
                     COALESCE(personalization_completed, FALSE) AS personalization_completed,
                     auth_provider,
                     created_at, updated_at, last_login_at,
-                    EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key,
-                    EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token
+                    """ + _HAS_API_KEY + """,
+                    """ + _HAS_OAUTH + """
             """, (user_id, email, name, avatar_url, timezone, locale))
 
             result = await cur.fetchone()
@@ -100,8 +106,8 @@ async def find_user_by_email(email: str) -> Optional[Dict[str, Any]]:
                     COALESCE(personalization_completed, FALSE) AS personalization_completed,
                     auth_provider,
                     created_at, updated_at, last_login_at,
-                    EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key,
-                    EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token
+                    """ + _HAS_API_KEY + """,
+                    """ + _HAS_OAUTH + """
                 FROM users
                 WHERE email = %s
                 LIMIT 1
@@ -127,8 +133,8 @@ async def migrate_user_id(old_user_id: str, new_user_id: str) -> Optional[Dict[s
                     COALESCE(personalization_completed, FALSE) AS personalization_completed,
                     auth_provider,
                     created_at, updated_at, last_login_at,
-                    EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key,
-                    EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token
+                    """ + _HAS_API_KEY + """,
+                    """ + _HAS_OAUTH + """
             """, (new_user_id, old_user_id))
             result = await cur.fetchone()
             if result:
@@ -176,8 +182,8 @@ async def create_user_from_auth(
                     COALESCE(personalization_completed, FALSE) AS personalization_completed,
                     auth_provider,
                     created_at, updated_at, last_login_at,
-                    EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key,
-                    EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token
+                    """ + _HAS_API_KEY + """,
+                    """ + _HAS_OAUTH + """
             """, (user_id, email, name, avatar_url, auth_provider, timezone, locale))
             result = await cur.fetchone()
 
@@ -212,8 +218,8 @@ async def get_user(user_id: str) -> Optional[Dict[str, Any]]:
                     COALESCE(personalization_completed, FALSE) AS personalization_completed,
                     auth_provider,
                     created_at, updated_at, last_login_at,
-                    EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key,
-                    EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token
+                    """ + _HAS_API_KEY + """,
+                    """ + _HAS_OAUTH + """
                 FROM users
                 WHERE user_id = %s
             """, (user_id,))
@@ -274,8 +280,8 @@ async def update_user(
         "COALESCE(personalization_completed, FALSE) AS personalization_completed",
         "auth_provider",
         "created_at", "updated_at", "last_login_at",
-        "EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key",
-        "EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token",
+        _HAS_API_KEY,
+        _HAS_OAUTH,
     ]
 
     query, params = builder.build(
@@ -341,8 +347,8 @@ async def upsert_user(
                     COALESCE(personalization_completed, FALSE) AS personalization_completed,
                     auth_provider,
                     created_at, updated_at, last_login_at,
-                    EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = users.user_id) AS has_api_key,
-                    EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = users.user_id) AS has_oauth_token
+                    """ + _HAS_API_KEY + """,
+                    """ + _HAS_OAUTH + """
             """, (user_id, email, name, avatar_url, timezone, locale))
 
             result = await cur.fetchone()
@@ -550,8 +556,8 @@ async def get_user_with_preferences(user_id: str) -> Optional[Dict[str, Any]]:
                     COALESCE(u.personalization_completed, FALSE) AS personalization_completed,
                     u.auth_provider,
                     u.created_at, u.updated_at, u.last_login_at,
-                    EXISTS (SELECT 1 FROM user_api_keys WHERE user_api_keys.user_id = u.user_id) AS has_api_key,
-                    EXISTS (SELECT 1 FROM user_oauth_tokens WHERE user_oauth_tokens.user_id = u.user_id) AS has_oauth_token,
+                    """ + _HAS_API_KEY.replace("users.user_id", "u.user_id") + """,
+                    """ + _HAS_OAUTH.replace("users.user_id", "u.user_id") + """,
                     p.user_preference_id, p.risk_preference, p.investment_preference,
                     p.agent_preference, p.other_preference,
                     p.created_at as pref_created_at, p.updated_at as pref_updated_at

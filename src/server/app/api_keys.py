@@ -9,6 +9,7 @@ Endpoints:
 - GET  /api/v1/models                     — List available models by provider
 """
 
+import functools
 import logging
 import re
 import time
@@ -506,9 +507,16 @@ async def test_api_key(body: TestApiKeyRequest, user_id: CurrentUserId):
                 detail="Base URL cannot point to a private or internal address.",
             )
 
-        # Resolve hostname to IPs and check each resolved address
+        # Resolve hostname to IPs and check each resolved address.
+        # Note: TOCTOU gap exists between this resolve and httpx's connect —
+        # a short-TTL DNS record could rebind after this check. Mitigated by
+        # rate limiting (10s/user) and 5s request timeout.
         try:
-            infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+            import asyncio
+            loop = asyncio.get_event_loop()
+            infos = await loop.run_in_executor(
+                None, socket.getaddrinfo, hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM,
+            )
             for family, _type, _proto, _canonname, sockaddr in infos:
                 addr = ipaddress.ip_address(sockaddr[0])
                 if addr.is_private or addr.is_loopback or addr.is_link_local:
@@ -553,6 +561,7 @@ async def test_api_key(body: TestApiKeyRequest, user_id: CurrentUserId):
 # ── Models Endpoint ──────────────────────────────────────────────────────
 
 
+@functools.lru_cache(maxsize=1)
 def _build_provider_catalog() -> list[dict]:
     """Build wizard-visible provider catalog from flat provider config.
 
