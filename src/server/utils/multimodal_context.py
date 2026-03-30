@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from src.server.models.additional_context import MultimodalContext
-from src.utils.storage import get_public_url, is_storage_enabled, upload_base64
+from src.utils.storage import get_public_url, is_storage_enabled, sanitize_storage_key, upload_base64
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +77,14 @@ async def build_attachment_metadata(
             "size": len(ctx.data.split(",", 1)[1]) * 3 // 4 if "," in ctx.data else 0,
         }
         if is_storage_enabled():
+            safe_key = sanitize_storage_key(name, ctx.data)
+            storage_key = f"{prefix}/{safe_key}"
             try:
-                storage_key = f"{prefix}/{name}"
                 success = await asyncio.to_thread(upload_base64, storage_key, ctx.data)
                 if success:
                     meta["url"] = get_public_url(storage_key)
             except Exception:
-                logger.warning(f"Failed to upload attachment {name}", exc_info=True)
+                logger.warning("Failed to upload attachment %r", safe_key, exc_info=True)
         return meta
 
     return list(await asyncio.gather(*(_process(ctx) for ctx in contexts)))
