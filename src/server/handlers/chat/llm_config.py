@@ -376,37 +376,39 @@ async def resolve_llm_config(
             f"[CHAT] Applied reasoning_effort={effective_reasoning} to {effective_model}"
         )
 
-    # Resolve OAuth/BYOK for subsidiary models
-    for role, sub_model in [("summarization", config.llm.summarization), ("fetch", config.llm.fetch)]:
-        if not sub_model:
-            continue
-        sub_client = await resolve_oauth_llm_client(user_id, sub_model)
-        if not sub_client and is_byok:
-            sub_client = await resolve_byok_llm_client(
-                user_id, sub_model, is_byok, _pref_cache=model_pref,
-            )
-        if sub_client:
-            if config is base_config:
-                config = config.model_copy(deep=True)
-            config.subsidiary_llm_clients[role] = sub_client
+    # Resolve OAuth/BYOK for subsidiary + fallback models in parallel.
+    # Each model tries OAuth first, then BYOK if OAuth fails.
+    import asyncio
 
-    # Resolve OAuth/BYOK for fallback models
-    if config.llm.fallback:
-        resolved_fallbacks: list = []
-        for fb_model in config.llm.fallback:
-            fb_client = await resolve_oauth_llm_client(user_id, fb_model)
-            if not fb_client and is_byok:
-                fb_client = await resolve_byok_llm_client(
-                    user_id, fb_model, is_byok, _pref_cache=model_pref,
-                )
-            if fb_client:
-                resolved_fallbacks.append(fb_client)
+    async def _resolve_one(model_name: str):
+        client = await resolve_oauth_llm_client(user_id, model_name)
+        if not client and is_byok:
+            client = await resolve_byok_llm_client(
+                user_id, model_name, is_byok, _pref_cache=model_pref,
+            )
+        return client
+
+    subsidiary_pairs = [(role, m) for role, m in [("summarization", config.llm.summarization), ("fetch", config.llm.fetch)] if m]
+    fallback_models = config.llm.fallback or []
+
+    all_models = [m for _, m in subsidiary_pairs] + list(fallback_models)
+    if all_models:
+        results = await asyncio.gather(*[_resolve_one(m) for m in all_models])
+
+        sub_count = len(subsidiary_pairs)
+        for i, (role, _) in enumerate(subsidiary_pairs):
+            if results[i]:
+                if config is base_config:
+                    config = config.model_copy(deep=True)
+                config.subsidiary_llm_clients[role] = results[i]
+
+        resolved_fallbacks = [r for r in results[sub_count:] if r]
         if resolved_fallbacks:
             if config is base_config:
                 config = config.model_copy(deep=True)
             config.fallback_llm_clients = resolved_fallbacks
             logger.info(
-                f"[CHAT] Resolved {len(resolved_fallbacks)}/{len(config.llm.fallback)} fallback models via OAuth/BYOK"
+                f"[CHAT] Resolved {len(resolved_fallbacks)}/{len(fallback_models)} fallback models via OAuth/BYOK"
             )
 
     return config
