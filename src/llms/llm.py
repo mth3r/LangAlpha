@@ -154,6 +154,18 @@ class ModelConfig:
             result[model_name] = {"sdk": sdk, "provider": provider}
         return result
 
+    def get_input_modalities(self, model_name: str) -> list[str]:
+        """Get supported input modalities for a model. Defaults to ["text"].
+
+        Reads directly from models.json entries, so variant providers
+        (codex-oauth, claude-oauth, etc.) are resolved correctly without
+        needing parent-provider fallback.
+        """
+        model_config = self.llm_config.get(model_name)
+        if not model_config:
+            return ["text"]
+        return model_config.get("input_modalities", ["text"])
+
 
 _UNSET = object()  # Sentinel to distinguish "no override" from "override to None"
 
@@ -630,6 +642,15 @@ def get_configured_llm_models() -> dict[str, list[str]]:
         print(f"Warning: Failed to load LLM configuration: {e}")
         return {}
 
+def get_input_modalities(model_name: str) -> list[str]:
+    """Get supported input modalities for a model name.
+
+    Convenience wrapper around ModelConfig.get_input_modalities()
+    using the singleton instance.
+    """
+    return LLM.get_model_config().get_input_modalities(model_name)
+
+
 def should_enable_caching(model_name: str) -> bool:
     """
     Check if a model should enable Anthropic prompt caching.
@@ -641,7 +662,7 @@ def should_enable_caching(model_name: str) -> bool:
         True if the model has enable_caching=True in its parameters
     """
     try:
-        config = ModelConfig()
+        config = LLM.get_model_config()
         model_info = config.get_model_config(model_name)
         if not model_info:
             return False

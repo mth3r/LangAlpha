@@ -88,3 +88,12 @@ class TestManifestIntegrity:
                 f"Expected parent provider of 'dashscope-coding' to be "
                 f"'dashscope', got '{parent}'"
             )
+
+    def test_every_model_with_input_modalities_has_text(self, model_config):
+        """Every model entry with input_modalities must include 'text'."""
+        for model_name, model_def in model_config.llm_config.items():
+            modalities = model_def.get("input_modalities")
+            if modalities is not None:
+                assert "text" in modalities, (
+                    f"{model_name}: input_modalities missing 'text': {modalities}"
+                )

@@ -1,4 +1,4 @@
-from .llm import LLM, ModelConfig, create_llm, get_llm_by_type, get_configured_llm_models, should_enable_caching
+from .llm import LLM, ModelConfig, create_llm, get_llm_by_type, get_configured_llm_models, get_input_modalities, should_enable_caching
 from .api_call import (
     make_api_call,
     parse_structured_output,
@@ -23,7 +23,7 @@ from .result_logger import (
 )
 
 
-__all__ = ['LLM', 'ModelConfig', 'create_llm', 'get_llm_by_type', 'get_configured_llm_models', 'should_enable_caching',
+__all__ = ['LLM', 'ModelConfig', 'create_llm', 'get_llm_by_type', 'get_configured_llm_models', 'get_input_modalities', 'should_enable_caching',
            'make_api_call', 'parse_structured_output',
            'create_messages', 'get_message_content', 'format_llm_content', 'repair_json_output', 'extract_json_from_content',
            'extract_token_usage',

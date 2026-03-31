@@ -38,10 +38,15 @@ from src.server.utils.directive_context import (
     build_directive_reminder,
     parse_directive_contexts,
 )
+from src.llms.llm import get_input_modalities
 from src.server.utils.multimodal_context import (
     build_attachment_metadata,
+    build_file_reminder,
+    build_unsupported_reminder,
+    filter_multimodal_by_capability,
     inject_multimodal_context,
     parse_multimodal_contexts,
+    upload_to_sandbox,
 )
 from src.utils.tracking import ExecutionTracker
 from src.server.dependencies.usage_limits import release_burst_slot
@@ -297,13 +302,82 @@ async def astream_ptc_workflow(
         else:
             loaded_skill_names = []
 
-        # Multimodal Context Injection (images and PDFs)
+        # Multimodal Context Injection
+        # All attachments are uploaded to sandbox (when available) so the
+        # agent always has file access.  Model-supported modalities also get
+        # native content blocks merged into the user message.
         multimodal_contexts = parse_multimodal_contexts(request.additional_context)
         if multimodal_contexts and not request.hitl_response:
-            messages = inject_multimodal_context(messages, multimodal_contexts)
-            logger.info(
-                f"[PTC_CHAT] Multimodal context injected: {len(multimodal_contexts)} attachment(s)"
+            # 1. Upload ALL files to sandbox
+            file_paths: list = []
+            if session and session.sandbox:
+                file_paths = await upload_to_sandbox(
+                    multimodal_contexts, session.sandbox
+                )
+                logger.info(
+                    f"[PTC_CHAT] Uploaded {len(multimodal_contexts)} attachment(s) to sandbox"
+                )
+
+            # 2. Filter by model capability for native content blocks
+            modalities = get_input_modalities(effective_model) if effective_model else ["text"]
+            supported, unsupported, file_only = filter_multimodal_by_capability(
+                multimodal_contexts, modalities
             )
+
+            # 3. Inject supported as native content blocks (merged into user message)
+            if supported:
+                supported_paths = [
+                    file_paths[i]
+                    for i, ctx in enumerate(multimodal_contexts)
+                    if ctx in supported
+                ] if file_paths else None
+                messages = inject_multimodal_context(
+                    messages, supported, file_paths=supported_paths
+                )
+                logger.info(
+                    f"[PTC_CHAT] Multimodal context injected: "
+                    f"{len(supported)} supported attachment(s)"
+                )
+
+            # Helper to build per-file path notes
+            def _file_note(ctx, idx):
+                desc = ctx.description or "file"
+                data = ctx.data
+                mime = data.split(":")[1].split(";")[0] if ":" in data else "unknown"
+                fpath = file_paths[idx] if file_paths and idx < len(file_paths) else None
+                if fpath:
+                    return (
+                        f"The user attached a file ({desc}, {mime}). "
+                        f"It has been saved to {fpath}. "
+                        f"Use Python to process it."
+                    )
+                return f"The user attached a file ({desc}, {mime})."
+
+            # 4. Unsupported image/PDF: "cannot view" warning + file paths
+            if unsupported:
+                notes = [
+                    _file_note(ctx, i)
+                    for i, ctx in enumerate(multimodal_contexts)
+                    if ctx in unsupported
+                ]
+                _append_to_last_user_message(
+                    messages, build_unsupported_reminder(notes)
+                )
+
+            # 5. File-only (xlsx, csv, etc.): path notes only, no "cannot view"
+            if file_only:
+                notes = [
+                    _file_note(ctx, i)
+                    for i, ctx in enumerate(multimodal_contexts)
+                    if ctx in file_only
+                ]
+                _append_to_last_user_message(
+                    messages, build_file_reminder(notes)
+                )
+                logger.info(
+                    f"[PTC_CHAT] {len(file_only)} file-only attachment(s) "
+                    f"uploaded to sandbox for {effective_model}"
+                )
 
         # Build input state or resume command
         if request.hitl_response:

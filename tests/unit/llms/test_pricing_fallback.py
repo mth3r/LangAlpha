@@ -54,7 +54,7 @@ class TestPricingFallback:
         }
         mc = _build_model_config(manifest, flat_providers)
 
-        with patch("src.llms.llm.ModelConfig", return_value=mc):
+        with patch("src.llms.llm.LLM.get_model_config", return_value=mc):
             from src.llms.pricing_utils import find_model_pricing
 
             result = find_model_pricing("z-model-1", provider="z-ai-cn")
@@ -82,7 +82,7 @@ class TestPricingFallback:
         }
         mc = _build_model_config(manifest, flat_providers)
 
-        with patch("src.llms.llm.ModelConfig", return_value=mc):
+        with patch("src.llms.llm.LLM.get_model_config", return_value=mc):
             from src.llms.pricing_utils import find_model_pricing
 
             result = find_model_pricing("qwen-coder-plus", provider="dashscope-coding")
@@ -112,7 +112,7 @@ class TestPricingFallback:
         }
         mc = _build_model_config(manifest, flat_providers)
 
-        with patch("src.llms.llm.ModelConfig", return_value=mc):
+        with patch("src.llms.llm.LLM.get_model_config", return_value=mc):
             from src.llms.pricing_utils import find_model_pricing
 
             result = find_model_pricing("qwen-turbo", provider="dashscope-coding")
@@ -142,7 +142,7 @@ class TestPricingFallback:
         }
         mc = _build_model_config(manifest, flat_providers)
 
-        with patch("src.llms.llm.ModelConfig", return_value=mc):
+        with patch("src.llms.llm.LLM.get_model_config", return_value=mc):
             from src.llms.pricing_utils import find_model_pricing
 
             # Should fall through to global search and find it under openai

@@ -16,6 +16,7 @@ Supported formats:
 """
 
 import base64
+import contextvars
 import io
 import logging
 from collections.abc import Awaitable, Callable
@@ -29,6 +30,8 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
 from PIL import Image
 
+from src.llms.llm import get_input_modalities
+
 logger = logging.getLogger(__name__)
 
 # Supported image extensions
@@ -39,6 +42,74 @@ DOCUMENT_EXTENSIONS = frozenset({".pdf"})
 
 # Combined visual extensions
 VISUAL_EXTENSIONS = IMAGE_EXTENSIONS | DOCUMENT_EXTENSIONS
+
+# Active model for the current async context (set in awrap_model_call, read in awrap_tool_call)
+_active_model: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    'multimodal_model', default=None
+)
+
+
+def _strip_unsupported_content_blocks(
+    messages: list, has_image: bool, has_pdf: bool
+) -> list:
+    """Replace unsupported image/file content blocks with text placeholders.
+
+    Returns the original list if no changes needed (avoids unnecessary copies).
+    Does not mutate the original messages (checkpoint integrity).
+    """
+    modified = False
+    result = []
+
+    for msg in messages:
+        content = msg.content if hasattr(msg, "content") else None
+        if not isinstance(content, list):
+            result.append(msg)
+            continue
+
+        new_blocks = []
+        msg_modified = False
+        for block in content:
+            if not isinstance(block, dict):
+                new_blocks.append(block)
+                continue
+
+            block_type = block.get("type", "")
+
+            # Check image_url blocks
+            if block_type == "image_url" and not has_image:
+                new_blocks.append({
+                    "type": "text",
+                    "text": "[Image attached in prior turn — not visible to current model]"
+                })
+                msg_modified = True
+                continue
+
+            # Check file blocks (PDF)
+            if block_type == "file" and block.get("mime_type", "").startswith("application/pdf") and not has_pdf:
+                new_blocks.append({
+                    "type": "text",
+                    "text": "[PDF attached in prior turn — not visible to current model]"
+                })
+                msg_modified = True
+                continue
+
+            new_blocks.append(block)
+
+        if msg_modified:
+            modified = True
+            # Create a copy of the message with new content
+            if hasattr(msg, "model_copy"):
+                new_msg = msg.model_copy(update={"content": new_blocks})
+            else:
+                new_msg = type(msg)(content=new_blocks, **{
+                    k: v for k, v in (msg.__dict__ if hasattr(msg, "__dict__") else {}).items()
+                    if k != "content"
+                })
+            result.append(new_msg)
+        else:
+            result.append(msg)
+
+    return result if modified else messages
 
 
 def _is_visual_request(file_path: str) -> bool:
@@ -99,15 +170,19 @@ class MultimodalMiddleware(AgentMiddleware):
         self,
         *,
         sandbox: Any | None = None,
+        model_name: str | None = None,
     ) -> None:
         """Initialize the MultimodalMiddleware.
 
         Args:
             sandbox: PTCSandbox instance for reading files from sandbox paths.
                     Required for local file support.
+            model_name: LLM model name for capability checking (from models.json).
+                       Used to determine which input modalities the model supports.
         """
         super().__init__()
         self.sandbox = sandbox
+        self.model_name = model_name
 
     def wrap_tool_call(
         self,
@@ -140,6 +215,32 @@ class MultimodalMiddleware(AgentMiddleware):
         )
         return handler(request)
 
+    async def awrap_model_call(self, request, handler):
+        """Strip unsupported content blocks from historical messages for text-only models.
+
+        When a user switches from a vision model to a text-only model mid-thread,
+        the checkpoint contains image/PDF content blocks that would cause 400 errors.
+        This method replaces those blocks with text placeholders.
+        """
+        model = self.model_name
+        token = _active_model.set(model)
+        try:
+            modalities = get_input_modalities(model) if model else ["text"]
+            has_image = "image" in modalities
+            has_pdf = "pdf" in modalities
+
+            # Fast path: model supports all visual types
+            if has_image and has_pdf:
+                return await handler(request)
+
+            # Strip unsupported content blocks from messages
+            sanitized = _strip_unsupported_content_blocks(request.messages, has_image, has_pdf)
+            if sanitized is not request.messages:
+                return await handler(request.override(messages=sanitized))
+            return await handler(request)
+        finally:
+            _active_model.reset(token)
+
     async def awrap_tool_call(
         self,
         request: Any,
@@ -169,6 +270,48 @@ class MultimodalMiddleware(AgentMiddleware):
         # Pass through non-visual requests
         if not _is_visual_request(file_path):
             return await handler(request)
+
+        # Check model capabilities — skip content injection for unsupported modalities
+        model = _active_model.get() or self.model_name
+        modalities = get_input_modalities(model) if model else ["text"]
+
+        # Determine file extension (from local path or URL path)
+        if file_path.startswith(("http://", "https://")):
+            ext = Path(urlparse(file_path).path).suffix.lower()
+        else:
+            ext = Path(file_path).suffix.lower()
+
+        _unsupported_note = (
+            "\n\n<system-reminder>"
+            "You cannot view this file directly because the current model does not support "
+            "this input type. Be transparent with the user about this limitation and suggest "
+            "they try switching to a model that supports image/PDF input. "
+            "Work in best effort to answer their query."
+            "</system-reminder>"
+        )
+        if ext in IMAGE_EXTENSIONS and "image" not in modalities:
+            # Model can't view images — run the tool normally, append a note
+            result = await handler(request)
+            result_content = result.content if hasattr(result, "content") else str(result)
+            return ToolMessage(
+                content=result_content + _unsupported_note,
+                tool_call_id=tool_call_id,
+            )
+        if ext in DOCUMENT_EXTENSIONS and "pdf" not in modalities:
+            result = await handler(request)
+            result_content = result.content if hasattr(result, "content") else str(result)
+            return ToolMessage(
+                content=result_content + _unsupported_note,
+                tool_call_id=tool_call_id,
+            )
+        # URLs without recognizable extension: block if model is text-only
+        if ext not in VISUAL_EXTENSIONS and "image" not in modalities and "pdf" not in modalities:
+            result = await handler(request)
+            result_content = result.content if hasattr(result, "content") else str(result)
+            return ToolMessage(
+                content=result_content + _unsupported_note,
+                tool_call_id=tool_call_id,
+            )
 
         logger.debug(f"[MULTIMODAL] Intercepting read_file for visual content: {file_path}")
 
