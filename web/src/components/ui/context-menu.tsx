@@ -28,7 +28,7 @@ const ContextMenuContent = React.forwardRef<
 ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName
 
 const itemVariants: Record<string, string> = {
-  default: "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
+  default: "data-[highlighted]:bg-accent/15",
   destructive: "text-destructive data-[highlighted]:bg-destructive/10 data-[highlighted]:text-destructive",
 }
 
