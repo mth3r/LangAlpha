@@ -664,7 +664,7 @@ function Markdown({ content, variant = 'panel', className = '', style, onOpenFil
       className={`${config.className} ${className}`.trim()}
       style={{ ...config.style, ...style }}
     >
-      <ReactMarkdown key={lineKey} remarkPlugins={[remarkGfm, remarkCjkFriendly, remarkMath]} rehypePlugins={[[rehypeKatex, { strict: false }], rehypeRaw, [rehypeSanitize, sanitizeSchema]]} components={components}>
+      <ReactMarkdown key={lineKey} remarkPlugins={[[remarkGfm, { singleTilde: false }], remarkCjkFriendly, remarkMath]} rehypePlugins={[[rehypeKatex, { strict: false }], rehypeRaw, [rehypeSanitize, sanitizeSchema]]} components={components}>
         {processed}
       </ReactMarkdown>
     </div>
