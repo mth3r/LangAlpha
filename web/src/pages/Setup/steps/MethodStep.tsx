@@ -218,7 +218,7 @@ export default function MethodStep() {
       await api.post('/api/auth/invitations/redeem', { code: invitationCode.trim() });
       setLocalRedeemed(true);
       // Bust stale platform tier cache, then refresh the user query
-      getCurrentUser({ refresh_tier: true }).catch(() => {});
+      await getCurrentUser({ refresh_tier: true }).catch(() => {});
       await queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
       navigate('/setup/defaults');
     } catch (e: unknown) {
@@ -237,8 +237,8 @@ export default function MethodStep() {
         // 409 = this user already redeemed the code — they have access.
         // Treat same as successful redemption: grant local access + navigate.
         setLocalRedeemed(true);
-        getCurrentUser({ refresh_tier: true }).catch(() => {});
-        queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
+        await getCurrentUser({ refresh_tier: true }).catch(() => {});
+        await queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
         navigate('/setup/defaults');
         return;
       } else if (typeof detail === 'string') {
