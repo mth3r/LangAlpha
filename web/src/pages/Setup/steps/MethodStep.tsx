@@ -11,7 +11,7 @@ import { useConfiguredProviders, type ConfiguredProvider } from '@/hooks/useConf
 import { useUser } from '@/hooks/useUser';
 import { usePreferences } from '@/hooks/usePreferences';
 import { useUpdatePreferences } from '@/hooks/useUpdatePreferences';
-import { deleteUserApiKey, disconnectCodexOAuth, disconnectClaudeOAuth } from '@/pages/Dashboard/utils/api';
+import { deleteUserApiKey, disconnectCodexOAuth, disconnectClaudeOAuth, getCurrentUser } from '@/pages/Dashboard/utils/api';
 import type { AccessType } from '@/components/model/types';
 
 // ---------------------------------------------------------------------------
@@ -217,6 +217,8 @@ export default function MethodStep() {
     try {
       await api.post('/api/auth/invitations/redeem', { code: invitationCode.trim() });
       setLocalRedeemed(true);
+      // Bust stale platform tier cache, then refresh the user query
+      getCurrentUser({ refresh_tier: true }).catch(() => {});
       await queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
       navigate('/setup/defaults');
     } catch (e: unknown) {
@@ -232,8 +234,13 @@ export default function MethodStep() {
       } else if (status === 410) {
         setInvitationError(t('setup.invitationErrorExpired'));
       } else if (status === 409) {
-        setInvitationError(t('setup.invitationErrorRedeemed'));
+        // 409 = this user already redeemed the code — they have access.
+        // Treat same as successful redemption: grant local access + navigate.
+        setLocalRedeemed(true);
+        getCurrentUser({ refresh_tier: true }).catch(() => {});
         queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
+        navigate('/setup/defaults');
+        return;
       } else if (typeof detail === 'string') {
         setInvitationError(detail);
       } else if (detail && typeof detail === 'object' && 'message' in detail) {
@@ -347,8 +354,8 @@ export default function MethodStep() {
         })}
       </div>
 
-      {/* Invitation code section — hide when already configured or invitation redeemed */}
-      {!canSkip && (
+      {/* Invitation code section — hide only when user already has platform access */}
+      {(userLoading || !hasPlatformAccess) && (
         <>
           {!showInvitation ? (
             <button

@@ -242,8 +242,8 @@ export async function createUser(userData: Record<string, unknown>): Promise<Rec
   return data;
 }
 
-export async function getCurrentUser(): Promise<Record<string, unknown>> {
-  const { data } = await api.get('/api/v1/users/me');
+export async function getCurrentUser(params?: { refresh_tier?: boolean }): Promise<Record<string, unknown>> {
+  const { data } = await api.get('/api/v1/users/me', { params });
   return data;
 }
 

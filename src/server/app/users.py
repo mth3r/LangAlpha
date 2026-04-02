@@ -17,7 +17,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import File, UploadFile
 from pydantic import BaseModel
 from src.utils.storage import get_public_url, upload_bytes
@@ -184,7 +184,10 @@ async def create_user(
 
 @router.get("/users/me", response_model=UserWithPreferencesResponse)
 @handle_api_exceptions("get user", logger)
-async def get_current_user(user_id: CurrentUserId):
+async def get_current_user(
+    user_id: CurrentUserId,
+    refresh_tier: bool = Query(False, description="Bust cached platform tier (use after invitation redemption)"),
+):
     """
     Get current user profile and preferences.
 
@@ -192,6 +195,7 @@ async def get_current_user(user_id: CurrentUserId):
 
     Args:
         user_id: User ID from authentication header
+        refresh_tier: When true, deletes cached platform tier before fetching
 
     Returns:
         User profile and preferences
@@ -208,6 +212,10 @@ async def get_current_user(user_id: CurrentUserId):
 
     # Populate platform access tier (cached, SaaS mode only)
     from src.server.dependencies.usage_limits import _fetch_platform_tier
+    if refresh_tier:
+        from src.utils.cache.redis_cache import get_cache_client
+        cache = get_cache_client()
+        await cache.delete(f"platform_tier:{user_id}")
     user_response.access_tier = await _fetch_platform_tier(user_id)
 
     preferences_response = None

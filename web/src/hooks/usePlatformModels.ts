@@ -76,10 +76,10 @@ export function useModelAccessMap(
   return useMemo(() => {
     if (!platform) return undefined;
     const map: Record<string, ModelAccess> = {};
-    for (const group of Object.values(models)) {
+    for (const [groupKey, group] of Object.entries(models)) {
       for (const m of group.models ?? []) {
         const meta = metadata[m];
-        const provider = meta?.provider ?? '';
+        const provider = meta?.provider ?? groupKey;
         const tier = typeof meta?.tier === 'number' ? meta.tier : 0;
         map[m] = getModelAccess(tier, provider, platform);
       }
