@@ -60,20 +60,47 @@ def get_input_modalities(
 
 The caller is responsible for looking up custom model modalities from the resolved config and passing them in.
 
+### Config threading
+
+Add `input_modalities: list[str] | None = None` to `AgentConfig` (`src/ptc_agent/config/agent.py`). In `resolve_llm_config()` (`src/server/handlers/chat/llm_config.py`, ~line 325), when the effective model is a custom model, extract `cm.get("input_modalities")` from the already-loaded custom model config and set it on the config object. This avoids redundant DB queries in the workflow.
+
 ### Workflow integration
 
-Both `ptc_workflow.py` (line 322) and `flash_workflow.py` (line 243) already have access to the resolved `config` object and `effective_model`. The change:
+Both `ptc_workflow.py` (line 322) and `flash_workflow.py` (line 243) read `config.input_modalities` and pass it to `get_input_modalities()`:
 
-1. Look up the custom model config from preferences (via `get_custom_model_config(user_id, effective_model)`).
-2. If found and `input_modalities` is present, pass it as `custom_modalities` to `get_input_modalities()`.
-3. If not found or field absent, call as before (falls back to `models.json` then `["text"]`).
+```python
+modalities = get_input_modalities(effective_model, custom_modalities=config.input_modalities) if effective_model else ["text"]
+```
 
-Both workflows already call `get_custom_model_config` earlier in the flow (inside `resolve_llm_config`), so the preference data is already cached in the request context.
+When `config.input_modalities` is `None` (system models, or custom models without the field), `get_input_modalities` falls back to the existing `models.json` lookup.
+
+### Middleware integration
+
+`MultimodalMiddleware` (`src/ptc_agent/agent/middleware/file_operations/multimodal.py`) has a second multimodal gate that strips image/PDF content blocks from historical messages during agent tool execution (lines 228, 276). It calls `get_input_modalities(self.model_name)` which would miss custom model modalities.
+
+Fix: add `custom_modalities: list[str] | None = None` parameter to `MultimodalMiddleware.__init__`. Pass it through to both `get_input_modalities()` call sites. Wire it from the agent constructor at `agent.py:410`:
+
+```python
+MultimodalMiddleware(sandbox=sandbox, model_name=self.config.llm.name, custom_modalities=self.config.input_modalities)
+```
+
+### UI data preservation
+
+Multiple UI components rebuild `custom_models` entries from scratch, dropping unknown fields. To prevent `input_modalities` from being silently erased on edit:
+
+- `Settings.tsx:510` — spread original entry before overriding: `{...existingEntry, name: ..., model_id: ..., provider: ...}`
+- `UserConfigPanel.tsx:469` — same spread pattern
+- `ModelPickStep.tsx:214` — same for newly synthesized entries; preserve existing entries via spread
 
 ### Frontend UI
 
-In `ConnectStep.tsx`, after the model name/ID inputs, add a "Capabilities" row with toggle chips:
+In `ConnectStep.tsx`, add modality toggle chips in both flows:
 
+**Manual model entry** (line ~717): After the model name/ID inputs, add a "Capabilities" row with toggle chips.
+
+**Discovered models** (line ~670): Each model in the discovered list gets per-model modality toggles. State is tracked as `Map<string, string[]>` keyed by model ID. When the user selects a model, its modality defaults to `["text"]`. Toggling Image/PDF updates that model's entry.
+
+Toggle chip behavior:
 - **Text** — always on, non-interactive (greyed out / checked)
 - **Image** — toggleable, off by default
 - **PDF** — toggleable, off by default
@@ -91,11 +118,20 @@ The `GET /api/v1/models` response's `model_metadata` map does not currently incl
 | File | Change |
 |---|---|
 | `web/src/components/model/types.ts` | Add `input_modalities?: string[]` to `CustomModelEntry` and `CustomModelFormState` |
-| `web/src/pages/Setup/steps/ConnectStep.tsx` | Add capability toggle chips to custom model form |
+| `web/src/pages/Setup/steps/ConnectStep.tsx` | Add per-model capability toggle chips to both manual and discovered model flows |
+| `web/src/pages/Settings/Settings.tsx` | Preserve `input_modalities` on custom model edit (spread original entry) |
+| `web/src/pages/Dashboard/components/UserConfigPanel.tsx` | Same spread preservation |
+| `web/src/pages/Setup/steps/ModelPickStep.tsx` | Same spread preservation for starred models |
 | `src/server/app/users.py` | Validate `input_modalities` in custom models validation block |
 | `src/llms/llm.py` | Add `custom_modalities` parameter to `get_input_modalities()` |
-| `src/server/handlers/chat/ptc_workflow.py` | Look up custom modalities, pass to `get_input_modalities()` |
+| `src/ptc_agent/config/agent.py` | Add `input_modalities: list[str] \| None = None` to `AgentConfig` |
+| `src/server/handlers/chat/llm_config.py` | Thread custom model modalities onto resolved config |
+| `src/server/handlers/chat/ptc_workflow.py` | Pass `config.input_modalities` to `get_input_modalities()` |
 | `src/server/handlers/chat/flash_workflow.py` | Same as ptc_workflow |
+| `src/ptc_agent/agent/middleware/file_operations/multimodal.py` | Accept and use `custom_modalities` in both gates |
+| `src/ptc_agent/agent/agent.py` | Wire `config.input_modalities` to `MultimodalMiddleware` constructor |
+| `tests/unit/llms/test_input_modalities.py` | Test custom_modalities override |
+| `tests/unit/server/app/test_preferences_validation.py` | Test input_modalities validation |
 
 ## Out of scope
 
