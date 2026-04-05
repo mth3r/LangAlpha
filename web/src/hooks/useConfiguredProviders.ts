@@ -6,8 +6,8 @@ import { getCodexOAuthStatus, getClaudeOAuthStatus } from '@/pages/Dashboard/uti
 
 export interface ConfiguredProvider {
   provider: string;
-  displayName: string;
-  type: 'api_key' | 'oauth';
+  display_name: string;
+  access_type: 'api_key' | 'oauth' | 'coding_plan';
 }
 
 /**
@@ -41,13 +41,14 @@ export function useConfiguredProviders() {
         for (const p of keys.providers as Array<{
           provider: string;
           display_name?: string;
+          access_type?: string;
           has_key?: boolean;
         }>) {
           if (p.has_key) {
             result.push({
               provider: p.provider,
-              displayName: p.display_name ?? p.provider,
-              type: 'api_key',
+              display_name: p.display_name ?? p.provider,
+              access_type: (p.access_type as ConfiguredProvider['access_type']) ?? 'api_key',
             });
           }
         }
@@ -58,15 +59,15 @@ export function useConfiguredProviders() {
     if (codexStatus?.connected) {
       result.push({
         provider: 'codex-oauth',
-        displayName: 'ChatGPT Codex',
-        type: 'oauth',
+        display_name: 'ChatGPT Codex',
+        access_type: 'oauth',
       });
     }
     if (claudeStatus?.connected) {
       result.push({
         provider: 'claude-oauth',
-        displayName: 'Claude (OAuth)',
-        type: 'oauth',
+        display_name: 'Claude (OAuth)',
+        access_type: 'oauth',
       });
     }
 

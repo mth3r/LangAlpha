@@ -7,6 +7,7 @@ import { useModels } from '@/hooks/useModels';
 import { usePreferences } from '@/hooks/usePreferences';
 import { useConfiguredProviders } from '@/hooks/useConfiguredProviders';
 import type { AccessType, ProviderCatalogEntry } from '@/components/model/types';
+import { isPlatformMode } from '@/config/hostMode';
 import { useTranslation } from 'react-i18next';
 
 const CUSTOM_PROVIDER_KEY = '__custom__';
@@ -35,7 +36,7 @@ export default function ProviderStep() {
     return (raw.provider_catalog as ProviderCatalogEntry[] | undefined) ?? [];
   }, [modelsData]);
 
-  const isLocalDev = !import.meta.env.VITE_SUPABASE_URL;
+  const isOSSMode = !isPlatformMode;
 
   // Filter catalog by selected method, split cloud vs local
   const filteredProviders = useMemo(
@@ -44,8 +45,8 @@ export default function ProviderStep() {
   );
 
   const localProviders = useMemo(
-    () => isLocalDev ? catalog.filter((p) => p.access_type === method && p.local_only) : [],
-    [catalog, method, isLocalDev],
+    () => isOSSMode ? catalog.filter((p) => p.access_type === method && p.local_only) : [],
+    [catalog, method, isOSSMode],
   );
 
   // User's existing custom providers (from preferences)

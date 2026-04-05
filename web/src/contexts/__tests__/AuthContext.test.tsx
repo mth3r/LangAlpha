@@ -3,8 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// Enable Supabase auth code path (AuthProvider checks VITE_SUPABASE_URL)
+// Enable platform auth code path (AuthProvider checks VITE_HOST_MODE)
 // Must be set before the dynamic import below.
+vi.stubEnv('VITE_HOST_MODE', 'platform');
 vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co');
 
 // Mock supabase with a functional mock auth object

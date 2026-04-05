@@ -711,8 +711,8 @@ class InsightService:
 
         # When auth is off (local dev / self-hosted), use the local dev user's
         # credentials so insights work without a system API key.
-        from src.config.settings import AUTH_ENABLED, LOCAL_DEV_USER_ID
-        system_user_id = None if AUTH_ENABLED else LOCAL_DEV_USER_ID
+        from src.config.settings import HOST_MODE, LOCAL_DEV_USER_ID
+        system_user_id = None if HOST_MODE == "platform" else LOCAL_DEV_USER_ID
 
         row = await insight_db.create_market_insight(
             model="flash",

@@ -63,6 +63,29 @@ export function useAllModels() {
     return out;
   }, [modelsData, customModels]);
 
+  /** Provider catalog for resolving SDK of custom models */
+  const providerCatalog = useMemo<Record<string, { sdk?: string; parent_provider?: string }>>(() => {
+    if (!modelsData) return {};
+    const raw = modelsData as Record<string, unknown>;
+    const catalog = (raw.provider_catalog ?? []) as Array<{ provider: string; sdk?: string }>;
+    const map: Record<string, { sdk?: string }> = {};
+    for (const entry of catalog) {
+      map[entry.provider] = entry;
+    }
+    // Also index custom providers from preferences
+    if (preferences) {
+      const prefs = preferences as Record<string, unknown>;
+      const other = (prefs.other_preference ?? {}) as Record<string, unknown>;
+      const customProviders = (other.custom_providers ?? []) as Array<{ name: string; parent_provider?: string }>;
+      for (const cp of customProviders) {
+        if (!map[cp.name] && cp.parent_provider && map[cp.parent_provider]) {
+          map[cp.name] = { sdk: map[cp.parent_provider].sdk };
+        }
+      }
+    }
+    return map;
+  }, [modelsData, preferences]);
+
   /** Model metadata with custom models added */
   const mergedMetadata = useMemo<Record<string, Record<string, unknown>>>(() => {
     if (!modelsData) return {};
@@ -71,12 +94,13 @@ export function useAllModels() {
 
     for (const cm of customModels) {
       if (!metadata[cm.name]) {
-        metadata[cm.name] = { provider: cm.provider, sdk: 'custom' };
+        const sdk = providerCatalog[cm.provider]?.sdk;
+        metadata[cm.name] = { provider: cm.provider, is_custom_model: true, ...(sdk ? { sdk } : {}) };
       }
     }
 
     return metadata;
-  }, [modelsData, customModels]);
+  }, [modelsData, customModels, providerCatalog]);
 
   // Augment platform with locally-known BYOK/OAuth providers so the
   // tier filter recognises connections that the platform service may not know about.

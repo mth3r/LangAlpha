@@ -7,9 +7,11 @@ No YAML dependency — pure os.getenv.
 
 import os
 
-# Auth / Login Service (Supabase)
+# Deployment mode: "oss" (self-hosted, no auth) or "platform" (Supabase auth + quota service)
+HOST_MODE: str = os.getenv("HOST_MODE", "oss")
+
+# Auth / Login Service (Supabase) — credential, not a mode flag
 SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-AUTH_ENABLED: bool = bool(SUPABASE_URL)
 LOCAL_DEV_USER_ID: str = os.getenv("AUTH_USER_ID", "local-dev-user")
 
 # Quota enforcement service (ginlix-auth)

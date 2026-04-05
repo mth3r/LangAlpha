@@ -105,17 +105,17 @@ function ConfiguredBanner({
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
-                  {p.displayName}
+                  {p.display_name}
                 </span>
                 <span
                   className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
                   style={{
-                    background: p.type === 'oauth' ? 'var(--color-accent-soft)' : 'var(--color-bg-page)',
-                    color: p.type === 'oauth' ? 'var(--color-accent-primary)' : 'var(--color-text-tertiary)',
-                    border: p.type === 'oauth' ? 'none' : '1px solid var(--color-border-default)',
+                    background: p.access_type === 'oauth' ? 'var(--color-accent-soft)' : 'var(--color-bg-page)',
+                    color: p.access_type === 'oauth' ? 'var(--color-accent-primary)' : 'var(--color-text-tertiary)',
+                    border: p.access_type === 'oauth' ? 'none' : '1px solid var(--color-border-default)',
                   }}
                 >
-                  {p.type === 'oauth' ? t('setup.oauthBadge') : t('setup.apiKeyBadge')}
+                  {p.access_type === 'oauth' ? t('setup.oauthBadge') : t('setup.apiKeyBadge')}
                 </span>
               </div>
               <button
@@ -124,7 +124,7 @@ function ConfiguredBanner({
                 className="text-xs shrink-0 px-2 py-1 rounded transition-colors hover:opacity-80"
                 style={{ color: 'var(--color-loss)' }}
               >
-                {p.type === 'oauth' ? t('setup.disconnectProvider') : t('setup.removeProvider')}
+                {p.access_type === 'oauth' ? t('setup.disconnectProvider') : t('setup.removeProvider')}
               </button>
             </div>
           ))}

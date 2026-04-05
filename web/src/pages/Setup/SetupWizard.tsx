@@ -8,8 +8,7 @@ import { useConfiguredProviders } from '@/hooks/useConfiguredProviders';
 import { useUser } from '@/hooks/useUser';
 import { skipSetup } from '@/hooks/useSetupGate';
 
-// Self-hosted / local dev: always allow exiting the wizard since keys are in .env
-const AUTH_ENABLED = !!import.meta.env.VITE_SUPABASE_URL;
+import { isPlatformMode } from '@/config/hostMode';
 import logoLight from '@/assets/img/logo.svg';
 import logoDark from '@/assets/img/logo-dark.svg';
 import React from 'react';
@@ -143,7 +142,7 @@ export default function SetupWizard() {
   const { hasAny: hasProvider } = useConfiguredProviders();
   const { user } = useUser();
   const hasPlatformAccess = (user?.access_tier ?? -1) >= 0;
-  const canExit = hasProvider || hasPlatformAccess || !AUTH_ENABLED;
+  const canExit = hasProvider || hasPlatformAccess || !isPlatformMode;
   const stepperLabels = STEPPER_KEYS.map((k) => t(`setup.${k}`));
 
   const current = routeIndex(location.pathname);

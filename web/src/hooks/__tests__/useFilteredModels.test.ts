@@ -37,11 +37,11 @@ describe('filterModelsByAccess', () => {
       openai: ['gpt-4o', 'gpt-4o-mini'],
     });
     const metadata: Record<string, ModelMetadataEntry> = {
-      'gpt-4o': { provider: 'openai', access_type: 'api_key' },
-      'gpt-4o-mini': { provider: 'openai', access_type: 'api_key' },
+      'gpt-4o': { provider: 'openai', access_access_type: 'api_key' },
+      'gpt-4o-mini': { provider: 'openai', access_access_type: 'api_key' },
     };
     const { configuredSet, configuredTypeMap } = makeConfigured([
-      { provider: 'openai', displayName: 'OpenAI', type: 'api_key' },
+      { provider: 'openai', display_name: 'OpenAI', access_type: 'api_key' },
     ]);
 
     const result = filterModelsByAccess(providerMap, metadata, configuredSet, configuredTypeMap);
@@ -55,10 +55,10 @@ describe('filterModelsByAccess', () => {
       openrouter: ['deepinfra-model-1'],
     });
     const metadata: Record<string, ModelMetadataEntry> = {
-      'deepinfra-model-1': { provider: 'deepinfra', access_type: 'api_key' },
+      'deepinfra-model-1': { provider: 'deepinfra', access_access_type: 'api_key' },
     };
     const { configuredSet, configuredTypeMap } = makeConfigured([
-      { provider: 'openrouter', displayName: 'OpenRouter', type: 'api_key' },
+      { provider: 'openrouter', display_name: 'OpenRouter', access_type: 'api_key' },
     ]);
 
     const result = filterModelsByAccess(providerMap, metadata, configuredSet, configuredTypeMap);
@@ -72,11 +72,11 @@ describe('filterModelsByAccess', () => {
       openai: ['gpt-4o', 'gpt-5.4-oauth'],
     });
     const metadata: Record<string, ModelMetadataEntry> = {
-      'gpt-4o': { provider: 'openai', access_type: 'api_key' },
+      'gpt-4o': { provider: 'openai', access_access_type: 'api_key' },
       'gpt-5.4-oauth': { provider: 'codex-oauth', access_type: 'oauth' },
     };
     const { configuredSet, configuredTypeMap } = makeConfigured([
-      { provider: 'openai', displayName: 'OpenAI', type: 'api_key' },
+      { provider: 'openai', display_name: 'OpenAI', access_type: 'api_key' },
     ]);
 
     const result = filterModelsByAccess(providerMap, metadata, configuredSet, configuredTypeMap);
@@ -91,8 +91,8 @@ describe('filterModelsByAccess', () => {
       anthropic: ['claude-sonnet'],
     });
     const metadata: Record<string, ModelMetadataEntry> = {
-      'gpt-4o': { provider: 'openai', access_type: 'api_key' },
-      'claude-sonnet': { provider: 'anthropic', access_type: 'api_key' },
+      'gpt-4o': { provider: 'openai', access_access_type: 'api_key' },
+      'claude-sonnet': { provider: 'anthropic', access_access_type: 'api_key' },
     };
     const configuredSet = new Set<string>();
     const configuredTypeMap = new Map<string, string>();
@@ -109,11 +109,11 @@ describe('filterModelsByAccess', () => {
       openai: ['gpt-4o', 'unknown-model'],
     });
     const metadata: Record<string, ModelMetadataEntry> = {
-      'gpt-4o': { provider: 'openai', access_type: 'api_key' },
+      'gpt-4o': { provider: 'openai', access_access_type: 'api_key' },
       // 'unknown-model' has no metadata
     };
     const { configuredSet, configuredTypeMap } = makeConfigured([
-      { provider: 'openai', displayName: 'OpenAI', type: 'api_key' },
+      { provider: 'openai', display_name: 'OpenAI', access_type: 'api_key' },
     ]);
 
     const result = filterModelsByAccess(providerMap, metadata, configuredSet, configuredTypeMap);
@@ -127,11 +127,11 @@ describe('filterModelsByAccess', () => {
       dashscope: ['qwen3-turbo', 'qwen3.5-plus-coding'],
     });
     const metadata: Record<string, ModelMetadataEntry> = {
-      'qwen3-turbo': { provider: 'dashscope', access_type: 'api_key' },
+      'qwen3-turbo': { provider: 'dashscope', access_access_type: 'api_key' },
       'qwen3.5-plus-coding': { provider: 'dashscope-coding', access_type: 'coding_plan' },
     };
     const { configuredSet, configuredTypeMap } = makeConfigured([
-      { provider: 'dashscope', displayName: 'DashScope', type: 'api_key' },
+      { provider: 'dashscope', display_name: 'DashScope', access_type: 'api_key' },
     ]);
 
     const result = filterModelsByAccess(providerMap, metadata, configuredSet, configuredTypeMap);
@@ -145,11 +145,11 @@ describe('filterModelsByAccess', () => {
       'z-ai': ['glm-5', 'glm-5-turbo-cn'],
     });
     const metadata: Record<string, ModelMetadataEntry> = {
-      'glm-5': { provider: 'z-ai', access_type: 'api_key' },
-      'glm-5-turbo-cn': { provider: 'z-ai-cn', access_type: 'api_key', requires_own_key: 'true' },
+      'glm-5': { provider: 'z-ai', access_access_type: 'api_key' },
+      'glm-5-turbo-cn': { provider: 'z-ai-cn', access_access_type: 'api_key', requires_own_key: 'true' },
     };
     const { configuredSet, configuredTypeMap } = makeConfigured([
-      { provider: 'z-ai', displayName: 'Zhipu AI', type: 'api_key' },
+      { provider: 'z-ai', display_name: 'Zhipu AI', access_type: 'api_key' },
     ]);
 
     const result = filterModelsByAccess(providerMap, metadata, configuredSet, configuredTypeMap);
@@ -166,7 +166,7 @@ describe('filterModelsByAccess', () => {
       'gpt-4o': { provider: 'openai' }, // no access_type field
     };
     const { configuredSet, configuredTypeMap } = makeConfigured([
-      { provider: 'openai', displayName: 'OpenAI', type: 'api_key' },
+      { provider: 'openai', display_name: 'OpenAI', access_type: 'api_key' },
     ]);
 
     const result = filterModelsByAccess(providerMap, metadata, configuredSet, configuredTypeMap);

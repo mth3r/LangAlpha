@@ -19,7 +19,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 
-from src.config.env import AUTH_ENABLED, HOST_IP
+from src.config.env import HOST_MODE, HOST_IP
 from src.server.utils.api import CurrentUserId
 from src.server.database.api_keys import (
     get_user_api_keys,
@@ -97,7 +97,7 @@ def _format_response(
         # base_url is stored, even without an API key.
         has_base_url = bool(base_urls.get(p))
         env_key = pinfo.get("env_key")
-        has_env = not AUTH_ENABLED and bool(env_key and os.getenv(env_key))
+        has_env = HOST_MODE == "oss" and bool(env_key and os.getenv(env_key))
         providers.append({
             "provider": p,
             "display_name": pinfo.get("display_name", p.title()),
@@ -164,14 +164,14 @@ class UpdateApiKeysRequest(BaseModel):
     def validate_api_keys(cls, v):
         if v is None:
             return v
-        from src.config.settings import AUTH_ENABLED
+        from src.config.settings import HOST_MODE
         for provider, key in v.items():
             if key is not None:
                 if len(key) > 256:
                     raise ValueError(f"API key for {provider} must be under 256 chars")
                 if key and not key.isascii():
                     raise ValueError(f"API key for {provider} must be ASCII")
-                if AUTH_ENABLED and key and len(key) < 8:
+                if HOST_MODE == "platform" and key and len(key) < 8:
                     raise ValueError(f"API key for {provider} must be at least 8 chars")
         return v
 
@@ -505,8 +505,8 @@ async def test_api_key(body: TestApiKeyRequest, user_id: CurrentUserId):
     base_url = body.base_url or provider_info.get("base_url") if provider_info else body.base_url
 
     # SSRF protection: block private/internal IPs when running hosted (auth enabled)
-    from src.config.settings import AUTH_ENABLED
-    if AUTH_ENABLED and base_url:
+    from src.config.settings import HOST_MODE
+    if HOST_MODE == "platform" and base_url:
         from urllib.parse import urlparse
         import ipaddress
         import socket

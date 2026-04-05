@@ -15,6 +15,8 @@ export interface ModelMetadataEntry {
   requires_own_key?: string;
   /** Numeric tier for platform-served access. Absent = 0. */
   tier?: number;
+  /** True for user-added custom models — bypasses all access filters. */
+  is_custom_model?: boolean;
 }
 
 /**
@@ -49,7 +51,7 @@ export function filterModelsByAccess(
       if (!modelProvider) return false;
 
       // 0. Custom models are self-authorizing — user explicitly added them.
-      if (meta?.sdk === 'custom') return true;
+      if (meta?.is_custom_model) return true;
 
       // 1. Direct match on model's own provider
       if (configuredSet.has(modelProvider)) return true;
@@ -78,12 +80,12 @@ export function filterModelsByAccess(
 }
 
 /**
- * Build a type map from configured providers: provider key -> type.
+ * Build a type map from configured providers: provider key -> access_type.
  */
 export function buildConfiguredTypeMap(
   providers: ConfiguredProvider[],
 ): Map<string, string> {
-  return new Map(providers.map((p) => [p.provider, p.type]));
+  return new Map(providers.map((p) => [p.provider, p.access_type]));
 }
 
 /**
@@ -101,7 +103,7 @@ export function augmentPlatformWithLocal(
   const localByok: string[] = [];
   const localOAuth: string[] = [];
   for (const p of configuredProviders) {
-    if (p.type === 'oauth') localOAuth.push(p.provider);
+    if (p.access_type === 'oauth') localOAuth.push(p.provider);
     else localByok.push(p.provider);
   }
   return {

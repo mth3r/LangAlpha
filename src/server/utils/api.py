@@ -14,7 +14,7 @@ from typing import Annotated, Callable, Optional, TypeVar
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from src.config.settings import AUTH_ENABLED, LOCAL_DEV_USER_ID
+from src.config.settings import HOST_MODE, LOCAL_DEV_USER_ID
 from src.server.auth.jwt_bearer import _decode_token
 
 # Type variable for generic return type preservation
@@ -47,7 +47,7 @@ async def get_current_user_id(
                 raise HTTPException(status_code=401, detail="Missing X-User-Id")
             return user_id
 
-    if not AUTH_ENABLED:
+    if HOST_MODE == "oss":
         return LOCAL_DEV_USER_ID
 
     if credentials is None:

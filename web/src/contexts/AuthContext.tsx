@@ -18,7 +18,8 @@ export interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const _SUPABASE_AUTH_ENABLED = !!import.meta.env.VITE_SUPABASE_URL;
+import { isPlatformMode } from '@/config/hostMode';
+
 const _LOCAL_DEV_USER_ID = (import.meta.env.VITE_AUTH_USER_ID as string) || 'local-dev-user';
 
 const baseURL = (import.meta.env.VITE_API_BASE_URL as string) ?? '';
@@ -38,8 +39,8 @@ const _localDevValue: AuthContextValue = {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Skip all Supabase logic when auth is disabled.
-  if (!_SUPABASE_AUTH_ENABLED) {
+  // Skip all Supabase logic in OSS mode.
+  if (!isPlatformMode) {
     return <AuthContext.Provider value={_localDevValue}>{children}</AuthContext.Provider>;
   }
 
@@ -52,7 +53,7 @@ let _syncPromise: Promise<void> | null = null;
 /** Inner provider that uses hooks — only rendered when Supabase auth is enabled. */
 function SupabaseAuthProvider({ children }: { children: React.ReactNode }) {
   // supabase is guaranteed non-null here because SupabaseAuthProvider is only
-  // rendered when _SUPABASE_AUTH_ENABLED is true.
+  // rendered when isPlatformMode is true.
   const sb = supabase!;
   const [session, setSession] = useState<Session | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);

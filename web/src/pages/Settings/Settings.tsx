@@ -791,14 +791,14 @@ function Settings() {
     const result: ConfiguredProvider[] = [];
     for (const p of byokProviders) {
       if (p.has_key) {
-        result.push({ provider: p.provider, displayName: p.display_name || p.provider, type: 'api_key' });
+        result.push({ provider: p.provider, display_name: p.display_name || p.provider, access_type: (p.access_type as ConfiguredProvider['access_type']) ?? 'api_key' });
       }
     }
     if (codexOAuthStatus.connected) {
-      result.push({ provider: 'codex-oauth', displayName: 'ChatGPT Codex', type: 'oauth' });
+      result.push({ provider: 'codex-oauth', display_name: 'ChatGPT Codex', access_type: 'oauth' });
     }
     if (claudeOAuthStatus.connected) {
-      result.push({ provider: 'claude-oauth', displayName: 'Claude (OAuth)', type: 'oauth' });
+      result.push({ provider: 'claude-oauth', display_name: 'Claude (OAuth)', access_type: 'oauth' });
     }
     return result;
   }, [byokProviders, codexOAuthStatus, claudeOAuthStatus]);
@@ -833,7 +833,7 @@ function Settings() {
         out[key].models!.push(cm.name);
       }
       if (!augmentedMetadata[cm.name]) {
-        augmentedMetadata[cm.name] = { provider: cm.provider, sdk: 'custom' };
+        augmentedMetadata[cm.name] = { provider: cm.provider, is_custom_model: true };
       }
     }
     if (platform) {
