@@ -48,6 +48,9 @@ export function filterModelsByAccess(
       const modelProvider = meta?.provider;
       if (!modelProvider) return false;
 
+      // 0. Custom models are self-authorizing — user explicitly added them.
+      if (meta?.sdk === 'custom') return true;
+
       // 1. Direct match on model's own provider
       if (configuredSet.has(modelProvider)) return true;
 

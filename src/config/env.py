@@ -33,3 +33,8 @@ USD_TO_CREDITS_RATE: int = int(os.getenv("USD_TO_CREDITS_RATE", "1000"))
 # Automation webhook delivery (ginlix-integration)
 AUTOMATION_WEBHOOK_URL: str = os.getenv("AUTOMATION_WEBHOOK_URL", "")
 AUTOMATION_WEBHOOK_SECRET: str = os.getenv("AUTOMATION_WEBHOOK_SECRET", "")
+
+# Host IP for local LLM providers (Ollama, LM Studio, vLLM).
+# In Docker, "localhost" means the container — use host.docker.internal to reach the host.
+_IN_DOCKER: bool = os.path.exists("/.dockerenv")
+HOST_IP: str = os.getenv("HOST_IP", "host.docker.internal" if _IN_DOCKER else "localhost")
