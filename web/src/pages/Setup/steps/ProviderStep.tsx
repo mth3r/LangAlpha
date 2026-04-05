@@ -91,7 +91,8 @@ export default function ProviderStep() {
       return;
     }
 
-    const provider = filteredProviders.find((p) => p.provider === selected);
+    const provider = filteredProviders.find((p) => p.provider === selected)
+      ?? localProviders.find((p) => p.provider === selected);
     const providerState = {
       method,
       provider: selected,
@@ -112,7 +113,7 @@ export default function ProviderStep() {
     }
 
     navigate('/setup/connect', { state: providerState });
-  }, [selected, method, filteredProviders, customProviderSet, configuredSet, navigate]);
+  }, [selected, method, filteredProviders, localProviders, customProviderSet, configuredSet, navigate]);
 
   if (isLoading) {
     return (

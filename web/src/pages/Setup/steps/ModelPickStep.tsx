@@ -199,17 +199,23 @@ export default function ModelPickStep() {
       // Collect any new custom models (not in built-in set)
       const prefs = (preferences as Record<string, unknown>) ?? {};
       const otherPref = ((prefs.other_preference ?? {}) as Record<string, unknown>);
-      const existingCustomModelList = ((otherPref.custom_models ?? []) as Array<{ model_id: string; provider: string }>);
+      const existingCustomModelList = ((otherPref.custom_models ?? []) as Array<{ name?: string; model_id: string; provider: string }>);
 
-      // Keep custom models for other providers, add new ones for this provider
+      // Keep custom models for other providers
       const otherProviderCustomModels = existingCustomModelList.filter(
         (cm) => cm.provider !== provider && cm.provider !== brandKey,
       );
-      const thisProviderCustomModels = [...starred]
-        .filter((m) => !builtInSet.has(m))
-        .map((m) => ({ model_id: m, provider: provider || brandKey }));
+      // Preserve existing custom models for this provider that are still starred
+      const existingThisProvider = existingCustomModelList.filter(
+        (cm) => (cm.provider === provider || cm.provider === brandKey) && starred.has(cm.name || cm.model_id),
+      );
+      const existingIds = new Set(existingThisProvider.map((cm) => cm.name || cm.model_id));
+      // Add newly starred non-builtin models as custom entries
+      const newCustomModels = [...starred]
+        .filter((m) => !builtInSet.has(m) && !existingIds.has(m))
+        .map((m) => ({ name: m, model_id: m, provider: provider || brandKey }));
 
-      const allCustomModels = [...otherProviderCustomModels, ...thisProviderCustomModels];
+      const allCustomModels = [...otherProviderCustomModels, ...existingThisProvider, ...newCustomModels];
 
       await updatePreferences.mutateAsync({
         other_preference: {

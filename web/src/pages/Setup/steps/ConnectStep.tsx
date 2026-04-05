@@ -254,6 +254,64 @@ export default function ConnectStep() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Input modality state — per-model for discovered, single for manual entry
+  const [modelModalities, setModelModalities] = useState<Map<string, Set<string>>>(new Map());
+  const [manualModalities, setManualModalities] = useState<Set<string>>(new Set());
+
+  const toggleDiscoveredModality = (modelId: string, modality: string) => {
+    setModelModalities(prev => {
+      const next = new Map(prev);
+      const current = next.get(modelId) ?? new Set<string>();
+      const updated = new Set(current);
+      if (updated.has(modality)) updated.delete(modality);
+      else updated.add(modality);
+      next.set(modelId, updated);
+      return next;
+    });
+  };
+
+  const toggleManualModality = (modality: string) => {
+    setManualModalities(prev => {
+      const next = new Set(prev);
+      if (next.has(modality)) next.delete(modality);
+      else next.add(modality);
+      return next;
+    });
+  };
+
+  const buildModalitiesArray = useCallback((modSet: Set<string>): string[] | undefined => {
+    if (modSet.size === 0) return undefined;
+    const arr = ['text', ...Array.from(modSet).filter(m => m !== 'text')];
+    return arr;
+  }, []);
+
+  // Dynamic model discovery state (for local providers)
+  const [discoveredModels, setDiscoveredModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedModelIds, setSelectedModelIds] = useState<Set<string>>(new Set());
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  // Fetch models from provider when entering isExistingCustom (dynamic providers)
+  useEffect(() => {
+    if (!isExistingCustom || !dynamicModels || !provider) return;
+    let cancelled = false;
+    setLoadingModels(true);
+    setModelsError(null);
+    api.get(`/api/v1/providers/${provider}/models`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const models = (data.models ?? []) as Array<{ id: string; name: string }>;
+        setDiscoveredModels(models);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const detail = err?.response?.data?.detail;
+        setModelsError(typeof detail === 'string' ? detail : 'Could not fetch models from provider');
+      })
+      .finally(() => { if (!cancelled) setLoadingModels(false); });
+    return () => { cancelled = true; };
+  }, [isExistingCustom, dynamicModels, provider]);
+
   // OAuth shared state
   const [oauthPhase, setOauthPhase] = useState<'disclaimer' | 'connecting' | 'active'>('disclaimer');
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -410,7 +468,7 @@ export default function ConnectStep() {
       ]);
 
       if (dynamicModels) {
-        // Dynamic providers (LM Studio, vLLM, Ollama) — go to custom model add
+        // Dynamic providers (LM Studio, vLLM, Ollama) — go to model discovery
         navigate('/setup/connect', {
           state: {
             method,
@@ -418,6 +476,7 @@ export default function ConnectStep() {
             displayName,
             brandKey,
             isExistingCustom: true,
+            dynamicModels: true,
           },
         });
       } else {
@@ -469,11 +528,13 @@ export default function ConnectStep() {
       };
       if (useRespApi) newProvider.use_response_api = true;
 
-      const newModel = {
+      const newModel: Record<string, unknown> = {
         name: customModelName.trim(),
         model_id: customModelId.trim() || customModelName.trim(),
         provider: slug,
       };
+      const mods = buildModalitiesArray(manualModalities);
+      if (mods) newModel.input_modalities = mods;
 
       // Only send custom_providers and custom_models — backend merges into existing JSONB
       await updatePreferences.mutateAsync({
@@ -511,7 +572,7 @@ export default function ConnectStep() {
     } finally {
       setSaving(false);
     }
-  }, [customName, customFormat, customBaseUrl, customApiKey, customModelName, customModelId, preferences, updatePreferences, updateApiKeys, queryClient, navigate, method, t]);
+  }, [customName, customFormat, customBaseUrl, customApiKey, customModelName, customModelId, preferences, updatePreferences, updateApiKeys, queryClient, navigate, method, t, manualModalities, buildModalitiesArray]);
 
   // ---------------------------------------------------------------------------
   // ---------------------------------------------------------------------------
@@ -519,7 +580,10 @@ export default function ConnectStep() {
   // ---------------------------------------------------------------------------
 
   const handleAddModelToExisting = useCallback(async () => {
-    if (!customModelName.trim()) {
+    // Support both: selected from discovered list, or manual entry
+    const hasSelected = selectedModelIds.size > 0;
+    const hasManual = customModelName.trim();
+    if (!hasSelected && !hasManual) {
       setError(t('setup.errorNoModelName'));
       return;
     }
@@ -532,15 +596,33 @@ export default function ConnectStep() {
       const otherPref = (prefs.other_preference ?? {}) as Record<string, unknown>;
       const existingModels = (Array.isArray(otherPref.custom_models) ? otherPref.custom_models : []) as Array<Record<string, unknown>>;
 
-      const newModel = {
-        name: customModelName.trim(),
-        model_id: customModelId.trim() || customModelName.trim(),
-        provider,
-      };
+      const newModels: Array<Record<string, unknown>> = [];
+
+      if (hasSelected) {
+        for (const id of selectedModelIds) {
+          const entry: Record<string, unknown> = { name: id, model_id: id, provider };
+          const mods = buildModalitiesArray(modelModalities.get(id) ?? new Set());
+          if (mods) entry.input_modalities = mods;
+          newModels.push(entry);
+        }
+      } else {
+        const entry: Record<string, unknown> = {
+          name: customModelName.trim(),
+          model_id: customModelId.trim() || customModelName.trim(),
+          provider,
+        };
+        const mods = buildModalitiesArray(manualModalities);
+        if (mods) entry.input_modalities = mods;
+        newModels.push(entry);
+      }
+
+      // Deduplicate: replace existing entries with same name, append truly new ones
+      const newNames = new Set(newModels.map((m) => m.name as string));
+      const deduped = existingModels.filter((m) => !newNames.has(m.name as string));
 
       await updatePreferences.mutateAsync({
         other_preference: {
-          custom_models: [...existingModels, newModel],
+          custom_models: [...deduped, ...newModels],
         },
       });
 
@@ -556,13 +638,23 @@ export default function ConnectStep() {
     } finally {
       setSaving(false);
     }
-  }, [customModelName, customModelId, provider, preferences, updatePreferences, queryClient, navigate, method, displayName, brandKey, t]);
+  }, [selectedModelIds, customModelName, customModelId, provider, preferences, updatePreferences, queryClient, navigate, method, displayName, brandKey, t, modelModalities, manualModalities, buildModalitiesArray]);
 
   // ---------------------------------------------------------------------------
   // Render — Add model to existing custom provider
   // ---------------------------------------------------------------------------
 
   if (isExistingCustom) {
+    const toggleModel = (id: string) => {
+      setSelectedModelIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+      });
+    };
+
+    const hasSelection = selectedModelIds.size > 0 || customModelName.trim();
+
     return (
       <div className="flex flex-col gap-4 sm:gap-6">
         <div className="flex flex-col gap-1">
@@ -576,40 +668,181 @@ export default function ConnectStep() {
             className="text-sm"
             style={{ color: 'var(--color-text-secondary)' }}
           >
-            {t('setup.addModelToDesc')}
+            {dynamicModels
+              ? t('setup.selectModelsDesc', { defaultValue: 'Select models available on your server.' })
+              : t('setup.addModelToDesc')}
           </p>
         </div>
 
-        <div
-          className="rounded-lg p-4 flex flex-col gap-3"
-          style={{
-            background: 'var(--color-bg-surface)',
-            border: '1px solid var(--color-border-default)',
-          }}
-        >
-          <label className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-            {t('setup.modelLabel')}
-          </label>
-          <Input
-            value={customModelName}
-            onChange={(e) => {
-              setCustomModelName(e.target.value);
-              if (!customModelId) setCustomModelId(e.target.value);
+        {/* Discovered models list (dynamic providers) */}
+        {dynamicModels && (
+          <div
+            className="rounded-lg p-4 flex flex-col gap-3"
+            style={{
+              background: 'var(--color-bg-surface)',
+              border: '1px solid var(--color-border-default)',
             }}
-            placeholder={t('setup.modelDisplayNamePlaceholder')}
-            autoComplete="off"
-          />
-          <Input
-            value={customModelId}
-            onChange={(e) => setCustomModelId(e.target.value)}
-            placeholder={t('setup.modelIdPlaceholder')}
-            className="font-mono text-xs"
-            autoComplete="off"
-          />
-          <p className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-            {t('setup.modelIdHint')}
-          </p>
-        </div>
+          >
+            <label className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              {t('setup.availableModels', { defaultValue: 'Available models' })}
+            </label>
+            {loadingModels && (
+              <div className="flex items-center gap-2 py-4 justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--color-text-tertiary)' }} />
+                <span className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+                  {t('setup.fetchingModels', { defaultValue: 'Fetching models...' })}
+                </span>
+              </div>
+            )}
+            {modelsError && (
+              <div className="flex items-center gap-2 py-2">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--color-warning, #f59e0b)' }} />
+                <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                  {modelsError}
+                </span>
+              </div>
+            )}
+            {!loadingModels && !modelsError && discoveredModels.length === 0 && (
+              <p className="text-sm py-2" style={{ color: 'var(--color-text-tertiary)' }}>
+                {t('setup.noModelsFound', { defaultValue: 'No models found. Make sure your server is running and has models loaded.' })}
+              </p>
+            )}
+            {discoveredModels.length > 0 && (
+              <div className="flex flex-col gap-1.5 max-h-[280px] overflow-y-auto">
+                {discoveredModels.map((m) => (
+                  <div key={m.id} className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => toggleModel(m.id)}
+                      className="flex items-center gap-3 rounded-md px-3 py-2 text-left transition-colors"
+                      style={{
+                        background: selectedModelIds.has(m.id)
+                          ? 'var(--color-accent-soft)'
+                          : 'transparent',
+                        border: selectedModelIds.has(m.id)
+                          ? '1px solid var(--color-accent-primary)'
+                          : '1px solid var(--color-border-default)',
+                      }}
+                    >
+                      <div
+                        className="flex-shrink-0 h-4 w-4 rounded border flex items-center justify-center"
+                        style={{
+                          borderColor: selectedModelIds.has(m.id)
+                            ? 'var(--color-accent-primary)'
+                            : 'var(--color-border-default)',
+                          background: selectedModelIds.has(m.id)
+                            ? 'var(--color-accent-primary)'
+                            : 'transparent',
+                        }}
+                      >
+                        {selectedModelIds.has(m.id) && (
+                          <Check className="h-3 w-3" style={{ color: '#fff' }} />
+                        )}
+                      </div>
+                      <span className="text-sm font-mono" style={{ color: 'var(--color-text-primary)' }}>
+                        {m.id}
+                      </span>
+                    </button>
+                    {selectedModelIds.has(m.id) && (
+                      <div className="flex items-center gap-1.5 pl-10 py-1">
+                        <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                          {t('setup.capabilities', { defaultValue: 'Capabilities' })}:
+                        </span>
+                        <span
+                          className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+                          style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent-primary)', opacity: 0.6 }}
+                        >
+                          Text
+                        </span>
+                        {(['image', 'pdf'] as const).map((mod) => {
+                          const active = modelModalities.get(m.id)?.has(mod);
+                          return (
+                            <button
+                              key={mod}
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleDiscoveredModality(m.id, mod); }}
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors"
+                              style={{
+                                background: active ? 'var(--color-accent-soft)' : 'transparent',
+                                color: active ? 'var(--color-accent-primary)' : 'var(--color-text-tertiary)',
+                                border: `1px solid ${active ? 'var(--color-accent-primary)' : 'var(--color-border-default)'}`,
+                              }}
+                            >
+                              {mod === 'image' ? 'Image' : 'PDF'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Manual model entry — fallback or for non-dynamic providers */}
+        {(!dynamicModels || (dynamicModels && !loadingModels && discoveredModels.length === 0)) && (
+          <div
+            className="rounded-lg p-4 flex flex-col gap-3"
+            style={{
+              background: 'var(--color-bg-surface)',
+              border: '1px solid var(--color-border-default)',
+            }}
+          >
+            <label className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+              {t('setup.modelLabel')}
+            </label>
+            <Input
+              value={customModelName}
+              onChange={(e) => {
+                setCustomModelName(e.target.value);
+                if (!customModelId) setCustomModelId(e.target.value);
+              }}
+              placeholder={t('setup.modelDisplayNamePlaceholder')}
+              autoComplete="off"
+            />
+            <Input
+              value={customModelId}
+              onChange={(e) => setCustomModelId(e.target.value)}
+              placeholder={t('setup.modelIdPlaceholder')}
+              className="font-mono text-xs"
+              autoComplete="off"
+            />
+            <p className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+              {t('setup.modelIdHint')}
+            </p>
+            <div className="flex items-center gap-1.5 pt-1">
+              <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+                {t('setup.capabilities', { defaultValue: 'Capabilities' })}:
+              </span>
+              <span
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent-primary)', opacity: 0.6 }}
+              >
+                Text
+              </span>
+              {(['image', 'pdf'] as const).map((mod) => {
+                const active = manualModalities.has(mod);
+                return (
+                  <button
+                    key={mod}
+                    type="button"
+                    onClick={() => toggleManualModality(mod)}
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors"
+                    style={{
+                      background: active ? 'var(--color-accent-soft)' : 'transparent',
+                      color: active ? 'var(--color-accent-primary)' : 'var(--color-text-tertiary)',
+                      border: `1px solid ${active ? 'var(--color-accent-primary)' : 'var(--color-border-default)'}`,
+                    }}
+                  >
+                    {mod === 'image' ? 'Image' : 'PDF'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="text-sm" style={{ color: 'var(--color-loss)' }}>
@@ -623,7 +856,7 @@ export default function ConnectStep() {
           </Button>
           <Button
             variant="default"
-            disabled={saving || !customModelName.trim()}
+            disabled={saving || !hasSelection}
             onClick={handleAddModelToExisting}
             className="min-w-[120px]"
           >
@@ -761,6 +994,35 @@ export default function ConnectStep() {
           <p className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
             {t('setup.modelIdHint')}
           </p>
+          <div className="flex items-center gap-1.5 pt-1">
+            <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-tertiary)' }}>
+              {t('setup.capabilities', { defaultValue: 'Capabilities' })}:
+            </span>
+            <span
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+              style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent-primary)', opacity: 0.6 }}
+            >
+              Text
+            </span>
+            {(['image', 'pdf'] as const).map((mod) => {
+              const active = manualModalities.has(mod);
+              return (
+                <button
+                  key={mod}
+                  type="button"
+                  onClick={() => toggleManualModality(mod)}
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors"
+                  style={{
+                    background: active ? 'var(--color-accent-soft)' : 'transparent',
+                    color: active ? 'var(--color-accent-primary)' : 'var(--color-text-tertiary)',
+                    border: `1px solid ${active ? 'var(--color-accent-primary)' : 'var(--color-border-default)'}`,
+                  }}
+                >
+                  {mod === 'image' ? 'Image' : 'PDF'}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {error && (
