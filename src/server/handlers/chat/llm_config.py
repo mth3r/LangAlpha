@@ -274,11 +274,31 @@ async def resolve_llm_config(
     Mode determines which config field and preference key to use
     (see _MODE_MODEL_MAP). Easy to extend for new modes.
     """
+    from ptc_agent.config import LLMConfig
+
     model_field, pref_key = _MODE_MODEL_MAP[mode]
     config = base_config
     model_pref = await get_model_preference(user_id)
 
-    if request_model:
+    # Bootstrap LLMConfig when agent_config.yaml has llm: null.
+    # The user must have configured a model via the UI or per-request param.
+    if config.llm is None:
+        resolved_name = request_model or model_pref.get(pref_key)
+        if not resolved_name:
+            raise ValueError(
+                "No model configured. Set llm in agent_config.yaml or select a model in Settings."
+            )
+        config = config.model_copy(deep=True)
+        config.llm = LLMConfig(
+            name=resolved_name if mode == "ptc" else "placeholder",
+            flash=resolved_name if mode == "flash" else model_pref.get("preferred_flash_model"),
+            summarization=model_pref.get("summarization_model"),
+            fetch=model_pref.get("fetch_model"),
+            fallback=model_pref.get("fallback_models"),
+        )
+        config.llm_client = None
+        logger.info(f"[CHAT] No system default LLM; bootstrapped from user preferences: {resolved_name}")
+    elif request_model:
         config = config.model_copy(deep=True)
         setattr(config.llm, model_field, request_model)
         config.llm_client = None
@@ -327,7 +347,11 @@ async def resolve_llm_config(
         is_custom_provider = not is_custom and await get_custom_provider_config(user_id, effective_model, _pref_cache=model_pref) is not None
         if (is_custom or is_custom_provider) and not is_byok:
             # Custom model/provider requires BYOK — revert to system default
-            default_model = getattr(base_config.llm, model_field, None) or base_config.llm.name
+            default_model = (getattr(base_config.llm, model_field, None) or base_config.llm.name) if base_config.llm else None
+            if not default_model:
+                raise ValueError(
+                    f"Custom model {effective_model} requires BYOK but no system default model is configured to fall back to."
+                )
             logger.warning(
                 f"[CHAT] Custom model {effective_model} selected but BYOK disabled, "
                 f"falling back to system default: {default_model}"

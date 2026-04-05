@@ -230,6 +230,9 @@ async def _run_flash_agent(prompt: str, user_id: str | None = None) -> str:
         except Exception as exc:
             logger.warning(f"[MARKET_INSIGHT] Could not resolve user LLM, falling back to system: {exc}")
 
+    if config.llm is None:
+        raise ValueError("No LLM configured — set a model in agent_config.yaml or select one in Settings")
+
     graph = build_flash_graph(config=config)
     input_state = {"messages": [HumanMessage(content=prompt)]}
     result = await graph.ainvoke(input_state)

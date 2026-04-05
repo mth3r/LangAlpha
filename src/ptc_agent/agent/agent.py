@@ -406,7 +406,7 @@ class PTCAgent:
         shared_middleware.append(TodoWriteMiddleware())
 
         # Add multimodal middleware for read_file image/PDF support (when enabled)
-        if self.config.enable_view_image:
+        if self.config.enable_view_image and self.config.llm:
             shared_middleware.append(MultimodalMiddleware(
                 sandbox=sandbox,
                 model_name=self.config.llm.name,

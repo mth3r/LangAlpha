@@ -510,7 +510,7 @@ def init_tracking(thread_id: str) -> tuple[TokenTrackingManager, ToolUsageTracke
 
 def apply_fetch_override(config) -> None:
     """Propagate fetch model / client overrides from *config* into context vars."""
-    if config.llm.fetch:
+    if config.llm and config.llm.fetch:
         fetch_model_override.set(config.llm.fetch)
         fetch_client = config.subsidiary_llm_clients.get("fetch")
         if fetch_client:

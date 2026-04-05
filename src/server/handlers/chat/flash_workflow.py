@@ -144,7 +144,7 @@ async def astream_flash_workflow(
         # Persist query start (with attachment and context metadata for display
         # in history).  This block is flash-specific because of multimodal guard
         # differences vs PTC.
-        effective_model = config.llm.flash if config else None
+        effective_model = config.llm.flash if config and config.llm else None
         query_metadata = {"msg_type": "flash"}
         if effective_model:
             query_metadata["llm_model"] = effective_model

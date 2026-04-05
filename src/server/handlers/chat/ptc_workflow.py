@@ -145,7 +145,7 @@ async def astream_ptc_workflow(
         # Persist query start
         feedback_action = None
         query_content = user_input
-        effective_model = config.llm.name if config else None
+        effective_model = config.llm.name if config and config.llm else None
         query_metadata = {
             "workspace_id": request.workspace_id,
             "msg_type": "ptc",
