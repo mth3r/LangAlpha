@@ -10,7 +10,7 @@ import {
   StockScreenerTable,
 } from './charts/MarketDataCharts';
 import SecFilingViewer from './charts/SecFilingViewer';
-import { FaviconImg } from './charts/InlineArtifactCards';
+import { FaviconImg, googleFaviconUrl } from './charts/InlineArtifactCards';
 import AutomationDetailPanel from './charts/AutomationDetailPanel';
 import Markdown, { CodeBlock } from './Markdown';
 import iconRobo from '../../../assets/img/icon-robo.png';
@@ -633,7 +633,7 @@ function WebSearchCards({ data }: WebSearchCardsProps): React.ReactElement {
             <div className="flex items-center gap-1.5 min-w-0">
               {(item.favicon || item.domain) && (
                 <FaviconImg
-                  src={item.favicon || (item.domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(item.domain)}&sz=32` : '')}
+                  src={item.favicon || googleFaviconUrl(item.domain)}
                   domain={item.domain}
                 />
               )}

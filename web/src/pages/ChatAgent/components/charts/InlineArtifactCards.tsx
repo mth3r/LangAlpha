@@ -841,6 +841,11 @@ function Inline8KCard({ artifact, onClick }: InlineFilingCardProps): React.React
 
 // ─── Shared favicon helper ──────────────────────────────────────────
 
+/** Build a Google favicon service URL for the given domain. Returns '' if domain is empty. */
+export function googleFaviconUrl(domain: string): string {
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+}
+
 /** Favicon <img> with onError fallback to a monogram span. */
 export function FaviconImg({ src, domain, size = 14 }: { src: string; domain: string; size?: number }): React.ReactElement {
   const [failed, setFailed] = useState(false);
@@ -900,8 +905,7 @@ function extractDomain(url: string): string {
 /** Resolve favicon URL: use provided value or fall back to Google favicon service. */
 function resolveFavicon(result: WebSearchResult): string {
   if (result.favicon) return result.favicon;
-  const domain = extractDomain(result.url || '');
-  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+  return googleFaviconUrl(extractDomain(result.url || ''));
 }
 
 const MAX_INLINE_RESULTS = 4;
