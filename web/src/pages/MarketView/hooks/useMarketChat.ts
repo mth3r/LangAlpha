@@ -305,7 +305,7 @@ export function useMarketChat(): UseMarketChatReturn {
     if (!assistantMessageId || !toolCalls || toolCalls.length === 0) return false;
 
     for (const toolCall of toolCalls) {
-      const toolCallId = (toolCall.id as string) || `tc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const toolCallId = (toolCall.id as string) || `tc-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
       const toolName = (toolCall.name as string) || 'unknown';
 
       contentOrderCounterRef.current++;
