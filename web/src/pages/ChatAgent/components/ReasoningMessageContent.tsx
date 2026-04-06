@@ -20,7 +20,7 @@ interface ReasoningMessageContentProps {
  * - Reasoning content is folded by default, can be expanded on click
  */
 function ReasoningMessageContent({ reasoningContent, isReasoning, reasoningComplete, reasoningTitle }: ReasoningMessageContentProps): React.ReactElement | null {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(isReasoning);
 
   // Don't render if there's no reasoning content, reasoning hasn't started, and reasoning isn't complete
   if (!reasoningContent && !isReasoning && !reasoningComplete) {

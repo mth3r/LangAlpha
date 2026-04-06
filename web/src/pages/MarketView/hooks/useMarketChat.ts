@@ -28,12 +28,15 @@ interface ReasoningProcess {
   isReasoning: boolean;
   reasoningComplete: boolean;
   order: number;
+  reasoningTitle?: string | null;
+  _completedAt?: number;
 }
 
 interface ToolCallResult {
   content: string | unknown;
   content_type: string;
   tool_call_id: string;
+  artifact?: Record<string, unknown>;
 }
 
 interface ToolCallProcess {
@@ -106,6 +109,7 @@ function createAssistantMessage(id: string): MarketChatMessage {
     timestamp: new Date().toISOString(),
     contentSegments: [],
     reasoningProcesses: {},
+    toolCallProcesses: {},
   };
 }
 
@@ -169,31 +173,22 @@ export function useMarketChat(): UseMarketChatReturn {
   function handleMessageChunk({ assistantMessageId, content }: { assistantMessageId: string; content: string }): boolean {
     if (!assistantMessageId || !content) return false;
 
+    contentOrderCounterRef.current++;
+    const currentOrder = contentOrderCounterRef.current;
+
     queueUpdate((prev) =>
       prev.map((msg) => {
         if (msg.id !== assistantMessageId) return msg;
 
-        // Find or create text content segment
-        const segments = [...(msg.contentSegments || [])];
-        let textSegment = segments.find((s) => s.type === 'text');
-
-        if (!textSegment) {
-          contentOrderCounterRef.current++;
-          textSegment = {
-            type: 'text',
-            order: contentOrderCounterRef.current,
-            content: '',
-          };
-          segments.push(textSegment);
-        }
-
-        // Accumulate content in the segment
-        textSegment.content = (textSegment.content || '') + content;
+        const newSegments = [
+          ...(msg.contentSegments || []),
+          { type: 'text' as const, content, order: currentOrder },
+        ];
 
         return {
           ...msg,
           content: (msg.content || '') + content,
-          contentSegments: segments,
+          contentSegments: newSegments,
         };
       })
     );
@@ -210,7 +205,8 @@ export function useMarketChat(): UseMarketChatReturn {
       contentOrderCounterRef.current++;
       const currentOrder = contentOrderCounterRef.current;
 
-      queueUpdate((prev) =>
+      flushUpdates();
+      setMessages((prev) =>
         prev.map((msg) => {
           if (msg.id !== assistantMessageId) return msg;
 
@@ -244,7 +240,8 @@ export function useMarketChat(): UseMarketChatReturn {
     } else if (signalContent === 'complete') {
       if (currentReasoningIdRef.current) {
         const reasoningId = currentReasoningIdRef.current;
-        queueUpdate((prev) =>
+        flushUpdates();
+        setMessages((prev) =>
           prev.map((msg) => {
             if (msg.id !== assistantMessageId) return msg;
 
@@ -254,6 +251,8 @@ export function useMarketChat(): UseMarketChatReturn {
                 ...reasoningProcesses[reasoningId],
                 isReasoning: false,
                 reasoningComplete: true,
+                reasoningTitle: null,
+                _completedAt: Date.now(),
               };
             }
 
@@ -297,6 +296,83 @@ export function useMarketChat(): UseMarketChatReturn {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Handles tool_calls events
+   */
+  function handleToolCalls({ assistantMessageId, toolCalls }: { assistantMessageId: string; toolCalls: Array<Record<string, unknown>> }): boolean {
+    if (!assistantMessageId || !toolCalls || toolCalls.length === 0) return false;
+
+    for (const toolCall of toolCalls) {
+      const toolCallId = (toolCall.id as string) || `tc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const toolName = (toolCall.name as string) || 'unknown';
+
+      contentOrderCounterRef.current++;
+      const currentOrder = contentOrderCounterRef.current;
+
+      queueUpdate((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== assistantMessageId) return msg;
+
+          const newSegments = [
+            ...(msg.contentSegments || []),
+            { type: 'tool_call' as const, toolCallId, order: currentOrder },
+          ];
+
+          const newToolCallProcesses = {
+            ...(msg.toolCallProcesses || {}),
+            [toolCallId]: {
+              toolName,
+              toolCall: toolCall,
+              toolCallResult: null,
+              isInProgress: true,
+              isComplete: false,
+              order: currentOrder,
+            },
+          };
+
+          return {
+            ...msg,
+            contentSegments: newSegments,
+            toolCallProcesses: newToolCallProcesses,
+          };
+        })
+      );
+    }
+    return true;
+  }
+
+  /**
+   * Handles tool_call_result events
+   */
+  function handleToolCallResult({ assistantMessageId, toolCallId, result }: { assistantMessageId: string; toolCallId: string; result: ToolCallResult }): boolean {
+    if (!assistantMessageId || !toolCallId) return false;
+
+    const isFailed = typeof result.content === 'string' && (result.content as string).startsWith('ERROR');
+
+    queueUpdate((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== assistantMessageId) return msg;
+
+        const toolCallProcesses = { ...(msg.toolCallProcesses || {}) };
+        if (toolCallProcesses[toolCallId]) {
+          toolCallProcesses[toolCallId] = {
+            ...toolCallProcesses[toolCallId],
+            toolCallResult: result,
+            isInProgress: false,
+            isComplete: true,
+            isFailed,
+          };
+        }
+
+        return {
+          ...msg,
+          toolCallProcesses,
+        };
+      })
+    );
+    return true;
   }
 
   /**
@@ -366,6 +442,26 @@ export function useMarketChat(): UseMarketChatReturn {
               handleMessageChunk({
                 assistantMessageId,
                 content: event.content as string,
+              });
+            }
+          } else if (eventType === 'tool_calls') {
+            const toolCalls = (event.tool_calls || []) as Array<Record<string, unknown>>;
+            handleToolCalls({
+              assistantMessageId,
+              toolCalls,
+            });
+          } else if (eventType === 'tool_call_result') {
+            const toolCallId = event.tool_call_id as string;
+            if (toolCallId) {
+              handleToolCallResult({
+                assistantMessageId,
+                toolCallId,
+                result: {
+                  content: (event.content as string) || '',
+                  content_type: (event.content_type as string) || 'text',
+                  tool_call_id: toolCallId,
+                  artifact: event.artifact as Record<string, unknown> | undefined,
+                },
               });
             }
           } else if (eventType === 'error') {
