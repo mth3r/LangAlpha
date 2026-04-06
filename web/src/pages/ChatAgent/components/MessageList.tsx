@@ -16,7 +16,8 @@ import {
   InlineSectorPerformanceCard,
   InlineSecFilingCard,
   InlineStockScreenerCard,
-} from './charts/InlineMarketCharts';
+  InlineWebSearchCard,
+} from './charts/InlineArtifactCards';
 import { InlineAutomationCard } from './charts/InlineAutomationCards';
 import { InlinePreviewCard } from './charts/InlinePreviewCard';
 import { extractFilePaths, FileMentionCards } from './FileCard';
@@ -132,6 +133,7 @@ const INLINE_ARTIFACT_MAP: Record<string, React.ComponentType<{ artifact: Record
   stock_screener: InlineStockScreenerCard,
   automations: InlineAutomationCard,
   preview_url: InlinePreviewCard,
+  web_search: InlineWebSearchCard,
 };
 
 /* --- Attachment helpers --- */
