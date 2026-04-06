@@ -1211,28 +1211,26 @@
       "sdk": "openai",
       "base_url": "http://{HOST_IP}:1234/v1",
       "env_key": "lm-studio",
-      "access_type": "api_key",
+      "access_type": "local",
       "dynamic_models": true,
-      "local_only": true,
+      "use_response_api": true,
       "display_name": "LM Studio"
     },
     "vllm": {
       "sdk": "openai",
       "base_url": "http://{HOST_IP}:8000/v1",
       "env_key": null,
-      "access_type": "api_key",
+      "access_type": "local",
       "dynamic_models": true,
-      "local_only": true,
       "use_response_api": true,
       "display_name": "vLLM"
     },
     "ollama": {
-      "sdk": "anthropic",
-      "base_url": "http://{HOST_IP}:11434",
+      "sdk": "openai",
+      "base_url": "http://{HOST_IP}:11434/v1",
       "env_key": null,
-      "access_type": "api_key",
+      "access_type": "local",
       "dynamic_models": true,
-      "local_only": true,
       "display_name": "Ollama"
     }
   },

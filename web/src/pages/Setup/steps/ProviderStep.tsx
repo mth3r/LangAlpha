@@ -35,17 +35,10 @@ export default function ProviderStep() {
     return (raw.provider_catalog as ProviderCatalogEntry[] | undefined) ?? [];
   }, [modelsData]);
 
-  const isLocalDev = !import.meta.env.VITE_SUPABASE_URL;
-
-  // Filter catalog by selected method, split cloud vs local
+  // Filter catalog by selected method
   const filteredProviders = useMemo(
-    () => catalog.filter((p) => p.access_type === method && !p.local_only),
+    () => catalog.filter((p) => p.access_type === method),
     [catalog, method],
-  );
-
-  const localProviders = useMemo(
-    () => isLocalDev ? catalog.filter((p) => p.access_type === method && p.local_only) : [],
-    [catalog, method, isLocalDev],
   );
 
   // User's existing custom providers (from preferences)
@@ -139,6 +132,7 @@ export default function ProviderStep() {
           {method === 'oauth' && t('setup.providerSubtitleOAuth')}
           {method === 'coding_plan' && t('setup.providerSubtitleCodingPlan')}
           {method === 'api_key' && t('setup.providerSubtitleApiKey')}
+          {method === 'local' && t('setup.providerSubtitleLocal')}
         </p>
       </div>
 
@@ -179,35 +173,6 @@ export default function ProviderStep() {
             />
           ))}
         </div>
-      )}
-
-      {/* Local model providers (dev only) */}
-      {localProviders.length > 0 && method === 'api_key' && (
-        <>
-          <div className="flex items-center gap-2">
-            <div className="h-px flex-1" style={{ background: 'var(--color-border-default)' }} />
-            <span className="text-xs font-medium" style={{ color: 'var(--color-text-tertiary)' }}>
-              {t('setup.localModels')}
-            </span>
-            <div className="h-px flex-1" style={{ background: 'var(--color-border-default)' }} />
-          </div>
-          <div
-            role="radiogroup"
-            aria-label="Local model providers"
-            className="grid grid-cols-2 sm:grid-cols-3 gap-3"
-          >
-            {localProviders.map((p) => (
-              <ProviderCard
-                key={p.provider}
-                provider={p.provider}
-                displayName={p.display_name}
-                selected={selected === p.provider}
-                configured={configuredSet.has(p.provider)}
-                onSelect={setSelected}
-              />
-            ))}
-          </div>
-        </>
       )}
 
       {/* Custom provider option (api_key and coding_plan only) */}

@@ -400,7 +400,7 @@ async def trigger_summarization(thread_id: str, keep_messages: int = 5) -> dict:
 
         agent_cfg = setup.agent_config
         summ_cfg = agent_cfg.summarization if agent_cfg else None
-        model_name = (agent_cfg.llm.summarization or "") if agent_cfg else ""
+        model_name = (agent_cfg.llm.summarization or "") if agent_cfg and agent_cfg.llm else ""
 
         # Read previous event from state (for chained summarization)
         previous_event = state.values.get("_summarization_event")

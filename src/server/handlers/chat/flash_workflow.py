@@ -144,7 +144,7 @@ async def astream_flash_workflow(
         # Persist query start (with attachment and context metadata for display
         # in history).  This block is flash-specific because of multimodal guard
         # differences vs PTC.
-        effective_model = config.llm.flash if config else None
+        effective_model = config.llm.flash if config and config.llm else None
         query_metadata = {"msg_type": "flash"}
         if effective_model:
             query_metadata["llm_model"] = effective_model
@@ -240,7 +240,7 @@ async def astream_flash_workflow(
         # sandbox for file upload).
         multimodal_contexts = parse_multimodal_contexts(request.additional_context)
         if multimodal_contexts:
-            modalities = get_input_modalities(effective_model) if effective_model else ["text"]
+            modalities = get_input_modalities(effective_model, custom_modalities=config.input_modalities) if effective_model else ["text"]
             supported, unsupported, file_only = filter_multimodal_by_capability(
                 multimodal_contexts, modalities
             )

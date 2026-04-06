@@ -145,7 +145,7 @@ async def astream_ptc_workflow(
         # Persist query start
         feedback_action = None
         query_content = user_input
-        effective_model = config.llm.name if config else None
+        effective_model = config.llm.name if config and config.llm else None
         query_metadata = {
             "workspace_id": request.workspace_id,
             "msg_type": "ptc",
@@ -319,7 +319,7 @@ async def astream_ptc_workflow(
                 )
 
             # 2. Filter by model capability for native content blocks
-            modalities = get_input_modalities(effective_model) if effective_model else ["text"]
+            modalities = get_input_modalities(effective_model, custom_modalities=config.input_modalities) if effective_model else ["text"]
             supported, unsupported, file_only = filter_multimodal_by_capability(
                 multimodal_contexts, modalities
             )

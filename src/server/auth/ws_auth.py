@@ -13,7 +13,7 @@ import logging
 
 from fastapi import WebSocket, WebSocketException, status
 
-from src.config.settings import AUTH_ENABLED, LOCAL_DEV_USER_ID
+from src.config.settings import HOST_MODE, LOCAL_DEV_USER_ID
 from src.server.auth.jwt_bearer import _decode_token
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ async def authenticate_websocket(websocket: WebSocket) -> str:
     Violation) and a ``WebSocketException`` is raised so the caller's
     handler exits cleanly.
     """
-    if not AUTH_ENABLED:
+    if HOST_MODE == "oss":
         return LOCAL_DEV_USER_ID
 
     # 1. Try Authorization header

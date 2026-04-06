@@ -120,10 +120,28 @@ async def get_key_for_provider(user_id: str, provider: str) -> Optional[str]:
             return row["api_key"] if row else None
 
 
+_BYOK_ACTIVE_TTL = 60  # seconds — safety net; primary invalidation is explicit
+
 async def is_byok_active(user_id: str) -> bool:
     """
     Quick check: is BYOK enabled AND does the user have at least one key?
+
+    Result is cached in Redis for up to ``_BYOK_ACTIVE_TTL`` seconds to avoid
+    a correlated subquery on every chat message.  The cache is explicitly
+    invalidated by ``invalidate_byok_cache`` whenever keys are written/deleted.
     """
+    from src.utils.cache.redis_cache import get_cache_client
+
+    cache_key = f"byok_active:{user_id}"
+    cache = get_cache_client()
+    if cache.enabled and cache.client:
+        try:
+            cached = await cache.client.get(cache_key)
+            if cached is not None:
+                return cached == b"1"
+        except Exception:
+            pass  # Redis down — fall through to DB
+
     async with get_db_connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -138,7 +156,27 @@ async def is_byok_active(user_id: str) -> bool:
                 """,
                 (user_id,),
             )
-            return (await cur.fetchone()) is not None
+            result = (await cur.fetchone()) is not None
+
+    if cache.enabled and cache.client:
+        try:
+            await cache.client.set(cache_key, b"1" if result else b"0", ex=_BYOK_ACTIVE_TTL)
+        except Exception:
+            pass
+
+    return result
+
+
+async def invalidate_byok_cache(user_id: str) -> None:
+    """Delete the cached ``is_byok_active`` result so the next call hits the DB."""
+    from src.utils.cache.redis_cache import get_cache_client
+
+    cache = get_cache_client()
+    if cache.enabled and cache.client:
+        try:
+            await cache.client.delete(f"byok_active:{user_id}")
+        except Exception:
+            pass
 
 
 async def update_base_url(user_id: str, provider: str, base_url: str | None) -> None:
@@ -158,6 +196,22 @@ async def update_base_url(user_id: str, provider: str, base_url: str | None) -> 
                 logger.info(
                     f"[api_keys_db] update_base_url user_id={user_id} provider={provider}"
                 )
+
+
+async def get_base_url_for_provider(user_id: str, provider: str) -> str | None:
+    """Return the stored base_url override for a single provider, or None.
+
+    Single-row indexed lookup — no PGP decryption, no join.  Used by
+    ``list_provider_models`` which only needs the URL, not the key.
+    """
+    async with get_db_connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                "SELECT base_url FROM user_api_keys WHERE user_id = %s AND provider = %s",
+                (user_id, provider),
+            )
+            row = await cur.fetchone()
+            return row["base_url"] if row else None
 
 
 async def get_byok_config_for_provider(

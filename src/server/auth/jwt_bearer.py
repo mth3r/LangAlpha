@@ -17,7 +17,7 @@ from jwt import PyJWKClient
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from src.config.settings import AUTH_ENABLED, LOCAL_DEV_USER_ID, SUPABASE_URL
+from src.config.settings import HOST_MODE, LOCAL_DEV_USER_ID, SUPABASE_URL
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -74,7 +74,7 @@ async def verify_jwt_token(
     When Supabase auth is disabled (``SUPABASE_URL`` unset), returns a
     static local-dev user ID without requiring a token.
     """
-    if not AUTH_ENABLED:
+    if HOST_MODE == "oss":
         return LOCAL_DEV_USER_ID
     if credentials is None:
         raise HTTPException(status_code=401, detail="Missing Bearer token")
@@ -88,7 +88,7 @@ async def get_current_auth_info(
 
     Used by the auth-sync endpoint to persist the provider on first login.
     """
-    if not AUTH_ENABLED:
+    if HOST_MODE == "oss":
         return AuthInfo(user_id=LOCAL_DEV_USER_ID)
     if credentials is None:
         raise HTTPException(status_code=401, detail="Missing Bearer token")

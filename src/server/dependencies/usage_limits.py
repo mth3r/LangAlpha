@@ -2,11 +2,11 @@
 FastAPI dependencies for usage limit enforcement.
 
 Gate hierarchy:
-  AUTH_ENABLED (= bool(SUPABASE_URL))   — master switch; OSS mode skips all gates.
+  HOST_MODE ("oss" | "platform")        — master switch; OSS mode skips all gates.
   AUTH_SERVICE_URL                       — platform quota service; guards
                                            credit/workspace limits and access tier
                                            checks.  Can be absent even when
-                                           AUTH_ENABLED is true (partial deploy).
+                                           HOST_MODE is "platform" (partial deploy).
 
 Fail-open: when the platform service is unreachable, requests are allowed.
 """
@@ -20,7 +20,7 @@ from typing import Annotated, Optional
 import httpx
 from fastapi import Depends, HTTPException
 
-from src.config.settings import AUTH_ENABLED, AUTH_SERVICE_URL
+from src.config.settings import HOST_MODE, AUTH_SERVICE_URL
 from src.server.utils.api import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ async def _check_burst_guard(user_id: str, max_concurrent: int) -> dict:
 
 async def release_burst_slot(user_id: str) -> None:
     """Release a burst slot (DECR) after request completes."""
-    if not AUTH_ENABLED:
+    if HOST_MODE == "oss":
         return  # No burst guard in OSS mode
 
     from src.utils.cache.redis_cache import get_cache_client
@@ -127,12 +127,15 @@ async def enforce_chat_limit(
     downstream gates (403 in threads.py, credit check) can decide without
     re-querying the DB.
 
-    OSS mode (AUTH_ENABLED=false): skip everything, return bare result.
+    OSS mode (HOST_MODE="oss"): still check BYOK so custom models
+    (Ollama, LM Studio, etc.) work. Skip burst guard + platform tier.
     """
-    if not AUTH_ENABLED:
-        return ChatAuthResult(user_id=user_id)
-
     from src.server.database.api_keys import is_byok_active
+
+    if HOST_MODE == "oss":
+        byok = await is_byok_active(user_id)
+        return ChatAuthResult(user_id=user_id, is_byok=byok)
+
     from src.server.database.oauth_tokens import has_any_oauth_token
 
     # Two independent DB queries — run in parallel to cut TTFT latency.

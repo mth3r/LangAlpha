@@ -241,6 +241,9 @@ class FlashAgent:
             summ_client = self.config.subsidiary_llm_clients.get("summarization")
             if summ_client:
                 summ_config["_llm_client"] = summ_client
+            elif self.config.llm_client:
+                # Custom/local model without separate BYOK resolution — reuse main client
+                summ_config["_llm_client"] = self.config.llm_client
         summarization = SummarizationMiddleware.from_config(config=summ_config, backend=None)
         if summarization is not None:
             main_middleware.append(summarization)

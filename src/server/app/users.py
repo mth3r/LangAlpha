@@ -22,7 +22,6 @@ from fastapi import File, UploadFile
 from pydantic import BaseModel
 from src.utils.storage import get_public_url, upload_bytes
 
-from src.config.settings import AUTH_SERVICE_URL
 from src.server.auth.jwt_bearer import get_current_auth_info, AuthInfo
 from src.server.database.user import (
     create_user as db_create_user,
@@ -48,6 +47,8 @@ from src.server.models.user import (
 from src.server.utils.api import CurrentUserId, handle_api_exceptions, raise_not_found
 
 logger = logging.getLogger(__name__)
+
+_VALID_MODALITIES = frozenset({"text", "image", "pdf"})
 
 router = APIRouter(prefix="/api/v1", tags=["Users"])
 
@@ -355,7 +356,7 @@ def _validate_custom_models(custom_models: list, custom_providers: list | None =
         if not name_re.match(name):
             raise HTTPException(
                 status_code=400,
-                detail=f"custom_models[{idx}]: name '{name}' is invalid (alphanumeric start, max 63 chars, only .-_ allowed)",
+                detail=f"custom_models[{idx}]: name '{name}' is invalid (alphanumeric start, max 63 chars, only .-_:/ allowed)",
             )
 
         # No collision with system models
@@ -396,6 +397,24 @@ def _validate_custom_models(custom_models: list, custom_providers: list | None =
                     detail=f"custom_models[{idx}]: {field} must be a JSON object",
                 )
 
+        # Validate input_modalities if present
+        modalities = cm.get("input_modalities")
+        if modalities is not None:
+            if not isinstance(modalities, list) or len(modalities) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"custom_models[{idx}]: input_modalities must be a non-empty list",
+                )
+            for m in modalities:
+                if not isinstance(m, str) or m not in _VALID_MODALITIES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"custom_models[{idx}]: invalid modality '{m}', allowed: {sorted(_VALID_MODALITIES)}",
+                    )
+            # Ensure "text" is always present
+            if "text" not in modalities:
+                cm["input_modalities"] = ["text"] + modalities
+
 
 def _validate_custom_providers(custom_providers: list) -> None:
     """Validate custom_providers list before persisting."""
@@ -433,6 +452,7 @@ def _validate_custom_providers(custom_providers: list) -> None:
         ura = cp.get("use_response_api")
         if ura is not None and not isinstance(ura, bool):
             raise HTTPException(status_code=400, detail=f"custom_providers[{idx}]: use_response_api must be a boolean")
+
 
 
 @router.put("/users/me/preferences", response_model=UserPreferencesResponse)

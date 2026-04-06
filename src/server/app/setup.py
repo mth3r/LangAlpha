@@ -101,9 +101,9 @@ async def lifespan(app: FastAPI):
         raise
 
     # Auto-provision local dev user when Supabase auth is disabled
-    from src.config.settings import AUTH_ENABLED, LOCAL_DEV_USER_ID
+    from src.config.settings import HOST_MODE, LOCAL_DEV_USER_ID
 
-    if not AUTH_ENABLED:
+    if HOST_MODE == "oss":
         from src.server.database.user import get_user, create_user_from_auth
 
         # Only provision if name is missing or user doesn't exist

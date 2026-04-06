@@ -283,8 +283,8 @@ async def _handle_send_message(
 
     # 403 guard: require BYOK, OAuth, or platform access (tier >= 0).
     # All flags are pre-checked by enforce_chat_limit — no DB calls here.
-    from src.config.settings import AUTH_ENABLED
-    if AUTH_ENABLED and not auth.is_byok and not auth.has_oauth and auth.access_tier < 0:
+    from src.config.settings import HOST_MODE
+    if HOST_MODE == "platform" and not auth.is_byok and not auth.has_oauth and auth.access_tier < 0:
         from src.server.dependencies.usage_limits import release_burst_slot
         await release_burst_slot(user_id)
         raise HTTPException(

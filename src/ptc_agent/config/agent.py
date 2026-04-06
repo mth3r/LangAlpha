@@ -152,7 +152,7 @@ class AgentConfig(BaseModel):
     """
 
     # Agent-specific configurations
-    llm: LLMConfig
+    llm: LLMConfig | None = None
     security: SecurityConfig
     logging: LoggingConfig
 
@@ -166,6 +166,9 @@ class AgentConfig(BaseModel):
 
     # Flash agent configuration
     flash: FlashConfig = Field(default_factory=FlashConfig)
+
+    # Custom model input modalities override (set by resolve_llm_config for custom models)
+    input_modalities: list[str] | None = None
 
     # Vision tool configuration
     # If True, enable view_image tool for viewing images (requires vision-capable model)
@@ -415,6 +418,11 @@ class AgentConfig(BaseModel):
         # If LLM client was passed directly (via create()), return it
         if self.llm_client is not None:
             return self.llm_client
+
+        if self.llm is None:
+            raise ValueError(
+                "No LLM configured. Set llm in agent_config.yaml or configure a model in the setup wizard."
+            )
 
         # Use src/llms factory for file-based loading
         from src.llms import create_llm

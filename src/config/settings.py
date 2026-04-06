@@ -17,13 +17,13 @@ from src.config.core import get_infrastructure_config
 
 # Re-export env-var constants for backward compatibility
 from src.config.env import (  # noqa: F401
-    AUTH_ENABLED,
     AUTH_SERVICE_URL,
     AUTOMATION_WEBHOOK_SECRET,
     AUTOMATION_WEBHOOK_URL,
     GINLIX_DATA_ENABLED,
     GINLIX_DATA_URL,
     GINLIX_DATA_WS_URL,
+    HOST_MODE,
     LOCAL_DEV_USER_ID,
     SUPABASE_URL,
 )

@@ -1,6 +1,6 @@
 /** Shared BYOK (Bring Your Own Key) and model types */
 
-export type AccessType = 'api_key' | 'coding_plan' | 'oauth';
+export type AccessType = 'api_key' | 'coding_plan' | 'oauth' | 'local';
 
 export interface ByokProvider {
   provider: string;
@@ -37,7 +37,6 @@ export interface ProviderCatalogEntry {
   base_url?: string | null;
   use_response_api?: boolean;
   dynamic_models?: boolean;
-  local_only?: boolean;
   region_variants?: RegionVariant[];
 }
 
@@ -47,6 +46,7 @@ export interface CustomModelEntry {
   provider: string;
   parameters?: Record<string, unknown>;
   extra_body?: Record<string, unknown>;
+  input_modalities?: string[];
 }
 
 export interface CustomModelFormState {
@@ -55,6 +55,7 @@ export interface CustomModelFormState {
   provider: string;
   parameters: string;
   extra_body: string;
+  input_modalities?: string[];
   _customProvider?: boolean;
 }
 

@@ -7,9 +7,11 @@ No YAML dependency — pure os.getenv.
 
 import os
 
-# Auth / Login Service (Supabase)
+# Deployment mode: "oss" (self-hosted, no auth) or "platform" (Supabase auth + quota service)
+HOST_MODE: str = os.getenv("HOST_MODE", "oss")
+
+# Auth / Login Service (Supabase) — credential, not a mode flag
 SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-AUTH_ENABLED: bool = bool(SUPABASE_URL)
 LOCAL_DEV_USER_ID: str = os.getenv("AUTH_USER_ID", "local-dev-user")
 
 # Quota enforcement service (ginlix-auth)
@@ -33,3 +35,8 @@ USD_TO_CREDITS_RATE: int = int(os.getenv("USD_TO_CREDITS_RATE", "1000"))
 # Automation webhook delivery (ginlix-integration)
 AUTOMATION_WEBHOOK_URL: str = os.getenv("AUTOMATION_WEBHOOK_URL", "")
 AUTOMATION_WEBHOOK_SECRET: str = os.getenv("AUTOMATION_WEBHOOK_SECRET", "")
+
+# Host IP for local LLM providers (Ollama, LM Studio, vLLM).
+# In Docker, "localhost" means the container — use host.docker.internal to reach the host.
+_IN_DOCKER: bool = os.path.exists("/.dockerenv")
+HOST_IP: str = os.getenv("HOST_IP", "host.docker.internal" if _IN_DOCKER else "localhost")

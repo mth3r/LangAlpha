@@ -88,3 +88,14 @@ class TestGetInputModalities:
     def test_module_level_unknown_model(self):
         result = get_input_modalities("nonexistent-xyz")
         assert result == ["text"]
+
+    def test_custom_modalities_override(self):
+        """When custom_modalities is provided, it is returned directly."""
+        result = get_input_modalities("nonexistent-xyz", custom_modalities=["text", "image"])
+        assert result == ["text", "image"]
+
+    def test_custom_modalities_none_falls_through(self):
+        """When custom_modalities is None, falls back to models.json lookup."""
+        result = get_input_modalities("claude-sonnet-4-6", custom_modalities=None)
+        assert "image" in result
+        assert "pdf" in result

@@ -230,6 +230,9 @@ async def _run_flash_agent(prompt: str, user_id: str | None = None) -> str:
         except Exception as exc:
             logger.warning(f"[MARKET_INSIGHT] Could not resolve user LLM, falling back to system: {exc}")
 
+    if config.llm is None:
+        raise ValueError("No LLM configured — set a model in agent_config.yaml or select one in Settings")
+
     graph = build_flash_graph(config=config)
     input_state = {"messages": [HumanMessage(content=prompt)]}
     result = await graph.ainvoke(input_state)
@@ -711,8 +714,8 @@ class InsightService:
 
         # When auth is off (local dev / self-hosted), use the local dev user's
         # credentials so insights work without a system API key.
-        from src.config.settings import AUTH_ENABLED, LOCAL_DEV_USER_ID
-        system_user_id = None if AUTH_ENABLED else LOCAL_DEV_USER_ID
+        from src.config.settings import HOST_MODE, LOCAL_DEV_USER_ID
+        system_user_id = None if HOST_MODE == "platform" else LOCAL_DEV_USER_ID
 
         row = await insight_db.create_market_insight(
             model="flash",

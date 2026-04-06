@@ -101,6 +101,48 @@ class TestValidateCustomModels:
                 {"name": "my-model", "model_id": "gpt-4o", "provider": "unknown"},
             ])
 
+    # --- input_modalities validation ---
+
+    def test_valid_input_modalities(self):
+        """Valid input_modalities should pass."""
+        self._validate([
+            {"name": "my-llava", "model_id": "llava", "provider": "openai", "input_modalities": ["text", "image"]},
+        ])
+
+    def test_invalid_modality_value_raises(self):
+        """Modality values must be in {text, image, pdf}."""
+        with pytest.raises(HTTPException, match="invalid modality"):
+            self._validate([
+                {"name": "my-model", "model_id": "gpt-4o", "provider": "openai", "input_modalities": ["text", "video"]},
+            ])
+
+    def test_non_list_modalities_raises(self):
+        """input_modalities must be a list."""
+        with pytest.raises(HTTPException, match="non-empty list"):
+            self._validate([
+                {"name": "my-model", "model_id": "gpt-4o", "provider": "openai", "input_modalities": "image"},
+            ])
+
+    def test_empty_modalities_raises(self):
+        """Empty input_modalities list is invalid."""
+        with pytest.raises(HTTPException, match="non-empty list"):
+            self._validate([
+                {"name": "my-model", "model_id": "gpt-4o", "provider": "openai", "input_modalities": []},
+            ])
+
+    def test_omitted_modalities_passes(self):
+        """Model without input_modalities should pass (backward compat)."""
+        self._validate([
+            {"name": "my-gpt", "model_id": "gpt-4o", "provider": "openai"},
+        ])
+
+    def test_text_auto_prepended(self):
+        """If input_modalities is provided without 'text', it should be auto-added."""
+        models = [{"name": "my-llava", "model_id": "llava", "provider": "openai", "input_modalities": ["image"]}]
+        self._validate(models)
+        # After validation, "text" should be prepended
+        assert models[0]["input_modalities"] == ["text", "image"]
+
 
 # ---------------------------------------------------------------------------
 # _validate_custom_providers (unit tests via direct import)

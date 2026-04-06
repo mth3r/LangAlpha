@@ -235,7 +235,7 @@ def load_from_dict(
     # Validate that all required sections exist
     # Accept either "sandbox" or "daytona" as the sandbox config key
     has_sandbox_key = "sandbox" in config_data or "daytona" in config_data
-    required_sections = ["llm", "mcp", "logging", "filesystem"]
+    required_sections = ["mcp", "logging", "filesystem"]
     validate_required_sections(config_data, required_sections)
     if not has_sandbox_key:
         raise ValueError(
@@ -244,37 +244,28 @@ def load_from_dict(
         )
 
     # Load LLM configuration - extract name and flash LLM
-    llm_data = config_data["llm"]
+    # llm: null (or omitted) is allowed — users configure models via the UI instead.
+    llm_data = config_data.get("llm")
 
-    # Handle different formats
+    llm_config: LLMConfig | None = None
     if isinstance(llm_data, str):
         # Simple string format: "claude-sonnet-4-5"
-        llm_name = llm_data
-        flash_llm = None
-        summarization_llm = None
-        fetch_llm = None
-        fallback_models = None
+        llm_config = LLMConfig(name=llm_data)
     elif isinstance(llm_data, dict):
         llm_name = llm_data.get("name", "")
         if not llm_name:
-            raise ValueError("llm.name is required in agent_config.yaml")
-        flash_llm = llm_data.get("flash")  # None means use main llm
-        summarization_llm = llm_data.get("summarization")  # None means use main llm
-        fetch_llm = llm_data.get("fetch")  # None means use flash/main llm
-        fallback_models = llm_data.get("fallback")  # list[str] | None
-    else:
-        raise ValueError(
-            "llm section must be either a string (LLM name) or dict with 'name' key"
+            raise ValueError("llm.name is required in agent_config.yaml when llm is a dict")
+        llm_config = LLMConfig(
+            name=llm_name,
+            flash=llm_data.get("flash"),
+            summarization=llm_data.get("summarization"),
+            fetch=llm_data.get("fetch"),
+            fallback=llm_data.get("fallback"),
         )
-
-    # Create LLM config - model resolution happens in get_llm_client()
-    llm_config = LLMConfig(
-        name=llm_name,
-        flash=flash_llm,
-        summarization=summarization_llm,
-        fetch=fetch_llm,
-        fallback=fallback_models,
-    )
+    elif llm_data is not None:
+        raise ValueError(
+            "llm section must be null, a string (LLM name), or dict with 'name' key"
+        )
 
     # Load configurations using shared factory functions
     sandbox_config = create_sandbox_config(config_data)

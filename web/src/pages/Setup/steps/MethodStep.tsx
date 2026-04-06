@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Loader2, Ticket, Link2, Code2, Key, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Ticket, Link2, Code2, Key, Monitor, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/api/client';
@@ -13,16 +13,20 @@ import { usePreferences } from '@/hooks/usePreferences';
 import { useUpdatePreferences } from '@/hooks/useUpdatePreferences';
 import { deleteUserApiKey, disconnectCodexOAuth, disconnectClaudeOAuth, getCurrentUser } from '@/pages/Dashboard/utils/api';
 import type { AccessType } from '@/components/model/types';
+import { isPlatformMode } from '@/config/hostMode';
+import { useAllModels } from '@/hooks/useAllModels';
 
 // ---------------------------------------------------------------------------
 // Method card data
 // ---------------------------------------------------------------------------
 
-const METHODS: Array<{
+const ALL_METHODS: Array<{
   id: AccessType;
   icon: typeof Link2;
   titleKey: string;
   descKey: string;
+  platformOnly?: boolean;
+  ossOnly?: boolean;
 }> = [
   {
     id: 'oauth',
@@ -42,7 +46,20 @@ const METHODS: Array<{
     titleKey: 'setup.methodApiKey',
     descKey: 'setup.methodApiKeyDesc',
   },
+  {
+    id: 'local',
+    icon: Monitor,
+    titleKey: 'setup.methodLocal',
+    descKey: 'setup.methodLocalDesc',
+    ossOnly: true,
+  },
 ];
+
+const METHODS = ALL_METHODS.filter((m) => {
+  if (m.ossOnly && isPlatformMode) return false;
+  if (m.platformOnly && !isPlatformMode) return false;
+  return true;
+});
 
 // ---------------------------------------------------------------------------
 // Configured providers banner
@@ -105,17 +122,19 @@ function ConfiguredBanner({
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>
-                  {p.displayName}
+                  {p.display_name}
                 </span>
                 <span
                   className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
                   style={{
-                    background: p.type === 'oauth' ? 'var(--color-accent-soft)' : 'var(--color-bg-page)',
-                    color: p.type === 'oauth' ? 'var(--color-accent-primary)' : 'var(--color-text-tertiary)',
-                    border: p.type === 'oauth' ? 'none' : '1px solid var(--color-border-default)',
+                    background: p.access_type === 'oauth' ? 'var(--color-accent-soft)' : 'var(--color-bg-page)',
+                    color: p.access_type === 'oauth' ? 'var(--color-accent-primary)' : 'var(--color-text-tertiary)',
+                    border: p.access_type === 'oauth' ? 'none' : '1px solid var(--color-border-default)',
                   }}
                 >
-                  {p.type === 'oauth' ? t('setup.oauthBadge') : t('setup.apiKeyBadge')}
+                  {p.access_type === 'oauth' ? t('setup.oauthBadge')
+                    : p.access_type === 'local' ? t('setup.localBadge')
+                    : t('setup.apiKeyBadge')}
                 </span>
               </div>
               <button
@@ -124,7 +143,7 @@ function ConfiguredBanner({
                 className="text-xs shrink-0 px-2 py-1 rounded transition-colors hover:opacity-80"
                 style={{ color: 'var(--color-loss)' }}
               >
-                {p.type === 'oauth' ? t('setup.disconnectProvider') : t('setup.removeProvider')}
+                {p.access_type === 'oauth' ? t('setup.disconnectProvider') : t('setup.removeProvider')}
               </button>
             </div>
           ))}
@@ -150,6 +169,7 @@ export default function MethodStep() {
   const canSkip = hasConfigured || (!userLoading && hasPlatformAccess);
   const { preferences } = usePreferences();
   const updatePreferences = useUpdatePreferences();
+  const { metadata } = useAllModels();
 
   const [selected, setSelected] = useState<AccessType | null>(null);
 
@@ -161,7 +181,7 @@ export default function MethodStep() {
 
   const handleRemoveProvider = useCallback(async (provider: ConfiguredProvider) => {
     try {
-      if (provider.type === 'oauth') {
+      if (provider.access_type === 'oauth') {
         if (provider.provider === 'codex-oauth') {
           await disconnectCodexOAuth();
           queryClient.invalidateQueries({ queryKey: queryKeys.oauth.codex() });
@@ -172,29 +192,49 @@ export default function MethodStep() {
       } else {
         // Remove API key
         await deleteUserApiKey(provider.provider).catch(() => {});
-        // Clean custom_providers and custom_models from preferences
+        // Clean custom_providers, custom_models, and any model preference
+        // fields that reference models from the removed provider.
         const prefs = preferences as Record<string, unknown> | null;
         const otherPref = (prefs?.other_preference ?? {}) as Record<string, unknown>;
         const existingProviders = (otherPref.custom_providers as Array<{ name: string }>) ?? [];
-        const existingModels = (otherPref.custom_models as Array<{ provider: string }>) ?? [];
+        const existingModels = (otherPref.custom_models as Array<{ provider: string; name: string }>) ?? [];
         const isCustom = existingProviders.some(cp => cp.name === provider.provider);
-        if (isCustom) {
-          const remainingProviders = existingProviders.filter(cp => cp.name !== provider.provider);
-          const remainingModels = existingModels.filter(cm => cm.provider !== provider.provider);
-          await updatePreferences.mutateAsync({
-            other_preference: {
-              custom_providers: remainingProviders.length > 0 ? remainingProviders : null,
-              custom_models: remainingModels.length > 0 ? remainingModels : null,
-            },
-          });
-        }
+        const remainingProviders = isCustom ? existingProviders.filter(cp => cp.name !== provider.provider) : existingProviders;
+        const remainingModels = existingModels.filter(cm => cm.provider !== provider.provider);
+        // Collect ALL model names belonging to this provider (custom + built-in)
+        const removedModelNames = new Set([
+          ...existingModels.filter(cm => cm.provider === provider.provider).map(cm => cm.name),
+          ...Object.entries(metadata)
+            .filter(([, meta]) => meta?.provider === provider.provider)
+            .map(([name]) => name),
+        ]);
+        const cleanModelPref = (val: unknown) =>
+          typeof val === 'string' && removedModelNames.has(val) ? null : undefined;
+        const prefUpdate: Record<string, unknown> = {
+          custom_providers: remainingProviders.length > 0 ? remainingProviders : null,
+          custom_models: remainingModels.length > 0 ? remainingModels : null,
+        };
+        // Clear subsidiary/preferred model fields if they reference a removed model
+        if (cleanModelPref(otherPref.summarization_model) === null) prefUpdate.summarization_model = null;
+        if (cleanModelPref(otherPref.fetch_model) === null) prefUpdate.fetch_model = null;
+        if (cleanModelPref(otherPref.preferred_model) === null) prefUpdate.preferred_model = null;
+        if (cleanModelPref(otherPref.preferred_flash_model) === null) prefUpdate.preferred_flash_model = null;
+        // Filter starred and fallback model lists
+        const starred = (otherPref.starred_models as string[]) ?? [];
+        const cleanStarred = starred.filter(m => !removedModelNames.has(m));
+        if (cleanStarred.length !== starred.length) prefUpdate.starred_models = cleanStarred.length > 0 ? cleanStarred : null;
+        const fallback = (otherPref.fallback_models as string[]) ?? [];
+        const cleanFallback = fallback.filter(m => !removedModelNames.has(m));
+        if (cleanFallback.length !== fallback.length) prefUpdate.fallback_models = cleanFallback.length > 0 ? cleanFallback : null;
+
+        await updatePreferences.mutateAsync({ other_preference: prefUpdate });
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
       queryClient.invalidateQueries({ queryKey: queryKeys.user.apiKeys() });
     } catch {
       // Silently fail — user can retry
     }
-  }, [preferences, updatePreferences, queryClient]);
+  }, [preferences, updatePreferences, queryClient, metadata]);
 
   const handleNext = useCallback(() => {
     if (!selected) return;
