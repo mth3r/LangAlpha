@@ -11,6 +11,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Use ExcelJS lib/ source (where pnpm patch applies) instead of dist/exceljs.min.js
+      'exceljs': path.resolve(__dirname, './node_modules/exceljs/excel.js'),
     },
   },
   build: {
