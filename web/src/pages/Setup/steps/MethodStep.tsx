@@ -257,9 +257,10 @@ export default function MethodStep() {
     try {
       await api.post('/api/auth/invitations/redeem', { code: invitationCode.trim() });
       setLocalRedeemed(true);
-      // Bust stale platform tier cache, then refresh the user query
+      // Bust stale platform tier cache, then refresh user + model access queries
       await getCurrentUser({ refresh_tier: true }).catch(() => {});
       await queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.platform.models() });
       navigate('/setup/defaults');
     } catch (e: unknown) {
       const err = e as {
@@ -279,6 +280,7 @@ export default function MethodStep() {
         setLocalRedeemed(true);
         await getCurrentUser({ refresh_tier: true }).catch(() => {});
         await queryClient.invalidateQueries({ queryKey: queryKeys.user.me() });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.platform.models() });
         navigate('/setup/defaults');
         return;
       } else if (typeof detail === 'string') {
