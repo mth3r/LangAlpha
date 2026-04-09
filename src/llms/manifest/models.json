@@ -387,8 +387,22 @@
       "text"
     ]
   },
-  "glm-5": {
-    "model_id": "glm-5",
+  "glm-5.1": {
+    "model_id": "glm-5.1",
+    "provider": "z-ai",
+    "visible": true,
+    "parameters": {
+      "max_tokens": 128000,
+      "thinking": {
+        "type": "enabled"
+      }
+    },
+    "input_modalities": [
+      "text"
+    ]
+  },
+  "glm-5v-turbo": {
+    "model_id": "glm-5v-turbo",
     "provider": "z-ai",
     "visible": true,
     "parameters": {
@@ -399,7 +413,8 @@
     },
     "input_modalities": [
       "text",
-      "image"
+      "image",
+      "pdf"
     ]
   },
   "glm-5-turbo": {
@@ -430,8 +445,22 @@
       "text"
     ]
   },
-  "glm-5-cn": {
-    "model_id": "glm-5",
+  "glm-5.1-cn": {
+    "model_id": "glm-5.1",
+    "provider": "z-ai-cn",
+    "visible": true,
+    "parameters": {
+      "max_tokens": 128000,
+      "thinking": {
+        "type": "enabled"
+      }
+    },
+    "input_modalities": [
+      "text"
+    ]
+  },
+  "glm-5v-turbo-cn": {
+    "model_id": "glm-5v-turbo",
     "provider": "z-ai-cn",
     "visible": true,
     "parameters": {
@@ -442,7 +471,8 @@
     },
     "input_modalities": [
       "text",
-      "image"
+      "image",
+      "pdf"
     ]
   },
   "minimax-m2.7": {
