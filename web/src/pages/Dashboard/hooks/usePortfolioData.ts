@@ -110,16 +110,18 @@ export function usePortfolioData() {
 
           // Apply split adjustments to cost basis and quantity
           const splits = splitsMap[sym] ?? [];
-          let adjCost = ac;
+          let adjCost: number | null = ac;
           let adjQty = q;
           if (splits.length > 0 && ac != null) {
             // Sort chronologically and apply each split
             const sorted = [...splits].sort((a, b) => a.date.localeCompare(b.date));
+            let costAcc: number = ac;
             for (const s of sorted) {
               const ratio = s.numerator / s.denominator;
               adjQty = adjQty * ratio;
-              adjCost = adjCost / ratio;
+              costAcc = costAcc / ratio;
             }
+            adjCost = costAcc;
           }
           const hasSplitAdjustment = splits.length > 0 && ac != null && adjCost !== ac;
 
