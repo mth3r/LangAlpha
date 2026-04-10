@@ -576,5 +576,32 @@ class YFinanceFinancialSource:
     ) -> list[dict[str, Any]]:
         return await asyncio.to_thread(_search_stocks, query, limit)
 
+    async def get_stock_splits(
+        self, symbol: str, from_date: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return stock splits since from_date (YYYY-MM-DD), or all splits if None."""
+        def _fetch() -> list[dict[str, Any]]:
+            ticker = yf.Ticker(symbol)
+            splits = ticker.splits  # pandas Series indexed by DatetimeIndex
+            if splits is None or splits.empty:
+                return []
+            result = []
+            for dt, ratio in splits.items():
+                date_str = dt.strftime("%Y-%m-%d")
+                if from_date and date_str < from_date:
+                    continue
+                result.append({
+                    "date": date_str,
+                    "numerator": float(ratio),
+                    "denominator": 1.0,
+                })
+            return result
+
+        try:
+            return await asyncio.to_thread(_fetch)
+        except Exception:
+            logger.warning("get_stock_splits failed for %s", symbol, exc_info=True)
+            return []
+
     async def close(self) -> None:
         pass

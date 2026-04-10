@@ -275,6 +275,17 @@ function Dashboard() {
               />
             </div>
             <div>
+              <label className="text-xs block mb-1" style={{ color: 'var(--color-text-secondary)' }}>Purchase Date</label>
+              <input
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                value={portfolio.editForm.firstPurchasedAt ?? ''}
+                onChange={(e) => portfolio.setEditForm?.({ ...portfolio.editForm, firstPurchasedAt: e.target.value })}
+                className="w-full px-3 py-2 rounded-md text-sm border"
+                style={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border-default)', color: 'var(--color-text-primary)', colorScheme: 'dark' }}
+              />
+            </div>
+            <div>
               <label className="text-xs block mb-1" style={{ color: 'var(--color-text-secondary)' }}>Notes</label>
               <Input
                 placeholder="Optional"

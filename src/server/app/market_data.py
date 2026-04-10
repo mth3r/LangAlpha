@@ -773,3 +773,46 @@ async def get_market_status(user_id: CurrentUserId) -> MarketStatusResponse:
     except Exception as e:
         logger.error(f"Error fetching market status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Stock Splits Endpoint
+# =============================================================================
+
+
+@router.get(
+    "/stocks/{symbol}/splits",
+    summary="Get historical stock splits",
+    description="Return stock split history for a symbol since an optional from_date (YYYY-MM-DD). Used to adjust cost basis for portfolio holdings.",
+)
+async def get_stock_splits(
+    symbol: str,
+    user_id: CurrentUserId,
+    from_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD). Only returns splits on or after this date."),
+) -> dict:
+    """Get stock splits since from_date, cached for 24 hours."""
+    symbol_upper = symbol.strip().upper()
+
+    try:
+        from src.utils.cache.redis_cache import get_cache_client
+        from src.data_client.yfinance.financial_source import YFinanceFinancialSource
+
+        cache = get_cache_client()
+        cache_key = f"splits:{symbol_upper}:{from_date or 'all'}"
+
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        source = YFinanceFinancialSource()
+        splits = await source.get_stock_splits(symbol_upper, from_date)
+        result = {"symbol": symbol_upper, "splits": splits}
+
+        await cache.set(cache_key, result, ttl=86400)  # 24 hours
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching splits for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

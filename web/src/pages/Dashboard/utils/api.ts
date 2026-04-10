@@ -640,3 +640,23 @@ export async function getEarningsCalendar({ from, to }: EarningsParams = {}): Pr
     return { data: [], count: 0 };
   }
 }
+
+/**
+ * Fetch stock split history since a given date.
+ * GET /api/v1/market-data/stocks/{symbol}/splits?from_date=YYYY-MM-DD
+ */
+export async function getStockSplits(
+  symbol: string,
+  fromDate?: string,
+): Promise<{ date: string; numerator: number; denominator: number }[]> {
+  try {
+    const params: Record<string, string> = {};
+    if (fromDate) params.from_date = fromDate;
+    const { data } = await api.get(`/api/v1/market-data/stocks/${encodeURIComponent(symbol)}/splits`, { params });
+    return data?.splits ?? [];
+  } catch (e: unknown) {
+    const err = e as { message?: string };
+    console.error(`[API] getStockSplits failed for ${symbol}:`, err?.message);
+    return [];
+  }
+}

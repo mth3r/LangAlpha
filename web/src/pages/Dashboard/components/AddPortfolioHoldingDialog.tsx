@@ -51,6 +51,7 @@ function AddPortfolioHoldingDialog({
   // Form fields for page 2
   const [quantity, setQuantity] = useState('');
   const [averageCost, setAverageCost] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [accountName, setAccountName] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -93,6 +94,7 @@ function AddPortfolioHoldingDialog({
       setSelectedStock(null);
       setQuantity('');
       setAverageCost('');
+      setPurchaseDate(new Date().toISOString().split('T')[0]);
       setAccountName('');
       setNotes('');
     }
@@ -108,6 +110,7 @@ function AddPortfolioHoldingDialog({
     setSelectedStock(null);
     setQuantity('');
     setAverageCost('');
+    setPurchaseDate(new Date().toISOString().split('T')[0]);
     setAccountName('');
     setNotes('');
   };
@@ -149,7 +152,7 @@ function AddPortfolioHoldingDialog({
       currency: selectedStock.currency || 'USD',
       account_name: accountName.trim() || undefined,
       notes: notes.trim() || undefined,
-      first_purchased_at: new Date().toISOString(),
+      first_purchased_at: purchaseDate ? new Date(purchaseDate + 'T00:00:00').toISOString() : new Date().toISOString(),
     };
 
     onAdd(payload);
@@ -297,6 +300,21 @@ function AddPortfolioHoldingDialog({
                       style={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border-default)', color: 'var(--color-text-primary)' }}
                     />
                   </div>
+                </div>
+
+                {/* Purchase Date */}
+                <div>
+                  <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+                    Purchase Date <span style={{ color: 'var(--color-loss)' }}>*</span>
+                  </label>
+                  <input
+                    type="date"
+                    max={new Date().toISOString().split('T')[0]}
+                    value={purchaseDate}
+                    onChange={(e) => setPurchaseDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md text-sm border"
+                    style={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border-default)', color: 'var(--color-text-primary)', colorScheme: 'dark' }}
+                  />
                 </div>
 
                 {/* Account Name */}

@@ -6,6 +6,7 @@ import {
   deletePortfolioHolding,
   getPortfolio,
   getStockPrices,
+  getStockSplits,
   updatePortfolioHolding,
 } from '../utils/api';
 import type { PortfolioHoldingPayload, PortfolioHoldingUpdatePayload } from '../utils/portfolio';
@@ -16,6 +17,10 @@ export interface PortfolioRow {
   symbol: string;
   quantity?: number | null;
   average_cost?: number | null;
+  first_purchased_at?: string | null;
+  splitAdjustedCost?: number | null;
+  splitAdjustedQuantity?: number | null;
+  hasSplitAdjustment?: boolean;
   notes?: string;
   price: number;
   marketValue?: number;
@@ -35,6 +40,7 @@ interface PortfolioQueryData {
 interface PortfolioEditForm {
   quantity: string;
   averageCost: string;
+  firstPurchasedAt: string;
   notes: string;
 }
 
@@ -68,12 +74,12 @@ export function usePortfolioData() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState<PortfolioRow | null>(null);
-  const [editForm, setEditForm] = useState<PortfolioEditForm>({ quantity: '', averageCost: '', notes: '' });
+  const [editForm, setEditForm] = useState<PortfolioEditForm>({ quantity: '', averageCost: '', firstPurchasedAt: '', notes: '' });
 
   const { data = { rows: [], hasRealHoldings: false }, isLoading: loading, refetch: fetchPortfolio } = useQuery<PortfolioQueryData>({
     queryKey: ['portfolioData'],
     queryFn: async (): Promise<PortfolioQueryData> => {
-      const { holdings } = await getPortfolio() as { holdings?: Array<{ user_portfolio_id: string; symbol: string; quantity?: number; average_cost?: number | null; notes?: string; [key: string]: unknown }> };
+      const { holdings } = await getPortfolio() as { holdings?: Array<{ user_portfolio_id: string; symbol: string; quantity?: number; average_cost?: number | null; first_purchased_at?: string | null; notes?: string; [key: string]: unknown }> };
       const symbols = holdings?.length
         ? holdings.map((h) => String(h.symbol || '').trim().toUpperCase())
         : [];
@@ -81,19 +87,54 @@ export function usePortfolioData() {
       const bySym: Record<string, StockPrice> = Object.fromEntries((prices || []).map((p) => [p.symbol, p]));
 
       if (holdings?.length) {
+        // Fetch splits for each holding that has a purchase date, in parallel
+        const splitsMap: Record<string, { date: string; numerator: number; denominator: number }[]> = {};
+        await Promise.all(
+          holdings.map(async (h) => {
+            const sym = String(h.symbol || '').trim().toUpperCase();
+            const purchaseDate = h.first_purchased_at
+              ? h.first_purchased_at.split('T')[0]
+              : null;
+            if (purchaseDate) {
+              splitsMap[sym] = await getStockSplits(sym, purchaseDate);
+            }
+          })
+        );
+
         const combined: PortfolioRow[] = holdings.map((h) => {
           const sym = String(h.symbol || '').trim().toUpperCase();
           const p = bySym[sym] || {} as Partial<StockPrice>;
           const q = Number(h.quantity || 0);
           const ac = h.average_cost != null ? Number(h.average_cost) : null;
           const price = p.price ?? 0;
-          const marketValue = q * price;
-          const plPct = ac != null && ac > 0 ? ((price - ac) / ac) * 100 : null;
+
+          // Apply split adjustments to cost basis and quantity
+          const splits = splitsMap[sym] ?? [];
+          let adjCost = ac;
+          let adjQty = q;
+          if (splits.length > 0 && ac != null) {
+            // Sort chronologically and apply each split
+            const sorted = [...splits].sort((a, b) => a.date.localeCompare(b.date));
+            for (const s of sorted) {
+              const ratio = s.numerator / s.denominator;
+              adjQty = adjQty * ratio;
+              adjCost = adjCost / ratio;
+            }
+          }
+          const hasSplitAdjustment = splits.length > 0 && ac != null && adjCost !== ac;
+
+          const effectiveCost = hasSplitAdjustment ? adjCost : ac;
+          const marketValue = adjQty * price;
+          const plPct = effectiveCost != null && effectiveCost > 0 ? ((price - effectiveCost) / effectiveCost) * 100 : null;
           return {
             user_portfolio_id: h.user_portfolio_id,
             symbol: sym,
             quantity: q,
             average_cost: ac,
+            first_purchased_at: h.first_purchased_at ?? null,
+            splitAdjustedCost: hasSplitAdjustment ? adjCost : null,
+            splitAdjustedQuantity: hasSplitAdjustment ? adjQty : null,
+            hasSplitAdjustment: hasSplitAdjustment ?? false,
             notes: h.notes ?? '',
             price,
             marketValue,
@@ -174,9 +215,13 @@ export function usePortfolioData() {
   const openEdit = useCallback((row: PortfolioRow | null) => {
     setEditRow(row);
     if (row) {
+      const purchaseDateStr = row.first_purchased_at
+        ? row.first_purchased_at.split('T')[0]
+        : '';
       setEditForm({
         quantity: row.quantity != null ? String(row.quantity) : '',
         averageCost: row.average_cost != null ? String(row.average_cost) : '',
+        firstPurchasedAt: purchaseDateStr,
         notes: row.notes ?? '',
       });
     }
@@ -193,6 +238,9 @@ export function usePortfolioData() {
         {
           quantity: q,
           average_cost: ac,
+          first_purchased_at: editForm.firstPurchasedAt
+            ? new Date(editForm.firstPurchasedAt + 'T00:00:00').toISOString()
+            : undefined,
           notes: editForm.notes.trim() || undefined,
         } as PortfolioHoldingUpdatePayload
       );

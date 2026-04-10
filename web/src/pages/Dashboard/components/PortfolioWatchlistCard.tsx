@@ -26,6 +26,10 @@ interface PortfolioRow {
   price: number;
   quantity?: number | null;
   average_cost?: number | null;
+  first_purchased_at?: string | null;
+  splitAdjustedCost?: number | null;
+  splitAdjustedQuantity?: number | null;
+  hasSplitAdjustment?: boolean;
   marketValue?: number;
   unrealizedPlPercent?: number | null;
   isPositive?: boolean;
@@ -191,11 +195,20 @@ function PortfolioItem({ item, index, onEdit, onDelete, valuesHidden, marketStat
       }}
     >
       <div>
-        <div className="font-bold text-sm" style={{ color: 'var(--color-text-primary)' }}>
+        <div className="font-bold text-sm flex items-center gap-1.5" style={{ color: 'var(--color-text-primary)' }}>
           {item.symbol}
+          {item.hasSplitAdjustment && (
+            <span
+              className="text-[9px] font-semibold px-1 py-0.5 rounded"
+              style={{ backgroundColor: 'var(--color-bg-hover)', color: 'var(--color-text-secondary)' }}
+              title={`Split-adjusted cost: $${Number(item.splitAdjustedCost).toFixed(2)} (original: $${Number(item.average_cost).toFixed(2)})`}
+            >
+              split adj.
+            </span>
+          )}
         </div>
         <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-          {valuesHidden ? '*** shares' : item.quantity != null ? `${Number(item.quantity).toLocaleString()} shares` : ''}
+          {valuesHidden ? '*** shares' : item.quantity != null ? `${Number(item.hasSplitAdjustment ? item.splitAdjustedQuantity : item.quantity).toLocaleString(undefined, { maximumFractionDigits: 4 })} shares` : ''}
         </div>
       </div>
 
