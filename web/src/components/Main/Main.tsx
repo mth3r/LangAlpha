@@ -10,6 +10,7 @@ const DetailPage = React.lazy(() => import('../../pages/Detail/DetailPage'));
 const NewsDetailPage = React.lazy(() => import('../../pages/Detail/NewsDetailPage'));
 const Automations = React.lazy(() => import('../../pages/Automations/Automations'));
 const Settings = React.lazy(() => import('../../pages/Settings/Settings'));
+const Strategies = React.lazy(() => import('../../pages/Strategies/Strategies'));
 
 function Main() {
   const location = useLocation();
@@ -28,6 +29,7 @@ function Main() {
         <Route path="/market" element={<MarketView />} />
         <Route path="/automations" element={<Automations />} />
         <Route path="/settings" element={<Settings />} />
+      <Route path="/strategies" element={<Strategies />} />
         <Route path="/news/:id" element={<NewsDetailPage />} />
         <Route path="/detail/:indexNumber" element={<DetailPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
