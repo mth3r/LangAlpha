@@ -200,7 +200,7 @@ def _exec_strategy(python_code: str, df: Any) -> List[Dict[str, Any]]:
     except ImportError:
         ta = None
 
-    namespace: dict = {"pd": pd, "df": df, "__builtins__": {}}
+    namespace: dict = {"pd": pd, "df": df, "__builtins__": __builtins__}
     if ta is not None:
         namespace["ta"] = ta
 
