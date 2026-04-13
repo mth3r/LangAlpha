@@ -7,14 +7,12 @@
 
 llm:
   # Model name from src/llms/manifest/models.json
-  name: "qwen3.5-plus"
-  flash: "qwen3.5-flash"
-  summarization: "qwen3.5-flash" # defaults to flash model
-  fetch: "qwen3.5-flash"         # defaults to flash model
+  name: "gemini-3.1-pro"
+  flash: "gemini-3-flash"
+  summarization: "gemini-3-flash" # defaults to flash model
+  fetch: "gemini-3-flash"         # defaults to flash model
   fallback:
-    - "kimi-k2.5"
-    - "minimax-m2.7"
-    - "glm-5-turbo"
+    - "gemini-3.1-flash-lite"
 
 sandbox:
   # Provider selection: "daytona" (cloud) or "docker" (local).
