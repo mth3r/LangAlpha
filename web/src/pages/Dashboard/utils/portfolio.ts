@@ -58,3 +58,50 @@ export async function updatePortfolioHolding(id: string, payload: PortfolioHoldi
 export async function deletePortfolioHolding(id: string): Promise<void> {
   await api.delete(`/api/v1/users/me/portfolio/${encodeURIComponent(id)}`);
 }
+
+export interface ImportRow {
+  symbol: string;
+  shares: number;
+  purchase_price: number;
+  purchase_date: string;
+  account: string;
+  notes: string;
+  adjusted_shares: number;
+  adjusted_price: number;
+  split_ratio: number;
+  error: string;
+}
+
+export interface ImportPreviewResponse {
+  rows: ImportRow[];
+  total: number;
+  errors: number;
+}
+
+export interface ImportConfirmResponse {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
+export function downloadTemplate(): void {
+  window.open('/api/v1/users/me/portfolio/template', '_blank');
+}
+
+export async function previewImport(file: File): Promise<ImportPreviewResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post('/api/v1/users/me/portfolio/preview', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data as ImportPreviewResponse;
+}
+
+export async function confirmImport(file: File): Promise<ImportConfirmResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await api.post('/api/v1/users/me/portfolio/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data as ImportConfirmResponse;
+}

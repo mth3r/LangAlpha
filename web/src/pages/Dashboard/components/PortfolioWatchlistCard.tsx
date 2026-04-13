@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, ArrowUpRight, ArrowDownRight, Trash2, Pencil, Eye, EyeOff, Sunrise, Sunset, MoreVertical } from 'lucide-react';
+import { Plus, Upload, ArrowUpRight, ArrowDownRight, Trash2, Pencil, Eye, EyeOff, Sunrise, Sunset, MoreVertical } from 'lucide-react';
+import ImportPortfolioDialog from './ImportPortfolioDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { getExtendedHoursInfo } from '@/lib/marketUtils';
@@ -352,6 +353,7 @@ function PortfolioWatchlistCard({
   const isMobile = useIsMobile();
   const [activeTab, setActiveTabRaw] = useState<PWTabKey>(() => (localStorage.getItem('portfolio_active_tab') as PWTabKey) || 'watchlist');
   const [valuesHidden, setValuesHiddenRaw] = useState(() => localStorage.getItem('portfolio_values_hidden') === 'true');
+  const [showImport, setShowImport] = useState(false);
 
   const setActiveTab = (tab: PWTabKey) => {
     setActiveTabRaw(tab);
@@ -527,10 +529,22 @@ function PortfolioWatchlistCard({
                     />
                   ))}
               <AddNewButton label="Add Transaction" onClick={onPortfolioAdd} />
+              <button
+                onClick={() => setShowImport(true)}
+                className="flex items-center gap-1.5 w-full mt-1 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
+              >
+                <Upload size={14} /> Import from CSV
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      <ImportPortfolioDialog
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        onImported={() => { setShowImport(false); onPortfolioAdd?.(); }}
+      />
     </div>
   );
 }
