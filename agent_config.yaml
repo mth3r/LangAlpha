@@ -7,12 +7,12 @@
 
 llm:
   # Model name from src/llms/manifest/models.json
-  name: "gemini-3.1-pro"
-  flash: "gemini-3-flash"
-  summarization: "gemini-3-flash" # defaults to flash model
-  fetch: "gemini-3-flash"         # defaults to flash model
+  name: "llama-3.3-70b-groq"
+  flash: "llama-3.3-70b-groq"
+  summarization: "llama-3.3-70b-groq" # defaults to flash model
+  fetch: "llama-3.3-70b-groq"         # defaults to flash model
   fallback:
-    - "gemini-3.1-flash-lite"
+    - "gemini-3-flash"
 
 sandbox:
   # Provider selection: "daytona" (cloud) or "docker" (local).

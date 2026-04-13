@@ -1,4 +1,13 @@
 {
+  "llama-3.3-70b-groq": {
+    "model_id": "llama-3.3-70b-versatile",
+    "provider": "groq",
+    "display_name": "Llama 3.3 70B (Groq)",
+    "visible": true,
+    "input_modalities": [
+      "text"
+    ]
+  },
   "gpt-5.4": {
     "model_id": "gpt-5.4",
     "provider": "openai",
