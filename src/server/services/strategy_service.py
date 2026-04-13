@@ -76,14 +76,37 @@ async def run_strategy(
 ) -> Dict[str, Any]:
     """Execute translated Python strategy against historical OHLCV data."""
     import pandas as pd
+    from datetime import datetime, timedelta, timezone
 
-    # Fetch OHLCV data
-    df = await _fetch_ohlcv(symbol, interval, from_date, to_date)
+    # Always fetch 2 years of data before from_date for indicator warmup.
+    # Signals are then filtered to the user-requested window.
+    warmup_start: Optional[str] = None
+    if from_date:
+        try:
+            dt = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+            warmup_start = (dt - timedelta(days=730)).strftime("%Y-%m-%d")
+        except ValueError:
+            warmup_start = None
+
+    df = await _fetch_ohlcv(symbol, interval, warmup_start or from_date, to_date)
     if df is None or df.empty:
         return {"signals": [], "stats": _empty_stats()}
 
-    # Execute strategy in restricted namespace
+    # Execute strategy on full dataset (warmup included)
     signals = await asyncio.to_thread(_exec_strategy, python_code, df)
+
+    # Filter signals to the user-requested date window
+    if from_date:
+        try:
+            cutoff = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+            if cutoff.tzinfo is None:
+                cutoff = cutoff.replace(tzinfo=timezone.utc)
+            signals = [
+                s for s in signals
+                if datetime.fromisoformat(s["timestamp"].replace("Z", "+00:00")).replace(tzinfo=timezone.utc) >= cutoff
+            ]
+        except (ValueError, KeyError):
+            pass
 
     # Compute backtest stats
     stats = _compute_stats(signals, df)
