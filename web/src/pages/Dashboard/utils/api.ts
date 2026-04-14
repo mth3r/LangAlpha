@@ -664,6 +664,26 @@ export async function getYtdStartPrice(symbol: string): Promise<number | null> {
   }
 }
 
+export type PortfolioPerformancePeriod = '1D' | '1W' | '1M' | '3M' | 'YTD' | '1Y' | '3Y' | 'ALL';
+
+export interface PortfolioPerformanceData {
+  dates: string[];
+  values: number[];
+  cost_basis: number;
+  period_start_value: number;
+}
+
+/**
+ * Fetch portfolio value time-series for the given period.
+ * GET /api/v1/users/me/portfolio/performance?period=...
+ */
+export async function getPortfolioPerformance(
+  period: PortfolioPerformancePeriod,
+): Promise<PortfolioPerformanceData> {
+  const { data } = await api.get('/api/v1/users/me/portfolio/performance', { params: { period } });
+  return data;
+}
+
 /**
  * Fetch stock split history since a given date.
  * GET /api/v1/market-data/stocks/{symbol}/splits?from_date=YYYY-MM-DD

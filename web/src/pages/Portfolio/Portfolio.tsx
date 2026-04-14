@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePortfolioData } from '../Dashboard/hooks/usePortfolioData';
 import { getYtdStartPrice } from '../Dashboard/utils/api';
+import type { PortfolioPerformancePeriod } from '../Dashboard/utils/api';
 import PortfolioSummaryCards from './components/PortfolioSummaryCards';
+import PortfolioPerformanceChart from './components/PortfolioPerformanceChart';
 import PortfolioTable from './components/PortfolioTable';
 import TickerChartModal from './components/TickerChartModal';
 import './Portfolio.css';
@@ -10,6 +12,7 @@ import './Portfolio.css';
 export default function Portfolio() {
   const { rows, loading } = usePortfolioData();
   const [chartSymbol, setChartSymbol] = useState<string | null>(null);
+  const [perfPeriod, setPerfPeriod] = useState<PortfolioPerformancePeriod>('1Y');
 
   const symbols = rows.map((r) => r.symbol);
 
@@ -43,6 +46,7 @@ export default function Portfolio() {
         ) : (
           <div className="portfolio-body">
             <PortfolioSummaryCards rows={rows} ytdPriceMap={ytdPriceMap} />
+            <PortfolioPerformanceChart period={perfPeriod} onPeriodChange={setPerfPeriod} />
             <PortfolioTable
               rows={rows}
               ytdPriceMap={ytdPriceMap}
