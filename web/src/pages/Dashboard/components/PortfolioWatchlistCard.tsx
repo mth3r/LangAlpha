@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Upload, ArrowUpRight, ArrowDownRight, Trash2, Pencil, Eye, EyeOff, Sunrise, Sunset, MoreVertical } from 'lucide-react';
+import { Plus, Upload, ArrowUpRight, ArrowDownRight, Trash2, Pencil, Eye, EyeOff, Sunrise, Sunset, MoreVertical, Settings } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import ImportPortfolioDialog from './ImportPortfolioDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +8,10 @@ import { getExtendedHoursInfo } from '@/lib/marketUtils';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem } from '@/components/ui/context-menu';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { getYtdStartPrice } from '../utils/api';
+
+type PlPeriod = 'day' | 'ytd' | 'alltime';
+type PlFormat = 'pct' | 'dollar';
 
 interface WatchlistRow {
   watchlist_item_id?: string | number;
@@ -37,11 +42,64 @@ interface PortfolioRow {
   previousClose?: number | null;
   earlyTradingChangePercent?: number | null;
   lateTradingChangePercent?: number | null;
+  dayChangeDollars?: number | null;
+  dayChangePct?: number | null;
   [key: string]: unknown;
 }
 
 // TODO: type properly once marketUtils exports this
 type MarketStatusData = Parameters<typeof getExtendedHoursInfo>[0];
+
+function getPlDisplay(
+  item: PortfolioRow,
+  period: PlPeriod,
+  format: PlFormat,
+  ytdPriceMap: Record<string, number | null>,
+): { str: string; isPos: boolean } {
+  const qty = item.hasSplitAdjustment
+    ? (item.splitAdjustedQuantity ?? item.quantity ?? 0)
+    : (item.quantity ?? 0);
+  const cost = item.hasSplitAdjustment
+    ? (item.splitAdjustedCost ?? item.average_cost ?? 0)
+    : (item.average_cost ?? 0);
+  const price = item.price ?? 0;
+  const marketValue = item.marketValue ?? qty * price;
+
+  let dollars: number | null = null;
+  let pct: number | null = null;
+
+  if (period === 'day') {
+    dollars = item.dayChangeDollars ?? null;
+    pct = item.dayChangePct ?? null;
+  } else if (period === 'ytd') {
+    const ytdPrice = ytdPriceMap[item.symbol];
+    if (ytdPrice != null) {
+      dollars = (price - ytdPrice) * qty;
+      pct = ytdPrice > 0 ? ((price - ytdPrice) / ytdPrice) * 100 : 0;
+    }
+  } else {
+    if (cost > 0) {
+      dollars = marketValue - qty * cost;
+      pct = item.unrealizedPlPercent ?? null;
+    }
+  }
+
+  if (format === 'pct') {
+    if (pct == null) return { str: '—', isPos: true };
+    const isPos = pct >= 0;
+    return { str: (isPos ? '+' : '') + pct.toFixed(2) + '%', isPos };
+  } else {
+    if (dollars == null) return { str: '—', isPos: true };
+    const isPos = dollars >= 0;
+    return {
+      str:
+        (isPos ? '+' : '-') +
+        '$' +
+        Math.abs(dollars).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      isPos,
+    };
+  }
+}
 
 interface WatchlistItemProps {
   item: WatchlistRow;
@@ -57,7 +115,6 @@ function WatchlistItem({ item, index, onDelete, marketStatus, isMobile }: Watchl
   const pctStr = (pos ? '+' : '') + Number(item.changePercent).toFixed(2) + '%';
   const hasId = !!item.watchlist_item_id;
 
-  // Extended hours: show when not regular session and data available
   const { extPct, extType, extPrice: _extPrice, extChange: _extChange } = getExtendedHoursInfo(marketStatus, item, { shortLabels: true });
   const extColor = extType === 'pre' ? '#fbbf24' : '#3b82f6';
 
@@ -113,7 +170,6 @@ function WatchlistItem({ item, index, onDelete, marketStatus, isMobile }: Watchl
           )}
         </div>
 
-        {/* Mobile: visible menu button */}
         {isMobile && hasId && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -137,7 +193,6 @@ function WatchlistItem({ item, index, onDelete, marketStatus, isMobile }: Watchl
     </motion.div>
   );
 
-  // Desktop: wrap with right-click context menu
   if (!isMobile && hasId) {
     return (
       <ContextMenu>
@@ -163,18 +218,16 @@ interface PortfolioItemProps {
   valuesHidden: boolean;
   marketStatus: MarketStatusData;
   isMobile: boolean;
+  plPeriod: PlPeriod;
+  plFormat: PlFormat;
+  ytdPriceMap: Record<string, number | null>;
 }
 
-function PortfolioItem({ item, index, onEdit, onDelete, valuesHidden, marketStatus, isMobile }: PortfolioItemProps) {
+function PortfolioItem({ item, index, onEdit, onDelete, valuesHidden, marketStatus, isMobile, plPeriod, plFormat, ytdPriceMap }: PortfolioItemProps) {
   const navigate = useNavigate();
-  const pos = item.isPositive;
-  const plStr =
-    item.unrealizedPlPercent != null
-      ? (pos ? '+' : '') + Number(item.unrealizedPlPercent).toFixed(2) + '%'
-      : '—';
+  const { str: plStr, isPos: pos } = getPlDisplay(item, plPeriod, plFormat, ytdPriceMap);
   const hasId = !!item.user_portfolio_id;
 
-  // Extended hours
   const { extPct, extType, extPrice: _extPrice2 } = getExtendedHoursInfo(marketStatus, item, { shortLabels: true });
   const extColor = extType === 'pre' ? '#fbbf24' : '#3b82f6';
 
@@ -231,7 +284,7 @@ function PortfolioItem({ item, index, onEdit, onDelete, valuesHidden, marketStat
               color: pos ? 'var(--color-profit)' : 'var(--color-loss)',
             }}
           >
-            {plStr}
+            {valuesHidden ? '—' : plStr}
           </div>
           {extType && extPct != null && (
             <div className="text-[10px] mt-0.5 text-center flex items-center justify-center gap-0.5" style={{ color: extColor }}>
@@ -241,7 +294,6 @@ function PortfolioItem({ item, index, onEdit, onDelete, valuesHidden, marketStat
           )}
         </div>
 
-        {/* Mobile: visible menu button */}
         {isMobile && hasId && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -269,7 +321,6 @@ function PortfolioItem({ item, index, onEdit, onDelete, valuesHidden, marketStat
     </motion.div>
   );
 
-  // Desktop: wrap with right-click context menu
   if (!isMobile && hasId) {
     return (
       <ContextMenu>
@@ -353,6 +404,8 @@ function PortfolioWatchlistCard({
   const isMobile = useIsMobile();
   const [activeTab, setActiveTabRaw] = useState<PWTabKey>(() => (localStorage.getItem('portfolio_active_tab') as PWTabKey) || 'watchlist');
   const [valuesHidden, setValuesHiddenRaw] = useState(() => localStorage.getItem('portfolio_values_hidden') === 'true');
+  const [plPeriod, setPlPeriodRaw] = useState<PlPeriod>(() => (localStorage.getItem('portfolio_pnl_period') as PlPeriod) || 'alltime');
+  const [plFormat, setPlFormatRaw] = useState<PlFormat>(() => (localStorage.getItem('portfolio_pnl_format') as PlFormat) || 'pct');
   const [showImport, setShowImport] = useState(false);
 
   const setActiveTab = (tab: PWTabKey) => {
@@ -366,23 +419,75 @@ function PortfolioWatchlistCard({
       return next;
     });
   };
+  const setPlPeriod = (p: PlPeriod) => {
+    setPlPeriodRaw(p);
+    localStorage.setItem('portfolio_pnl_period', p);
+  };
+  const setPlFormat = (f: PlFormat) => {
+    setPlFormatRaw(f);
+    localStorage.setItem('portfolio_pnl_format', f);
+  };
 
-  // Compute portfolio summary
+  // Fetch YTD start prices only when YTD period is selected
+  const symbols = portfolioRows.map((r) => r.symbol);
+  const { data: ytdPriceMap = {} } = useQuery<Record<string, number | null>>({
+    queryKey: ['ytdPrices', symbols.join(',')],
+    queryFn: async () => {
+      const map: Record<string, number | null> = {};
+      await Promise.all(symbols.map(async (sym) => {
+        map[sym] = await getYtdStartPrice(sym);
+      }));
+      return map;
+    },
+    enabled: plPeriod === 'ytd' && symbols.length > 0,
+    staleTime: 1000 * 60 * 60, // 1 hour — YTD start price doesn't change intraday
+  });
+
+  // Portfolio summary
   const totalValue = portfolioRows.reduce((sum, r) => sum + (r.marketValue || 0), 0);
   const totalCost = portfolioRows.reduce(
     (sum, r) => sum + (r.average_cost != null ? r.average_cost * (r.quantity || 0) : 0),
-    0
+    0,
   );
-  const totalPl = totalCost > 0 ? totalValue - totalCost : 0;
-  const totalPlPct = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
-  const isPlPositive = totalPl >= 0;
+
+  // Summary P&L changes based on selected period
+  const summaryPl = (() => {
+    if (plPeriod === 'day') {
+      const dollars = portfolioRows.reduce((sum, r) => sum + (r.dayChangeDollars ?? 0), 0);
+      const prevTotal = portfolioRows.reduce((sum, r) => {
+        const qty = r.hasSplitAdjustment ? (r.splitAdjustedQuantity ?? r.quantity ?? 0) : (r.quantity ?? 0);
+        return sum + (r.previousClose ?? r.price) * qty;
+      }, 0);
+      const pct = prevTotal > 0 ? (dollars / prevTotal) * 100 : 0;
+      return { dollars, pct, isPos: dollars >= 0 };
+    } else if (plPeriod === 'ytd') {
+      const dollars = portfolioRows.reduce((sum, r) => {
+        const qty = r.hasSplitAdjustment ? (r.splitAdjustedQuantity ?? r.quantity ?? 0) : (r.quantity ?? 0);
+        const ytdPrice = ytdPriceMap[r.symbol];
+        return sum + (ytdPrice != null ? (r.price - ytdPrice) * qty : 0);
+      }, 0);
+      const ytdStart = portfolioRows.reduce((sum, r) => {
+        const qty = r.hasSplitAdjustment ? (r.splitAdjustedQuantity ?? r.quantity ?? 0) : (r.quantity ?? 0);
+        const ytdPrice = ytdPriceMap[r.symbol];
+        return sum + (ytdPrice ?? r.price) * qty;
+      }, 0);
+      const pct = ytdStart > 0 ? (dollars / ytdStart) * 100 : 0;
+      return { dollars, pct, isPos: dollars >= 0 };
+    } else {
+      const dollars = totalCost > 0 ? totalValue - totalCost : 0;
+      const pct = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
+      return { dollars, pct, isPos: dollars >= 0 };
+    }
+  })();
+
+  const periodLabel = plPeriod === 'day' ? 'today' : plPeriod === 'ytd' ? 'YTD' : 'all time';
 
   return (
     <div
       className="dashboard-glass-card p-6 flex flex-col"
       style={{ minHeight: '200px', maxHeight: 'clamp(300px, calc(100vh - 420px), 800px)' }}
     >
-      {/* Header with tab switcher */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
           {activeTab === 'watchlist' ? 'Watchlist' : 'Portfolio'}
@@ -426,14 +531,8 @@ function PortfolioWatchlistCard({
                 ? Array.from({ length: 5 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
                       <div className="flex-1">
-                        <div
-                          className="h-4 rounded mb-1"
-                          style={{ backgroundColor: 'var(--color-border-default)', width: '40%' }}
-                        />
-                        <div
-                          className="h-3 rounded"
-                          style={{ backgroundColor: 'var(--color-border-default)', width: '25%' }}
-                        />
+                        <div className="h-4 rounded mb-1" style={{ backgroundColor: 'var(--color-border-default)', width: '40%' }} />
+                        <div className="h-3 rounded" style={{ backgroundColor: 'var(--color-border-default)', width: '25%' }} />
                       </div>
                     </div>
                   ))
@@ -470,32 +569,83 @@ function PortfolioWatchlistCard({
                     <div className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       Net Asset Value
                     </div>
-                    <button
-                      onClick={() => setValuesHidden((h) => !h)}
-                      className="p-1 rounded-md transition-colors"
-                      style={{ color: 'var(--color-text-secondary)' }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                    >
-                      {valuesHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
+                    <div className="flex items-center gap-0.5">
+                      {/* P&L settings gear */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className="p-1 rounded-md transition-colors"
+                            style={{ color: 'var(--color-text-secondary)' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            title="P&L display settings"
+                          >
+                            <Settings size={13} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="p-3 w-44" onClick={(e) => e.stopPropagation()}>
+                          <div className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Show P&amp;L</div>
+                          <div className="flex gap-1 mb-3">
+                            {(['day', 'ytd', 'alltime'] as const).map((p) => (
+                              <button
+                                key={p}
+                                onClick={() => setPlPeriod(p)}
+                                className="flex-1 py-1 text-xs rounded-md font-medium transition-colors"
+                                style={{
+                                  backgroundColor: plPeriod === p ? 'var(--color-bg-elevated)' : 'transparent',
+                                  color: plPeriod === p ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                  outline: plPeriod === p ? '1px solid var(--color-border-elevated)' : 'none',
+                                }}
+                              >
+                                {p === 'day' ? 'Day' : p === 'ytd' ? 'YTD' : 'All'}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-secondary)' }}>Format</div>
+                          <div className="flex gap-1">
+                            {(['pct', 'dollar'] as const).map((f) => (
+                              <button
+                                key={f}
+                                onClick={() => setPlFormat(f)}
+                                className="flex-1 py-1 text-xs rounded-md font-medium transition-colors"
+                                style={{
+                                  backgroundColor: plFormat === f ? 'var(--color-bg-elevated)' : 'transparent',
+                                  color: plFormat === f ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                                  outline: plFormat === f ? '1px solid var(--color-border-elevated)' : 'none',
+                                }}
+                              >
+                                {f === 'pct' ? '%' : '$'}
+                              </button>
+                            ))}
+                          </div>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      {/* Eye toggle */}
+                      <button
+                        onClick={() => setValuesHidden((h) => !h)}
+                        className="p-1 rounded-md transition-colors"
+                        style={{ color: 'var(--color-text-secondary)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-hover)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        {valuesHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
                   </div>
-                  <div
-                    className="text-2xl font-bold mb-2 dashboard-mono"
-                    style={{ color: 'var(--color-text-primary)' }}
-                  >
+                  <div className="text-2xl font-bold mb-2 dashboard-mono" style={{ color: 'var(--color-text-primary)' }}>
                     {valuesHidden ? '********' : `$${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                   </div>
                   {!valuesHidden && (
                     <div
-                      className="flex items-center gap-2 text-xs font-medium w-fit px-2 py-1 rounded-full"
+                      className="flex items-center gap-1.5 text-xs font-medium w-fit px-2 py-1 rounded-full"
                       style={{
-                        backgroundColor: isPlPositive ? 'var(--color-profit-soft)' : 'var(--color-loss-soft)',
-                        color: isPlPositive ? 'var(--color-profit)' : 'var(--color-loss)',
+                        backgroundColor: summaryPl.isPos ? 'var(--color-profit-soft)' : 'var(--color-loss-soft)',
+                        color: summaryPl.isPos ? 'var(--color-profit)' : 'var(--color-loss)',
                       }}
                     >
-                      {isPlPositive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                      {isPlPositive ? '+' : '-'}${Math.abs(totalPl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({totalPlPct.toFixed(1)}%)
+                      {summaryPl.isPos ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                      {summaryPl.isPos ? '+' : '-'}${Math.abs(summaryPl.dollars).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({summaryPl.pct.toFixed(1)}%)
+                      <span className="opacity-60">{periodLabel}</span>
                     </div>
                   )}
                 </div>
@@ -505,14 +655,8 @@ function PortfolioWatchlistCard({
                 ? Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-3 p-3 animate-pulse">
                       <div className="flex-1">
-                        <div
-                          className="h-4 rounded mb-1"
-                          style={{ backgroundColor: 'var(--color-border-default)', width: '40%' }}
-                        />
-                        <div
-                          className="h-3 rounded"
-                          style={{ backgroundColor: 'var(--color-border-default)', width: '25%' }}
-                        />
+                        <div className="h-4 rounded mb-1" style={{ backgroundColor: 'var(--color-border-default)', width: '40%' }} />
+                        <div className="h-3 rounded" style={{ backgroundColor: 'var(--color-border-default)', width: '25%' }} />
                       </div>
                     </div>
                   ))
@@ -526,6 +670,9 @@ function PortfolioWatchlistCard({
                       valuesHidden={valuesHidden}
                       marketStatus={marketStatus}
                       isMobile={isMobile}
+                      plPeriod={plPeriod}
+                      plFormat={plFormat}
+                      ytdPriceMap={ytdPriceMap}
                     />
                   ))}
               <AddNewButton label="Add Transaction" onClick={onPortfolioAdd} />
