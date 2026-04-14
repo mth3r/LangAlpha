@@ -72,7 +72,7 @@ export default function ImportPortfolioDialog({ open, onClose, onImported }: Pro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50">
       <div className="bg-background border border-border rounded-lg w-full max-w-2xl mx-4 shadow-xl flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -164,13 +164,13 @@ export default function ImportPortfolioDialog({ open, onClose, onImported }: Pro
                           <>
                             <td className="py-2 pr-3 font-medium">{row.symbol}</td>
                             <td className="py-2 pr-3 text-right">{row.shares}</td>
-                            <td className="py-2 pr-3 text-right">${row.purchase_price.toFixed(2)}</td>
+                            <td className="py-2 pr-3 text-right">{row.purchase_price ? `$${row.purchase_price.toFixed(2)}` : '—'}</td>
                             <td className="py-2 pr-3">{row.purchase_date}</td>
                             <td className={`py-2 pr-3 text-right ${row.split_ratio !== 1 ? 'text-amber-500 font-medium' : 'text-muted-foreground'}`}>
                               {row.split_ratio !== 1 ? `${row.split_ratio}×` : '—'}
                             </td>
                             <td className="py-2 pr-3 text-right font-medium">{row.adjusted_shares}</td>
-                            <td className="py-2 pr-3 text-right font-medium">${row.adjusted_price.toFixed(2)}</td>
+                            <td className="py-2 pr-3 text-right font-medium">{row.adjusted_price ? `$${row.adjusted_price.toFixed(2)}` : '—'}</td>
                             <td className="py-2 text-muted-foreground">{row.account || '—'}</td>
                           </>
                         )}
