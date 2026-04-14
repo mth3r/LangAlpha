@@ -29,6 +29,8 @@ export interface PortfolioRow {
   previousClose?: number | null;
   earlyTradingChangePercent?: number | null;
   lateTradingChangePercent?: number | null;
+  dayChangeDollars?: number | null;
+  dayChangePct?: number | null;
   [key: string]: unknown;
 }
 
@@ -127,6 +129,10 @@ export function usePortfolioData() {
 
           const effectiveCost = hasSplitAdjustment ? adjCost : ac;
           const marketValue = adjQty * price;
+          const prevClose = p.previousClose ?? null;
+          const effectiveQty = hasSplitAdjustment ? adjQty : q;
+          const dayChangeDollars = prevClose != null ? (price - prevClose) * effectiveQty : null;
+          const dayChangePct = prevClose != null && prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : null;
           const plPct = effectiveCost != null && effectiveCost > 0 ? ((price - effectiveCost) / effectiveCost) * 100 : null;
           return {
             user_portfolio_id: h.user_portfolio_id,
@@ -145,6 +151,8 @@ export function usePortfolioData() {
             previousClose: p.previousClose ?? null,
             earlyTradingChangePercent: p.earlyTradingChangePercent ?? null,
             lateTradingChangePercent: p.lateTradingChangePercent ?? null,
+            dayChangeDollars,
+            dayChangePct,
           };
         });
         return { rows: combined, hasRealHoldings: true };
