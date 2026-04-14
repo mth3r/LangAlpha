@@ -1,4 +1,4 @@
-import { ChartCandlestick, LayoutDashboard, MessageSquareText, Timer, FlaskConical, Settings } from 'lucide-react';
+import { ChartCandlestick, LayoutDashboard, MessageSquareText, Timer, FlaskConical, Settings, Briefcase } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -34,6 +34,11 @@ function Sidebar() {
       key: '/automations',
       icon: Timer,
       label: t('sidebar.automations'),
+    },
+    {
+      key: '/portfolio',
+      icon: Briefcase,
+      label: 'Portfolio',
     },
     {
       key: '/strategies',

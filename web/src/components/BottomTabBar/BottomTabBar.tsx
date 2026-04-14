@@ -1,4 +1,4 @@
-import { ChartCandlestick, LayoutDashboard, MessageSquareText, Timer, Settings } from 'lucide-react';
+import { ChartCandlestick, LayoutDashboard, MessageSquareText, Timer, Settings, Briefcase } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import './BottomTabBar.css';
@@ -8,6 +8,7 @@ const menuItems = [
   { key: '/chat', icon: MessageSquareText, labelKey: 'sidebar.chatAgent' },
   { key: '/market', icon: ChartCandlestick, labelKey: 'sidebar.marketView' },
   { key: '/automations', icon: Timer, labelKey: 'sidebar.automations' },
+  { key: '/portfolio', icon: Briefcase, labelKey: 'sidebar.portfolio' },
   { key: '/settings', icon: Settings, labelKey: 'sidebar.settings' },
 ];
 

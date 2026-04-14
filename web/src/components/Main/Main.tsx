@@ -11,6 +11,7 @@ const NewsDetailPage = React.lazy(() => import('../../pages/Detail/NewsDetailPag
 const Automations = React.lazy(() => import('../../pages/Automations/Automations'));
 const Settings = React.lazy(() => import('../../pages/Settings/Settings'));
 const Strategies = React.lazy(() => import('../../pages/Strategies/Strategies'));
+const Portfolio = React.lazy(() => import('../../pages/Portfolio/Portfolio'));
 
 function Main() {
   const location = useLocation();
@@ -30,6 +31,7 @@ function Main() {
         <Route path="/automations" element={<Automations />} />
         <Route path="/settings" element={<Settings />} />
       <Route path="/strategies" element={<Strategies />} />
+        <Route path="/portfolio" element={<Portfolio />} />
         <Route path="/news/:id" element={<NewsDetailPage />} />
         <Route path="/detail/:indexNumber" element={<DetailPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
