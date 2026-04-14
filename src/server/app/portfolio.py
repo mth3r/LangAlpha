@@ -61,8 +61,8 @@ _CSV_TEMPLATE_EXAMPLE = [
 class ImportRow(BaseModel):
     symbol: str
     shares: float
-    purchase_price: float
-    purchase_date: str        # YYYY-MM-DD
+    purchase_price: float = 0.0
+    purchase_date: str = ""   # YYYY-MM-DD
     account: str = ""
     notes: str = ""
     # Populated by server after split adjustment:
@@ -121,7 +121,7 @@ def _parse_csv(content: bytes) -> tuple[list[ImportRow], list[str]]:
     headers = [h.strip().lower().replace(" ", "_") for h in reader.fieldnames]
     reader.fieldnames = headers
 
-    required = {"symbol", "shares", "purchase_price", "purchase_date"}
+    required = {"symbol", "shares"}
     missing = required - set(headers)
     if missing:
         return rows, [f"Missing required columns: {', '.join(sorted(missing))}"]
@@ -132,19 +132,34 @@ def _parse_csv(content: bytes) -> tuple[list[ImportRow], list[str]]:
             continue  # skip blank rows
 
         try:
-            shares = float((raw.get("shares") or "").replace(",", ""))
-            price = float((raw.get("purchase_price") or "").replace(",", "").replace("$", ""))
-            date_str = (raw.get("purchase_date") or "").strip()
-            # Accept MM/DD/YYYY, YYYY-MM-DD, M/D/YYYY
-            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%-m/%-d/%Y"):
+            shares_raw = (raw.get("shares") or "").strip().replace(",", "")
+            if not shares_raw:
+                errors.append(f"Row {i} ({sym}): missing required field 'shares'")
+                continue
+            shares = float(shares_raw)
+
+            # purchase_price is optional — treat missing/-- as 0
+            price_raw = (raw.get("purchase_price") or "").strip().replace(",", "").replace("$", "")
+            if price_raw and price_raw.lower() not in ("--", "-", "n/a", "na"):
                 try:
-                    parsed_date = datetime.strptime(date_str, fmt)
-                    date_str = parsed_date.strftime("%Y-%m-%d")
-                    break
+                    price = float(price_raw)
                 except ValueError:
-                    continue
+                    price = 0.0
             else:
-                raise ValueError(f"Unrecognised date '{date_str}' (use YYYY-MM-DD)")
+                price = 0.0
+
+            # purchase_date is optional — skip rather than error on bad/missing dates
+            date_str = (raw.get("purchase_date") or "").strip()
+            if date_str:
+                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%-m/%-d/%Y"):
+                    try:
+                        parsed_date = datetime.strptime(date_str, fmt)
+                        date_str = parsed_date.strftime("%Y-%m-%d")
+                        break
+                    except ValueError:
+                        continue
+                else:
+                    date_str = ""  # unrecognised format — treat as no date
 
             rows.append(ImportRow(
                 symbol=sym,
@@ -193,9 +208,9 @@ async def preview_portfolio_import(
 
     # Fetch split ratios in parallel
     async def _adjust(row: ImportRow) -> ImportRow:
-        ratio = await _get_split_ratio(row.symbol, row.purchase_date)
+        ratio = await _get_split_ratio(row.symbol, row.purchase_date) if row.purchase_date else 1.0
         row.adjusted_shares = round(row.shares * ratio, 6)
-        row.adjusted_price = round(row.purchase_price / ratio, 6) if ratio else row.purchase_price
+        row.adjusted_price = round(row.purchase_price / ratio, 6) if ratio and row.purchase_price else row.purchase_price
         row.split_ratio = ratio
         return row
 
@@ -229,11 +244,11 @@ async def import_portfolio(
     async def _import_row(row: ImportRow):
         nonlocal imported, skipped
         try:
-            ratio = await _get_split_ratio(row.symbol, row.purchase_date)
+            ratio = await _get_split_ratio(row.symbol, row.purchase_date) if row.purchase_date else 1.0
             adj_shares = Decimal(str(round(row.shares * ratio, 6)))
-            adj_price = Decimal(str(round(row.purchase_price / ratio, 6))) if ratio else Decimal(str(row.purchase_price))
+            adj_price = Decimal(str(round(row.purchase_price / ratio, 6))) if ratio and row.purchase_price else (Decimal(str(row.purchase_price)) if row.purchase_price else None)
 
-            purchase_dt = datetime.fromisoformat(row.purchase_date).replace(tzinfo=timezone.utc)
+            purchase_dt = datetime.fromisoformat(row.purchase_date).replace(tzinfo=timezone.utc) if row.purchase_date else None
 
             await db_upsert_portfolio_holding(
                 user_id=user_id,
