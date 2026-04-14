@@ -642,6 +642,29 @@ export async function getEarningsCalendar({ from, to }: EarningsParams = {}): Pr
 }
 
 /**
+ * Get the first trading day close price of the current year for YTD P&L.
+ * Fetches a narrow window around Jan 1 to find the first trading day.
+ */
+export async function getYtdStartPrice(symbol: string): Promise<number | null> {
+  const year = new Date().getFullYear();
+  const from = `${year - 1}-12-28`;
+  const to = `${year}-01-10`;
+  try {
+    const { data } = await api.get(`/api/v1/market-data/daily/stocks/${encodeURIComponent(symbol)}`, {
+      params: { from, to },
+    });
+    const points: { time: number; close: number }[] = data?.data ?? [];
+    if (!points.length) return null;
+    const sorted = [...points].sort((a, b) => a.time - b.time);
+    const janFirst = new Date(year, 0, 1).getTime();
+    const ytdPoint = sorted.find((p) => p.time >= janFirst) ?? sorted[sorted.length - 1];
+    return ytdPoint?.close ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch stock split history since a given date.
  * GET /api/v1/market-data/stocks/{symbol}/splits?from_date=YYYY-MM-DD
  */
