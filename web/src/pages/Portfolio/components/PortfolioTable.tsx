@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ArrowUpRight, ArrowDownRight, ChevronsUp, TrendingUp, Minus, TrendingDown, ChevronsDown } from 'lucide-react';
 import type { PortfolioRow } from '../../Dashboard/hooks/usePortfolioData';
 
 type SortKey =
@@ -27,19 +27,57 @@ const CONSENSUS_RANK: Record<string, number> = {
   'Strong Sell': 1,
 };
 
-const CONSENSUS_COLOR: Record<string, string> = {
-  'Strong Buy': 'var(--color-profit)',
-  'Buy': 'var(--color-profit)',
-  'Hold': '#f59e0b',
-  'Sell': 'var(--color-loss)',
-  'Strong Sell': 'var(--color-loss)',
+
+const CONSENSUS_ICON_CONFIG: Record<string, {
+  icon: React.ComponentType<{ size?: number }>;
+  color: string;
+  label: string;
+}> = {
+  'Strong Buy': { icon: ChevronsUp,    color: '#10b981', label: 'Strong Buy' },
+  'Buy':        { icon: TrendingUp,    color: '#22c55e', label: 'Buy' },
+  'Hold':       { icon: Minus,         color: '#f59e0b', label: 'Hold' },
+  'Sell':       { icon: TrendingDown,  color: '#f97316', label: 'Sell' },
+  'Strong Sell':{ icon: ChevronsDown,  color: '#ef4444', label: 'Strong Sell' },
 };
+
+function ConsensusIcon({ consensus, symbol, onClick }: { consensus: string; symbol: string; onClick?: (symbol: string, signal: string) => void }) {
+  const cfg = CONSENSUS_ICON_CONFIG[consensus];
+  if (!cfg) return <span style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>—</span>;
+  const Icon = cfg.icon;
+  return (
+    <button
+      title={cfg.label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(symbol, consensus);
+      }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '3px 8px',
+        borderRadius: 6,
+        backgroundColor: `${cfg.color}18`,
+        border: `1px solid ${cfg.color}44`,
+        color: cfg.color,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: onClick ? 'pointer' : 'default',
+        lineHeight: 1,
+      }}
+    >
+      <Icon size={12} />
+      <span>{cfg.label}</span>
+    </button>
+  );
+}
 
 interface PortfolioTableProps {
   rows: PortfolioRow[];
   ytdPriceMap: Record<string, number | null>;
   analystMap?: Record<string, AnalystEntry>;
   onRowClick: (symbol: string) => void;
+  onSignalClick?: (symbol: string, signal: string) => void;
 }
 
 interface SortState {
@@ -76,7 +114,7 @@ function PlChip({ dollars, pct }: { dollars: number; pct: number }) {
   );
 }
 
-export default function PortfolioTable({ rows, ytdPriceMap, analystMap = {}, onRowClick }: PortfolioTableProps) {
+export default function PortfolioTable({ rows, ytdPriceMap, analystMap = {}, onRowClick, onSignalClick }: PortfolioTableProps) {
   const [sort, setSort] = useState<SortState>({ key: 'marketValue', dir: 'desc' });
 
   const toggleSort = (key: SortKey) => {
@@ -244,9 +282,11 @@ export default function PortfolioTable({ rows, ytdPriceMap, analystMap = {}, onR
                   const consensus = analystMap[row.symbol]?.consensus;
                   if (!consensus) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
                   return (
-                    <span style={{ fontWeight: 600, color: CONSENSUS_COLOR[consensus] ?? 'var(--color-text-secondary)' }}>
-                      {consensus}
-                    </span>
+                    <ConsensusIcon
+                      consensus={consensus}
+                      symbol={row.symbol}
+                      onClick={onSignalClick}
+                    />
                   );
                 })()}
               </td>

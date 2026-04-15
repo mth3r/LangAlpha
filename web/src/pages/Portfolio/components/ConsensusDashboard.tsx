@@ -1,4 +1,5 @@
 import React from 'react';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export interface TickerResult {
   symbol: string;
@@ -12,38 +13,62 @@ interface ConsensusDashboardProps {
   results: TickerResult[];
   screenerIds: string[];
   requireUnanimous: boolean;
+  onSymbolClick?: (symbol: string, signal: string) => void;
 }
 
-const SIGNAL_COLORS: Record<string, string> = {
-  BUY: '#10b981',
-  SELL: '#ef4444',
-  NEUTRAL: '#6b7280',
+const SIGNAL_CONFIG: Record<string, {
+  icon: React.ComponentType<{ size?: number }>;
+  color: string;
+  label: string;
+}> = {
+  BUY:     { icon: TrendingUp,   color: '#22c55e', label: 'BUY' },
+  SELL:    { icon: TrendingDown, color: '#ef4444', label: 'SELL' },
+  NEUTRAL: { icon: Minus,        color: '#6b7280', label: 'NEUTRAL' },
 };
 
-function SignalBadge({ signal }: { signal: string }) {
+function SignalBadge({ signal, symbol, onClick }: { signal: string; symbol: string; onClick?: (symbol: string, signal: string) => void }) {
+  const cfg = SIGNAL_CONFIG[signal];
+  if (!cfg) {
+    return <span style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>—</span>;
+  }
+  const Icon = cfg.icon;
   return (
-    <span style={{
-      padding: '2px 7px',
-      borderRadius: 4,
-      fontSize: 11,
-      fontWeight: 600,
-      backgroundColor: `${SIGNAL_COLORS[signal] ?? '#6b7280'}22`,
-      color: SIGNAL_COLORS[signal] ?? '#6b7280',
-      border: `1px solid ${SIGNAL_COLORS[signal] ?? '#6b7280'}44`,
-    }}>
-      {signal}
-    </span>
+    <button
+      title={cfg.label}
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick(symbol, signal); } : undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 7px',
+        borderRadius: 5,
+        backgroundColor: `${cfg.color}18`,
+        border: `1px solid ${cfg.color}44`,
+        color: cfg.color,
+        fontSize: 11,
+        fontWeight: 600,
+        cursor: onClick ? 'pointer' : 'default',
+        lineHeight: 1,
+      }}
+    >
+      <Icon size={11} />
+      <span>{cfg.label}</span>
+    </button>
   );
 }
 
-export default function ConsensusDashboard({ results, screenerIds, requireUnanimous }: ConsensusDashboardProps) {
+export default function ConsensusDashboard({ results, screenerIds, requireUnanimous, onSymbolClick }: ConsensusDashboardProps) {
   const actionList = results.filter((r) => r.consensus === 'BUY' || r.consensus === 'SELL');
   const neutral = results.filter((r) => r.consensus === 'NEUTRAL');
 
   if (results.length === 0) return null;
 
   const renderRow = (r: TickerResult) => (
-    <tr key={r.symbol} style={{ borderBottom: '1px solid var(--color-border-muted)' }}>
+    <tr
+      key={r.symbol}
+      style={{ borderBottom: '1px solid var(--color-border-muted)', cursor: onSymbolClick ? 'pointer' : 'default' }}
+      onClick={onSymbolClick ? () => onSymbolClick(r.symbol, r.consensus) : undefined}
+    >
       <td style={{ padding: '8px 10px', fontWeight: 600, fontSize: 13, color: 'var(--color-text-primary)' }}>
         {r.symbol}
       </td>
@@ -52,11 +77,13 @@ export default function ConsensusDashboard({ results, screenerIds, requireUnanim
       </td>
       {screenerIds.map((id) => (
         <td key={id} style={{ padding: '8px 10px' }}>
-          {r.signals[id] ? <SignalBadge signal={r.signals[id]} /> : <span style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>—</span>}
+          {r.signals[id]
+            ? <SignalBadge signal={r.signals[id]} symbol={r.symbol} onClick={onSymbolClick ? (sym, sig) => onSymbolClick(sym, sig) : undefined} />
+            : <span style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>—</span>}
         </td>
       ))}
       <td style={{ padding: '8px 10px' }}>
-        <SignalBadge signal={r.consensus} />
+        <SignalBadge signal={r.consensus} symbol={r.symbol} onClick={onSymbolClick ? (sym, sig) => onSymbolClick(sym, sig) : undefined} />
       </td>
     </tr>
   );

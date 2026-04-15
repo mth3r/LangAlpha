@@ -1,13 +1,15 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import MarketChart from '../../MarketView/components/MarketChart';
+import type { SignalMarker } from '../../MarketView/hooks/useChartOverlays';
 
 interface TickerChartModalProps {
   symbol: string | null;
   onClose: () => void;
+  signalMarker?: SignalMarker | null;
 }
 
-export default function TickerChartModal({ symbol, onClose }: TickerChartModalProps) {
+export default function TickerChartModal({ symbol, onClose, signalMarker }: TickerChartModalProps) {
   useEffect(() => {
     if (!symbol) return;
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -66,6 +68,7 @@ export default function TickerChartModal({ symbol, onClose }: TickerChartModalPr
             liveTick={null}
             wsStatus="disconnected"
             snapshot={null}
+            signalMarker={signalMarker}
           />
         </div>
       </div>

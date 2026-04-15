@@ -22,6 +22,7 @@ interface AnalystEntry {
 export default function Portfolio() {
   const { rows, loading } = usePortfolioData();
   const [chartSymbol, setChartSymbol] = useState<string | null>(null);
+  const [chartSignal, setChartSignal] = useState<string | null>(null);
   const [perfPeriod, setPerfPeriod] = useState<PortfolioPerformancePeriod>('1Y');
 
   // Screener state
@@ -124,7 +125,8 @@ export default function Portfolio() {
               rows={rows}
               ytdPriceMap={ytdPriceMap}
               analystMap={analystMap}
-              onRowClick={setChartSymbol}
+              onRowClick={(sym) => { setChartSymbol(sym); setChartSignal(null); }}
+              onSignalClick={(sym, sig) => { setChartSymbol(sym); setChartSignal(sig); }}
             />
             <ScreenerControls
               config={screenerConfig}
@@ -137,6 +139,7 @@ export default function Portfolio() {
                 results={scanResults}
                 screenerIds={lastScreenerIds}
                 requireUnanimous={lastRequireUnanimous}
+                onSymbolClick={(sym, sig) => { setChartSymbol(sym); setChartSignal(sig); }}
               />
             )}
           </div>
@@ -145,7 +148,8 @@ export default function Portfolio() {
 
       <TickerChartModal
         symbol={chartSymbol}
-        onClose={() => setChartSymbol(null)}
+        signalMarker={chartSignal ? { signal: chartSignal } : null}
+        onClose={() => { setChartSymbol(null); setChartSignal(null); }}
       />
     </div>
   );

@@ -355,7 +355,7 @@ def _get_analyst_price_targets(symbol: str) -> list[dict[str, Any]]:
                 "targetLow": _clean_value(targets.get("low")),
                 "targetMean": _clean_value(targets.get("mean")),
                 "targetMedian": _clean_value(targets.get("median")),
-                "targetConsensus": _clean_value(targets.get("current")),
+                "targetConsensus": _clean_value(targets.get("mean")),
             }
         ]
     return []

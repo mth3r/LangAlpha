@@ -27,6 +27,26 @@ interface OverlayVisibility {
   [key: string]: boolean | undefined;
 }
 
+export interface SignalMarker {
+  signal: string;
+}
+
+const SIGNAL_MARKER_CONFIG: Record<string, {
+  position: 'aboveBar' | 'belowBar';
+  shape: 'arrowUp' | 'arrowDown' | 'circle';
+  color: string;
+  text: string;
+}> = {
+  'Strong Buy': { position: 'belowBar', shape: 'arrowUp',   color: '#10b981', text: 'Strong Buy' },
+  'Buy':        { position: 'belowBar', shape: 'arrowUp',   color: '#22c55e', text: 'Buy' },
+  'Hold':       { position: 'aboveBar', shape: 'circle',    color: '#f59e0b', text: 'Hold' },
+  'Sell':       { position: 'aboveBar', shape: 'arrowDown', color: '#f97316', text: 'Sell' },
+  'Strong Sell':{ position: 'aboveBar', shape: 'arrowDown', color: '#ef4444', text: 'Strong Sell' },
+  'BUY':        { position: 'belowBar', shape: 'arrowUp',   color: '#10b981', text: 'BUY' },
+  'SELL':       { position: 'aboveBar', shape: 'arrowDown', color: '#ef4444', text: 'SELL' },
+  'NEUTRAL':    { position: 'aboveBar', shape: 'circle',    color: '#6b7280', text: 'NEUTRAL' },
+};
+
 /**
  * Binary search to find the nearest chart bar time for a given date string.
  * Returns the closest time that exists in chartData.
@@ -59,7 +79,7 @@ function snapToNearestBar(chartData: ChartDataPoint[], dateStr: string): number 
 
 /**
  * Manages series markers on the candlestick series.
- * Combines earnings surprises and analyst grade changes into markers.
+ * Combines earnings surprises, analyst grade changes, and an optional signal marker.
  */
 export function useChartOverlays(
   candlestickSeriesRef: RefObject<ISeriesApi<'Candlestick'> | null>,
@@ -67,7 +87,8 @@ export function useChartOverlays(
   earningsData: EarningsEntry[] | null,
   overlayData: OverlayData | null,
   overlayVisibility: OverlayVisibility | null,
-  symbol: string | null
+  symbol: string | null,
+  signalMarker?: SignalMarker | null,
 ): void {
   useEffect(() => {
     const series = candlestickSeriesRef.current;
@@ -78,7 +99,7 @@ export function useChartOverlays(
       return;
     }
 
-    const markers: Array<{ time: Time; position: 'aboveBar' | 'belowBar'; shape: 'arrowUp' | 'arrowDown'; color: string; text: string }> = [];
+    const markers: Array<{ time: Time; position: 'aboveBar' | 'belowBar'; shape: 'arrowUp' | 'arrowDown' | 'circle'; color: string; text: string; size?: number }> = [];
 
     // Earnings markers
     if (overlayVisibility?.earnings && earningsData && Array.isArray(earningsData)) {
@@ -121,6 +142,22 @@ export function useChartOverlays(
       });
     }
 
+    // Signal marker — pinned at the latest bar
+    if (signalMarker) {
+      const cfg = SIGNAL_MARKER_CONFIG[signalMarker.signal];
+      if (cfg) {
+        const latestTime = chartData[chartData.length - 1].time as Time;
+        markers.push({
+          time: latestTime,
+          position: cfg.position,
+          shape: cfg.shape,
+          color: cfg.color,
+          text: cfg.text,
+          size: 2,
+        });
+      }
+    }
+
     // Sort markers by time (required by lightweight-charts)
     markers.sort((a, b) => (a.time as number) - (b.time as number));
 
@@ -135,5 +172,5 @@ export function useChartOverlays(
         try { series.setMarkers([]); } catch (_) { /* already cleaned */ }
       }
     };
-  }, [candlestickSeriesRef, chartData, earningsData, overlayData, overlayVisibility, symbol]);
+  }, [candlestickSeriesRef, chartData, earningsData, overlayData, overlayVisibility, symbol, signalMarker]);
 }

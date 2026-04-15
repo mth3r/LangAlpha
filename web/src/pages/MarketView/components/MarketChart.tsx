@@ -25,6 +25,7 @@ import CrosshairTooltip from './CrosshairTooltip';
 import TradingViewWidget from './TradingViewWidget';
 import { useChartAnnotations } from '../hooks/useChartAnnotations';
 import { useChartOverlays } from '../hooks/useChartOverlays';
+import type { SignalMarker } from '../hooks/useChartOverlays';
 import { SlidersHorizontal, Settings2, Maximize2, Minimize2, ChevronDown, Plus, Minus, RotateCcw, Menu } from 'lucide-react';
 
 import { loadPref, savePref } from '../utils/prefs';
@@ -80,6 +81,7 @@ interface MarketChartProps {
   ginlixDataEnabled?: boolean;
   marketStatus?: Record<string, unknown> | null;
   snapshot: SnapshotData | null;
+  signalMarker?: SignalMarker | null;
 }
 
 export interface MarketChartHandle {
@@ -105,6 +107,7 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
   ginlixDataEnabled = true,
   marketStatus,
   snapshot,
+  signalMarker,
 }, ref) => {
   const { theme } = useTheme();
   const ct = getChartTheme(theme as 'dark' | 'light');
@@ -262,7 +265,7 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
   useChartAnnotations(candlestickSeriesRef, stockMeta, quoteData, priceTargetsForAnnotations, annotationsVisible, symbol);
 
   // --- Series markers via hook ---
-  useChartOverlays(candlestickSeriesRef, chartDataForHooks as any, earningsData as any, overlayData as any, overlayVisibility as any, symbol);
+  useChartOverlays(candlestickSeriesRef, chartDataForHooks as any, earningsData as any, overlayData as any, overlayVisibility as any, symbol, signalMarker);
 
   // --- Live tick updates from WS (1s and 1min intervals, custom/Light mode only) ---
   useEffect(() => {
