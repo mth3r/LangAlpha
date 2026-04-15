@@ -3,11 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { usePortfolioData } from '../Dashboard/hooks/usePortfolioData';
 import { getYtdStartPrice } from '../Dashboard/utils/api';
 import type { PortfolioPerformancePeriod } from '../Dashboard/utils/api';
+import { fetchAnalystData } from '../MarketView/utils/api';
 import PortfolioSummaryCards from './components/PortfolioSummaryCards';
 import PortfolioPerformanceChart from './components/PortfolioPerformanceChart';
 import PortfolioTable from './components/PortfolioTable';
 import TickerChartModal from './components/TickerChartModal';
 import './Portfolio.css';
+
+interface AnalystEntry {
+  consensus: string | null;
+  targetConsensus: number | null;
+}
 
 export default function Portfolio() {
   const { rows, loading } = usePortfolioData();
@@ -27,6 +33,29 @@ export default function Portfolio() {
     },
     enabled: symbols.length > 0,
     staleTime: 1000 * 60 * 60,
+  });
+
+  const { data: analystMap = {} } = useQuery<Record<string, AnalystEntry>>({
+    queryKey: ['portfolioAnalyst', symbols.join(',')],
+    queryFn: async () => {
+      const map: Record<string, AnalystEntry> = {};
+      await Promise.allSettled(
+        symbols.map(async (sym) => {
+          try {
+            const res = await fetchAnalystData(sym) as Record<string, unknown> | null;
+            if (!res) return;
+            const consensus = (res.ratingsConsensus as Record<string, unknown> | null)?.consensus as string | null ?? null;
+            const targetConsensus = (res.priceTargets as Record<string, unknown> | null)?.targetConsensus as number | null ?? null;
+            map[sym] = { consensus, targetConsensus };
+          } catch {
+            // leave missing
+          }
+        })
+      );
+      return map;
+    },
+    enabled: symbols.length > 0,
+    staleTime: 15 * 60 * 1000,
   });
 
   return (
@@ -50,6 +79,7 @@ export default function Portfolio() {
             <PortfolioTable
               rows={rows}
               ytdPriceMap={ytdPriceMap}
+              analystMap={analystMap}
               onRowClick={setChartSymbol}
             />
           </div>

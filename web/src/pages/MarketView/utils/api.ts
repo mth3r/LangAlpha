@@ -348,6 +348,36 @@ export async function fetchAnalystData(symbol: string, { signal }: { signal?: Ab
   }
 }
 
+export interface TechnicalSignal {
+  name: string;
+  value: number | null;
+  signal: 'Buy' | 'Sell' | 'Neutral';
+}
+
+export interface TechnicalsData {
+  symbol: string;
+  summary: { buy: number; neutral: number; sell: number };
+  oscillators: TechnicalSignal[];
+  movingAverages: TechnicalSignal[];
+}
+
+export async function fetchTechnicals(symbol: string, { signal }: { signal?: AbortSignal } = {}): Promise<TechnicalsData | null> {
+  if (!symbol || !symbol.trim()) return null;
+  try {
+    const { data } = await api.get(
+      `/api/v1/market-data/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}/technicals`,
+      { signal }
+    );
+    return data as TechnicalsData;
+  } catch (error: unknown) {
+    if (error instanceof Error && (error.name === 'CanceledError' || error.name === 'AbortError')) {
+      throw error;
+    }
+    console.error('Error fetching technicals:', error);
+    return null;
+  }
+}
+
 // --- Flash Mode Chat Streaming ---
 
 interface StreamError extends Error {

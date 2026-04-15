@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { fetchStockQuote, fetchCompanyOverview, fetchAnalystData } from '../utils/api';
+import { fetchStockQuote, fetchCompanyOverview, fetchAnalystData, fetchTechnicals } from '../utils/api';
+import type { TechnicalsData } from '../utils/api';
+export type { TechnicalsData };
 import { fetchMarketStatus } from '@/lib/marketUtils';
 import type { StockInfo, RealTimePrice, SnapshotData } from '@/types/market';
 import type { ConnectionStatus, BarData } from './useMarketDataWS';
@@ -41,6 +43,8 @@ export interface UseStockDataReturn {
     overviewData: unknown;
     overviewLoading: boolean;
     overlayData: AnalystOverlayData | null;
+    technicalData: TechnicalsData | null;
+    technicalLoading: boolean;
     marketStatus: MarketStatusData | null;
     handleLatestBar: (bar: BarData | null) => void;
 }
@@ -124,7 +128,15 @@ export function useStockData({
         staleTime: 5 * 60 * 1000, // 5 minutes fresh
     });
 
-    // 4. Market Status
+    // 4. Technicals
+    const { data: technicalData = null, isLoading: technicalLoading } = useQuery<TechnicalsData | null>({
+        queryKey: ['technicals', selectedStock],
+        queryFn: ({ signal }) => fetchTechnicals(selectedStock!, { signal }),
+        enabled: !!selectedStock,
+        staleTime: 15 * 60 * 1000, // 15 minutes fresh
+    });
+
+    // 5. Market Status
     const { data: marketStatus = null } = useQuery<MarketStatusData | null>({
         queryKey: ['dashboard', 'marketStatus'], // Matches cached value from useDashboardData
         queryFn: fetchMarketStatus,
@@ -168,6 +180,8 @@ export function useStockData({
         overviewData,
         overviewLoading,
         overlayData,
+        technicalData,
+        technicalLoading,
         marketStatus,
         handleLatestBar
     };

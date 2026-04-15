@@ -4,8 +4,9 @@ FastAPI router for market data proxy endpoints.
 Provides cached access to FMP intraday data for stocks and indexes.
 """
 
+import asyncio
 import logging
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -25,6 +26,10 @@ from src.server.models.market_data import (
     PriceTargetSummary,
     AnalystGrade,
     AnalystDataResponse,
+    RatingsConsensus,
+    TechnicalSignal,
+    TechnicalsSummaryCount,
+    TechnicalsResponse,
     SnapshotData,
     SnapshotResponse,
     MarketStatusResponse,
@@ -536,7 +541,6 @@ async def get_analyst_data(
     symbol_upper = symbol.strip().upper()
 
     try:
-        import asyncio
         from src.utils.cache.redis_cache import get_cache_client
         from src.data_client import get_financial_data_provider
 
@@ -565,9 +569,39 @@ async def get_analyst_data(
                 logger.warning("Failed to fetch grades for %s", symbol_upper, exc_info=True)
                 return []
 
-        price_targets_raw, grades_raw = await asyncio.gather(
+        async def _fetch_ratings_consensus() -> dict | None:
+            try:
+                from src.data_client.fmp.fmp_client import FMPClient
+                fmp_client = FMPClient()
+                try:
+                    raw = await fmp_client.get_grades_summary(symbol_upper)
+                    if raw and isinstance(raw, list) and len(raw) > 0:
+                        r = raw[0]
+                        return {
+                            "strongBuy": int(r.get("strongBuy") or 0),
+                            "buy": int(r.get("buy") or 0),
+                            "hold": int(r.get("hold") or 0),
+                            "sell": int(r.get("sell") or 0),
+                            "strongSell": int(r.get("strongSell") or 0),
+                            "consensus": r.get("consensus"),
+                        }
+                finally:
+                    await fmp_client.close()
+            except Exception:
+                pass
+            # yfinance fallback
+            try:
+                ratings_list = await provider.financial.get_analyst_ratings(symbol_upper)
+                if ratings_list and isinstance(ratings_list, list) and len(ratings_list) > 0:
+                    return ratings_list[0]
+            except Exception:
+                pass
+            return None
+
+        price_targets_raw, grades_raw, ratings_raw = await asyncio.gather(
             provider.financial.get_analyst_price_targets(symbol_upper),
             _fetch_grades(),
+            _fetch_ratings_consensus(),
             return_exceptions=True,
         )
 
@@ -594,10 +628,15 @@ async def get_analyst_data(
                     action=g.get("action"),
                 ))
 
+        ratings_consensus = None
+        if isinstance(ratings_raw, dict):
+            ratings_consensus = RatingsConsensus(**ratings_raw)
+
         response = AnalystDataResponse(
             symbol=symbol_upper,
             priceTargets=price_targets,
             grades=grades,
+            ratingsConsensus=ratings_consensus,
         )
         await cache.set(cache_key, response.model_dump(), ttl=900)
         return response
@@ -615,6 +654,237 @@ async def get_analyst_data(
 
 _SNAPSHOT_CACHE_TTL = 15  # seconds
 _MARKET_STATUS_CACHE_TTL = 30  # seconds
+_TECHNICALS_CACHE_TTL = 900  # 15 minutes
+
+
+def _compute_technicals(symbol: str, closes: list[float], highs: list[float], lows: list[float]) -> TechnicalsResponse:
+    """Compute technical indicators from daily OHLCV data (last N bars).
+    All indicator math uses pure Python / list comprehensions — no numpy needed.
+    """
+    import math
+
+    def ema(values: list[float], period: int) -> list[float]:
+        if len(values) < period:
+            return []
+        k = 2.0 / (period + 1)
+        result = [sum(values[:period]) / period]
+        for v in values[period:]:
+            result.append(v * k + result[-1] * (1 - k))
+        return result
+
+    def sma(values: list[float], period: int) -> float | None:
+        if len(values) < period:
+            return None
+        return sum(values[-period:]) / period
+
+    def signal_str(buy_cond: bool | None, sell_cond: bool | None) -> str:
+        if buy_cond:
+            return "Buy"
+        if sell_cond:
+            return "Sell"
+        return "Neutral"
+
+    if len(closes) < 30:
+        return TechnicalsResponse(
+            symbol=symbol,
+            summary=TechnicalsSummaryCount(buy=0, neutral=0, sell=0),
+            oscillators=[],
+            movingAverages=[],
+        )
+
+    price = closes[-1]
+    oscillators: list[TechnicalSignal] = []
+    moving_averages: list[TechnicalSignal] = []
+
+    # ---- RSI(14) ----
+    if len(closes) >= 15:
+        gains, losses = [], []
+        for i in range(1, len(closes)):
+            d = closes[i] - closes[i - 1]
+            gains.append(max(d, 0.0))
+            losses.append(max(-d, 0.0))
+        # Wilder smoothing — use last 14 bars
+        avg_gain = sum(gains[-14:]) / 14
+        avg_loss = sum(losses[-14:]) / 14
+        rsi_val: float | None = None
+        if avg_loss > 0:
+            rs = avg_gain / avg_loss
+            rsi_val = 100 - (100 / (1 + rs))
+        elif avg_gain > 0:
+            rsi_val = 100.0
+        else:
+            rsi_val = 50.0
+        oscillators.append(TechnicalSignal(
+            name="RSI(14)",
+            value=round(rsi_val, 2),
+            signal=signal_str(rsi_val is not None and rsi_val < 50, rsi_val is not None and rsi_val > 50),
+        ))
+
+    # ---- MACD(12,26,9) ----
+    if len(closes) >= 35:
+        ema12 = ema(closes, 12)
+        ema26 = ema(closes, 26)
+        # align lengths
+        diff = len(ema12) - len(ema26)
+        macd_line = [a - b for a, b in zip(ema12[diff:], ema26)]
+        if len(macd_line) >= 9:
+            signal_line = ema(macd_line, 9)
+            macd_val = macd_line[-1]
+            sig_val = signal_line[-1]
+            oscillators.append(TechnicalSignal(
+                name="MACD(12,26,9)",
+                value=round(macd_val - sig_val, 4),
+                signal=signal_str(macd_val > sig_val, macd_val < sig_val),
+            ))
+
+    # ---- Stochastic %K(14,3) ----
+    if len(closes) >= 14:
+        low14 = min(lows[-14:])
+        high14 = max(highs[-14:])
+        if high14 > low14:
+            k_val = (closes[-1] - low14) / (high14 - low14) * 100
+        else:
+            k_val = 50.0
+        oscillators.append(TechnicalSignal(
+            name="Stoch %K(14,3)",
+            value=round(k_val, 2),
+            signal=signal_str(k_val < 20, k_val > 80),
+        ))
+
+    # ---- CCI(20) ----
+    if len(closes) >= 20 and len(highs) >= 20 and len(lows) >= 20:
+        typical = [(highs[-20 + i] + lows[-20 + i] + closes[-20 + i]) / 3 for i in range(20)]
+        tp_mean = sum(typical) / 20
+        mean_dev = sum(abs(t - tp_mean) for t in typical) / 20
+        if mean_dev > 0:
+            cci_val = (typical[-1] - tp_mean) / (0.015 * mean_dev)
+        else:
+            cci_val = 0.0
+        oscillators.append(TechnicalSignal(
+            name="CCI(20)",
+            value=round(cci_val, 2),
+            signal=signal_str(cci_val < -100, cci_val > 100),
+        ))
+
+    # ---- ADX(14) ----
+    if len(closes) >= 28:
+        # True Range and Directional Movement
+        tr_list, dm_plus, dm_minus = [], [], []
+        for i in range(1, len(closes)):
+            h, l, pc = highs[i], lows[i], closes[i - 1]
+            tr = max(h - l, abs(h - pc), abs(l - pc))
+            tr_list.append(tr)
+            up_move = highs[i] - highs[i - 1]
+            down_move = lows[i - 1] - lows[i]
+            dm_plus.append(up_move if up_move > down_move and up_move > 0 else 0.0)
+            dm_minus.append(down_move if down_move > up_move and down_move > 0 else 0.0)
+        # Wilder smooth over 14
+        period = 14
+        if len(tr_list) >= period:
+            atr = sum(tr_list[:period])
+            sdm_plus = sum(dm_plus[:period])
+            sdm_minus = sum(dm_minus[:period])
+            for i in range(period, len(tr_list)):
+                atr = atr - atr / period + tr_list[i]
+                sdm_plus = sdm_plus - sdm_plus / period + dm_plus[i]
+                sdm_minus = sdm_minus - sdm_minus / period + dm_minus[i]
+            if atr > 0:
+                di_plus = (sdm_plus / atr) * 100
+                di_minus = (sdm_minus / atr) * 100
+                dx = abs(di_plus - di_minus) / (di_plus + di_minus) * 100 if (di_plus + di_minus) > 0 else 0
+                # rough ADX — single DX as proxy (full Wilder smoothing needs more bars)
+                adx_val = dx
+            else:
+                adx_val, di_plus, di_minus = 0.0, 0.0, 0.0
+            if adx_val >= 25:
+                adx_signal = "Buy" if di_plus > di_minus else "Sell"
+            else:
+                adx_signal = "Neutral"
+            oscillators.append(TechnicalSignal(
+                name="ADX(14)",
+                value=round(adx_val, 2),
+                signal=adx_signal,
+            ))
+
+    # ---- Moving Averages ----
+    for period in [10, 20, 50, 100, 200]:
+        v = sma(closes, period)
+        if v is not None:
+            moving_averages.append(TechnicalSignal(
+                name=f"SMA({period})",
+                value=round(v, 2),
+                signal=signal_str(price > v, price < v),
+            ))
+
+    for period in [10, 20, 50]:
+        ev_list = ema(closes, period)
+        if ev_list:
+            v = ev_list[-1]
+            moving_averages.append(TechnicalSignal(
+                name=f"EMA({period})",
+                value=round(v, 2),
+                signal=signal_str(price > v, price < v),
+            ))
+
+    all_signals = [s.signal for s in oscillators + moving_averages]
+    buy_count = all_signals.count("Buy")
+    sell_count = all_signals.count("Sell")
+    neutral_count = all_signals.count("Neutral")
+
+    return TechnicalsResponse(
+        symbol=symbol,
+        summary=TechnicalsSummaryCount(buy=buy_count, neutral=neutral_count, sell=sell_count),
+        oscillators=oscillators,
+        movingAverages=moving_averages,
+    )
+
+
+@router.get(
+    "/stocks/{symbol}/technicals",
+    response_model=TechnicalsResponse,
+    summary="Get technical analysis signals",
+    description="Compute RSI, MACD, Stochastic, ADX, CCI and SMA/EMA signals from daily OHLCV data.",
+)
+async def get_stock_technicals(symbol: str, user_id: CurrentUserId) -> TechnicalsResponse:
+    symbol_upper = symbol.upper().strip()
+    cache_key = f"technicals:{symbol_upper}"
+
+    from src.utils.cache.redis_cache import get_cache_client
+    cache = get_cache_client()
+
+    cached = await cache.get(cache_key)
+    if cached is not None:
+        return TechnicalsResponse(**cached)
+
+    def _fetch_ohlcv() -> tuple[list[float], list[float], list[float]] | None:
+        try:
+            import yfinance as yf
+            t = yf.Ticker(symbol_upper)
+            hist = t.history(period="200d")
+            if hist is None or hist.empty or len(hist) < 20:
+                return None
+            closes = [float(v) for v in hist["Close"].tolist()]
+            highs = [float(v) for v in hist["High"].tolist()]
+            lows = [float(v) for v in hist["Low"].tolist()]
+            return closes, highs, lows
+        except Exception as exc:
+            logger.warning(f"Failed to fetch OHLCV for {symbol_upper}: {exc}")
+            return None
+
+    ohlcv = await asyncio.to_thread(_fetch_ohlcv)
+    if ohlcv is None:
+        result = TechnicalsResponse(
+            symbol=symbol_upper,
+            summary=TechnicalsSummaryCount(buy=0, neutral=0, sell=0),
+            oscillators=[],
+            movingAverages=[],
+        )
+        return result
+
+    closes, highs, lows = ohlcv
+    result = _compute_technicals(symbol_upper, closes, highs, lows)
+    await cache.set(cache_key, result.model_dump(), ttl=_TECHNICALS_CACHE_TTL)
+    return result
 
 
 @router.get(

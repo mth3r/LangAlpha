@@ -10,11 +10,35 @@ type SortKey =
   | 'marketValue'
   | 'dayChange'
   | 'totalPl'
-  | 'ytdPl';
+  | 'ytdPl'
+  | 'analystRating'
+  | 'ptUpside';
+
+interface AnalystEntry {
+  consensus: string | null;
+  targetConsensus: number | null;
+}
+
+const CONSENSUS_RANK: Record<string, number> = {
+  'Strong Buy': 5,
+  'Buy': 4,
+  'Hold': 3,
+  'Sell': 2,
+  'Strong Sell': 1,
+};
+
+const CONSENSUS_COLOR: Record<string, string> = {
+  'Strong Buy': 'var(--color-profit)',
+  'Buy': 'var(--color-profit)',
+  'Hold': '#f59e0b',
+  'Sell': 'var(--color-loss)',
+  'Strong Sell': 'var(--color-loss)',
+};
 
 interface PortfolioTableProps {
   rows: PortfolioRow[];
   ytdPriceMap: Record<string, number | null>;
+  analystMap?: Record<string, AnalystEntry>;
   onRowClick: (symbol: string) => void;
 }
 
@@ -52,7 +76,7 @@ function PlChip({ dollars, pct }: { dollars: number; pct: number }) {
   );
 }
 
-export default function PortfolioTable({ rows, ytdPriceMap, onRowClick }: PortfolioTableProps) {
+export default function PortfolioTable({ rows, ytdPriceMap, analystMap = {}, onRowClick }: PortfolioTableProps) {
   const [sort, setSort] = useState<SortState>({ key: 'marketValue', dir: 'desc' });
 
   const toggleSort = (key: SortKey) => {
@@ -96,6 +120,16 @@ export default function PortfolioTable({ rows, ytdPriceMap, onRowClick }: Portfo
         case 'dayChange': return dir * (a.dayDollars - b.dayDollars);
         case 'totalPl': return dir * (a.totalPlDollars - b.totalPlDollars);
         case 'ytdPl': return dir * ((a.ytdDollars ?? 0) - (b.ytdDollars ?? 0));
+        case 'analystRating': {
+          const ra = CONSENSUS_RANK[analystMap[a.symbol]?.consensus ?? ''] ?? 0;
+          const rb = CONSENSUS_RANK[analystMap[b.symbol]?.consensus ?? ''] ?? 0;
+          return dir * (ra - rb);
+        }
+        case 'ptUpside': {
+          const ua = analystMap[a.symbol]?.targetConsensus != null ? ((analystMap[a.symbol].targetConsensus! - a.price) / a.price) * 100 : -Infinity;
+          const ub = analystMap[b.symbol]?.targetConsensus != null ? ((analystMap[b.symbol].targetConsensus! - b.price) / b.price) * 100 : -Infinity;
+          return dir * (ua - ub);
+        }
         default: return 0;
       }
     });
@@ -130,6 +164,8 @@ export default function PortfolioTable({ rows, ytdPriceMap, onRowClick }: Portfo
             {th('Day Change', 'dayChange')}
             {th('Total P&L', 'totalPl')}
             {th('YTD P&L', 'ytdPl')}
+            {th('Rating', 'analystRating')}
+            {th('Upside', 'ptUpside')}
           </tr>
         </thead>
         <tbody>
@@ -202,6 +238,29 @@ export default function PortfolioTable({ rows, ytdPriceMap, onRowClick }: Portfo
                     loading…
                   </span>
                 )}
+              </td>
+              <td className="px-4 py-3 text-xs">
+                {(() => {
+                  const consensus = analystMap[row.symbol]?.consensus;
+                  if (!consensus) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
+                  return (
+                    <span style={{ fontWeight: 600, color: CONSENSUS_COLOR[consensus] ?? 'var(--color-text-secondary)' }}>
+                      {consensus}
+                    </span>
+                  );
+                })()}
+              </td>
+              <td className="px-4 py-3 text-xs text-right">
+                {(() => {
+                  const target = analystMap[row.symbol]?.targetConsensus;
+                  if (target == null) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
+                  const upside = ((target - row.price) / row.price) * 100;
+                  return (
+                    <span style={{ fontWeight: 600, color: upside >= 0 ? 'var(--color-profit)' : 'var(--color-loss)' }}>
+                      {upside >= 0 ? '+' : ''}{upside.toFixed(1)}%
+                    </span>
+                  );
+                })()}
               </td>
             </tr>
           ))}

@@ -237,11 +237,44 @@ class AnalystGrade(BaseModel):
     action: Optional[str] = Field(None, description="Action (upgrade, downgrade, maintained, etc.)")
 
 
+class RatingsConsensus(BaseModel):
+    """Analyst buy/hold/sell rating distribution and consensus label."""
+    strongBuy: int = Field(0, description="Number of Strong Buy ratings")
+    buy: int = Field(0, description="Number of Buy ratings")
+    hold: int = Field(0, description="Number of Hold ratings")
+    sell: int = Field(0, description="Number of Sell ratings")
+    strongSell: int = Field(0, description="Number of Strong Sell ratings")
+    consensus: Optional[str] = Field(None, description="Consensus label: Strong Buy | Buy | Hold | Sell | Strong Sell")
+
+
 class AnalystDataResponse(BaseModel):
     """Response for analyst data endpoint."""
     symbol: str = Field(..., description="Stock ticker symbol")
     priceTargets: Optional[PriceTargetSummary] = Field(None, description="Price target summary")
     grades: List[AnalystGrade] = Field(default_factory=list, description="Recent analyst grade changes")
+    ratingsConsensus: Optional[RatingsConsensus] = Field(None, description="Analyst rating distribution and consensus")
+
+
+class TechnicalSignal(BaseModel):
+    """Single technical indicator signal."""
+    name: str = Field(..., description="Indicator name, e.g. RSI(14), MACD, SMA(50)")
+    value: Optional[float] = Field(None, description="Current indicator value")
+    signal: str = Field("Neutral", description="Buy | Sell | Neutral")
+
+
+class TechnicalsSummaryCount(BaseModel):
+    """Summary count of buy/neutral/sell signals across all indicators."""
+    buy: int = Field(0)
+    neutral: int = Field(0)
+    sell: int = Field(0)
+
+
+class TechnicalsResponse(BaseModel):
+    """Response for technical analysis endpoint."""
+    symbol: str = Field(..., description="Stock ticker symbol")
+    summary: TechnicalsSummaryCount
+    oscillators: List[TechnicalSignal] = Field(default_factory=list, description="RSI, MACD, Stochastic, ADX, CCI")
+    movingAverages: List[TechnicalSignal] = Field(default_factory=list, description="SMA and EMA signals")
 
 
 class SnapshotData(BaseModel):

@@ -111,6 +111,8 @@ function MarketViewInner() {
     overviewData,
     overviewLoading,
     overlayData,
+    technicalData,
+    technicalLoading,
     marketStatus,
     handleLatestBar
   } = useStockData({
@@ -543,6 +545,9 @@ function MarketViewInner() {
               onClose={() => setShowOverview(false)}
               data={overviewData as OverviewData | null}
               loading={overviewLoading}
+              analystData={overlayData}
+              technicalData={technicalData}
+              technicalLoading={technicalLoading}
             />
           </MobileBottomSheet>
         </div>
@@ -573,6 +578,9 @@ function MarketViewInner() {
                     onClose={() => setShowOverview(false)}
                     data={overviewData as OverviewData | null}
                     loading={overviewLoading}
+                    analystData={overlayData}
+                    technicalData={technicalData}
+                    technicalLoading={technicalLoading}
                   />
                 )}
                 <MarketChart
