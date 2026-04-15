@@ -4,8 +4,8 @@ import type { IChartApi, LogicalRange, MouseEventParams } from 'lightweight-char
 import html2canvas from 'html2canvas';
 import './MarketChart.css';
 import { fetchStockData } from '../utils/api';
-import { calculateMA, calculateRSI, updateRSIIncremental } from '../utils/chartHelpers';
-import type { RSIState, OHLCDataPoint } from '../utils/chartHelpers';
+import { calculateMA, calculateRSI, updateRSIIncremental, calculateHHMA } from '../utils/chartHelpers';
+import type { RSIState, OHLCDataPoint, HHMASignal } from '../utils/chartHelpers';
 import {
   getChartTheme,
   INTERVALS, PRIMARY_INTERVAL_KEYS, INITIAL_LOAD_DAYS, SCROLL_CHUNK_DAYS,
@@ -13,6 +13,7 @@ import {
   STAGE1_LOAD_DAYS, STAGE2_BACKFILL_DAYS, PREFETCH_ENABLED_INTERVALS, PREFETCH_THRESHOLD,
   MA_CONFIGS, DEFAULT_ENABLED_MA, RSI_PERIODS, BARS_PER_DAY, TARGET_BAR_SPACING,
   OVERLAY_COLORS, OVERLAY_LABELS,
+  HHMA_COLOR_BULL, HHMA_COLOR_BEAR, HHMA_DEFAULT_LENGTH,
   EXTENDED_HOURS_INTERVALS, getExtendedHoursType, computeExtendedHoursRegions,
   EXT_COLOR_PRE, EXT_COLOR_POST,
   isUSEquity, supports1sInterval,
@@ -120,6 +121,8 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
   const rsiSeriesRef = useRef<any>(null);
   const volumeSeriesRef = useRef<any>(null);
   const maSeriesRefs = useRef<Record<number, any>>({});
+  const hhmaSeriesUpRef = useRef<any>(null);   // bullish slope (green)
+  const hhmaSeriesDownRef = useRef<any>(null); // bearish slope (red)
   const baselineSeriesRef = useRef<any>(null);
   const extHoursBgRef = useRef<ExtendedHoursBgPrimitive | null>(null);
   const extCloseLineRef = useRef<any>(null);
@@ -137,6 +140,14 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
   const [enabledMaPeriods, setEnabledMaPeriods] = useState<number[]>(() => loadPref('maPeriods', DEFAULT_ENABLED_MA));
   const [rsiPeriod, setRsiPeriod] = useState<number>(() => loadPref('rsiPeriod', 14));
   const [maValues, setMaValues] = useState<Record<number, string>>({});
+
+  // HHMA state (persisted)
+  const [showHHMA, setShowHHMA] = useState<boolean>(() => loadPref('showHHMA', false));
+  const [hhmaLength, setHhmaLength] = useState<number>(() => loadPref('hhmaLength', HHMA_DEFAULT_LENGTH));
+  const [hhmaValue, setHhmaValue] = useState<string | null>(null);
+  const [hhmaSignal, setHhmaSignal] = useState<HHMASignal>('neutral');
+  const showHHMARef = useRef(false);
+  const hhmaLengthRef = useRef(HHMA_DEFAULT_LENGTH);
 
   // Chart mode: 'custom' (our lightweight-charts) or 'tradingview' (full TV widget) (persisted)
   const [chartMode, setChartMode] = useState<string>(() => loadPref('chartMode', 'custom'));
@@ -197,11 +208,17 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
   const symbolRef = useRef(symbol);
   useEffect(() => { symbolRef.current = symbol; }, [symbol]);
 
+  // Keep HHMA refs synced
+  useEffect(() => { showHHMARef.current = showHHMA; }, [showHHMA]);
+  useEffect(() => { hhmaLengthRef.current = hhmaLength; }, [hhmaLength]);
+
   // Persist user preferences to localStorage
   useEffect(() => { savePref('maPeriods', enabledMaPeriods); }, [enabledMaPeriods]);
   useEffect(() => { savePref('rsiPeriod', rsiPeriod); }, [rsiPeriod]);
   useEffect(() => { savePref('chartMode', chartMode); }, [chartMode]);
   useEffect(() => { savePref('overlayVisibility', overlayVisibility); }, [overlayVisibility]);
+  useEffect(() => { savePref('showHHMA', showHHMA); }, [showHHMA]);
+  useEffect(() => { savePref('hhmaLength', hhmaLength); }, [hhmaLength]);
   useEffect(() => { savePref('priceScaleMode', priceScaleMode); }, [priceScaleMode]);
   useEffect(() => { savePref('magnetMode', magnetMode); }, [magnetMode]);
   useEffect(() => { savePref('annotationsVisible', annotationsVisible); }, [annotationsVisible]);
@@ -669,6 +686,41 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
       }
     }
 
+    // HHMA — two-tone line split into bull/bear segments
+    if (hhmaSeriesUpRef.current && hhmaSeriesDownRef.current) {
+      if (showHHMARef.current) {
+        const hhmaData = calculateHHMA(data as unknown as OHLCDataPoint[], hhmaLengthRef.current);
+        // Build up (bullish) and down (bearish) data sets.
+        // Include the transition point in both series so the line appears continuous.
+        const upData: { time: number; value: number }[] = [];
+        const downData: { time: number; value: number }[] = [];
+        for (let i = 0; i < hhmaData.length; i++) {
+          const pt = hhmaData[i];
+          const prev = hhmaData[i - 1];
+          if (pt.signal === 'bullish') {
+            // Include previous bear point as anchor for visual continuity
+            if (prev && prev.signal !== 'bullish') upData.push({ time: prev.time, value: prev.value });
+            upData.push({ time: pt.time, value: pt.value });
+          } else {
+            // Include previous bull point as anchor
+            if (prev && prev.signal === 'bullish') downData.push({ time: prev.time, value: prev.value });
+            downData.push({ time: pt.time, value: pt.value });
+          }
+        }
+        hhmaSeriesUpRef.current.setData(upData);
+        hhmaSeriesDownRef.current.setData(downData);
+        // Update display state from last point
+        const last = hhmaData[hhmaData.length - 1];
+        if (last) {
+          setHhmaValue(last.value.toFixed(2));
+          setHhmaSignal(last.signal);
+        }
+      } else {
+        hhmaSeriesUpRef.current.setData([]);
+        hhmaSeriesDownRef.current.setData([]);
+      }
+    }
+
     // Update chart data state for overlay hooks
     setChartDataForHooks(data);
   }, []);
@@ -795,6 +847,23 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
   }, [symbol, interval, updateSeriesData]);
 
   // --- Toggle handlers ---
+  const handleToggleHHMA = useCallback(() => {
+    setShowHHMA((prev) => {
+      const next = !prev;
+      showHHMARef.current = next;
+      if (allDataRef.current.length > 0) updateSeriesData(allDataRef.current);
+      return next;
+    });
+  }, [updateSeriesData]);
+
+  const handleHHMALengthChange = useCallback((len: number) => {
+    hhmaLengthRef.current = len;
+    setHhmaLength(len);
+    if (showHHMARef.current && allDataRef.current.length > 0) {
+      updateSeriesData(allDataRef.current);
+    }
+  }, [updateSeriesData]);
+
   const handleToggleMa = useCallback((period: number) => {
     const isCurrentlyEnabled = enabledMaPeriodsRef.current.includes(period);
     if (!isCurrentlyEnabled && allDataRef.current.length < period) {
@@ -882,6 +951,24 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
         lastValueVisible: false,
         priceLineVisible: false,
       });
+    });
+
+    // HHMA two-tone line series (bull=green, bear=red)
+    hhmaSeriesUpRef.current = chart.addLineSeries({
+      color: HHMA_COLOR_BULL,
+      lineWidth: 2 as any,
+      lineType: LineType.Curved,
+      title: '',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    hhmaSeriesDownRef.current = chart.addLineSeries({
+      color: HHMA_COLOR_BEAR,
+      lineWidth: 2 as any,
+      lineType: LineType.Curved,
+      title: '',
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
 
     // Subscribe to crosshair move for tooltip
@@ -1016,6 +1103,8 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
       baselineSeriesRef.current = null;
       Object.keys(maSeriesRefs.current).forEach(k => { maSeriesRefs.current[Number(k)] = null; });
       rsiSeriesRef.current = null;
+      hhmaSeriesUpRef.current = null;
+      hhmaSeriesDownRef.current = null;
 
       if (chartRef.current) {
         chartRef.current.remove();
@@ -1132,11 +1221,13 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
       if (volumeSeriesRef.current) {
         volumeSeriesRef.current.applyOptions({ visible: false });
       }
-      // Hide MAs too
+      // Hide MAs and HHMA too
       MA_CONFIGS.forEach(({ period }) => {
         const s = maSeriesRefs.current[period];
         if (s) s.applyOptions({ visible: false });
       });
+      if (hhmaSeriesUpRef.current) hhmaSeriesUpRef.current.applyOptions({ visible: false });
+      if (hhmaSeriesDownRef.current) hhmaSeriesDownRef.current.applyOptions({ visible: false });
 
       const prevClose = (quoteData?.previousClose || quoteData?.open) as number | undefined;
       const basePrice: number = prevClose || (allDataRef.current.length > 0 ? allDataRef.current[0].open : 0);
@@ -1175,6 +1266,8 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
         const s = maSeriesRefs.current[period];
         if (s) s.applyOptions({ visible: true });
       });
+      if (hhmaSeriesUpRef.current) hhmaSeriesUpRef.current.applyOptions({ visible: true });
+      if (hhmaSeriesDownRef.current) hhmaSeriesDownRef.current.applyOptions({ visible: true });
 
       if (baselineSeriesRef.current) {
         try { chart.removeSeries(baselineSeriesRef.current); } catch (_) { /* ok */ }
@@ -1580,6 +1673,29 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
   const renderIndicatorsContent = () => (
     <>
       <div className="dropdown-section">
+        <span className="indicator-toggles-label">HHMA</span>
+        <div className="indicator-toggles">
+          <button
+            type="button"
+            className={`indicator-toggle-btn${showHHMA ? ' indicator-toggle-active' : ''}`}
+            style={showHHMA ? { color: HHMA_COLOR_BULL, borderColor: HHMA_COLOR_BULL } : undefined}
+            onClick={handleToggleHHMA}
+          >
+            {hhmaLength}
+          </button>
+          {([14, 21, 50] as const).filter((l) => l !== hhmaLength).map((l) => (
+            <button
+              key={l}
+              type="button"
+              className="indicator-toggle-btn"
+              onClick={() => handleHHMALengthChange(l)}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="dropdown-section">
         <span className="indicator-toggles-label">MA</span>
         <div className="indicator-toggles">
           {MA_CONFIGS.map(({ period, color }) => (
@@ -1769,6 +1885,12 @@ const MarketChart = React.memo(forwardRef<MarketChartHandle, MarketChartProps>((
               </div>
               {/* Indicator values — wide only */}
               <div className="chart-indicators toolbar--wide-only">
+                {showHHMA && (
+                  <span className="indicator-item">
+                    <span className="indicator-color" style={{ backgroundColor: hhmaSignal === 'bullish' ? HHMA_COLOR_BULL : hhmaSignal === 'bearish' ? HHMA_COLOR_BEAR : '#888' }} />
+                    HHMA ({hhmaLength}): {hhmaValue ?? '\u2014'} {hhmaSignal === 'bullish' ? '▲' : hhmaSignal === 'bearish' ? '▼' : ''}
+                  </span>
+                )}
                 {MA_CONFIGS.filter(({ period }) => enabledMaPeriods.includes(period)).map(({ period, color, label }) => (
                   <span className="indicator-item" key={period}>
                     <span className="indicator-color" style={{ backgroundColor: color }} />

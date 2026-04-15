@@ -92,6 +92,71 @@ export function calculateRSI(data: OHLCDataPoint[], period: number = 14): RSIRes
   };
 }
 
+export type HHMASignal = 'bullish' | 'bearish' | 'neutral';
+
+export interface HHMAPoint extends TimeValuePoint {
+  signal: HHMASignal;
+}
+
+/**
+ * Hyperbolic Hull Moving Average — O(n * length)
+ *
+ * Port of the QuantAlgo TradingView Pine Script:
+ *   sinhWMA = weighted MA using sinh((length-i)/length) weights
+ *   raw     = 2 * sinhWMA(close, length/2) - sinhWMA(close, length)
+ *   HHMA    = sinhWMA(raw, sqrt(length))
+ *
+ * Each point is tagged with a slope signal (bullish / bearish / neutral).
+ */
+export function calculateHHMA(data: OHLCDataPoint[], length: number = 21): HHMAPoint[] {
+  const half = Math.round(length / 2);
+  const sqrtLen = Math.round(Math.sqrt(length));
+
+  function sinhWMA(closes: number[], endIdx: number, len: number): number {
+    let sumW = 0;
+    let sumV = 0;
+    for (let j = 0; j < len; j++) {
+      const w = Math.sinh((len - j) / len);
+      sumW += w;
+      sumV += closes[endIdx - j] * w;
+    }
+    return sumV / sumW;
+  }
+
+  if (data.length < length + sqrtLen) return [];
+
+  const closes = data.map((d) => d.close);
+
+  // Stage 1: compute raw = 2*sinhWMA(half) - sinhWMA(length) for every bar >= length-1
+  const raw: number[] = [];
+  const rawTimes: number[] = [];
+  for (let i = length - 1; i < data.length; i++) {
+    raw.push(2 * sinhWMA(closes, i, half) - sinhWMA(closes, i, length));
+    rawTimes.push(data[i].time);
+  }
+
+  // Stage 2: apply sinhWMA(sqrtLen) to raw series
+  if (raw.length < sqrtLen) return [];
+
+  const result: HHMAPoint[] = [];
+  for (let i = sqrtLen - 1; i < raw.length; i++) {
+    let sumW = 0;
+    let sumV = 0;
+    for (let j = 0; j < sqrtLen; j++) {
+      const w = Math.sinh((sqrtLen - j) / sqrtLen);
+      sumW += w;
+      sumV += raw[i - j] * w;
+    }
+    const value = sumV / sumW;
+    const prev = result.length > 0 ? result[result.length - 1].value : null;
+    const signal: HHMASignal =
+      prev === null ? 'neutral' : value > prev ? 'bullish' : value < prev ? 'bearish' : 'neutral';
+    result.push({ time: rawTimes[i], value, signal });
+  }
+
+  return result;
+}
+
 /**
  * O(1) incremental RSI update for a single new bar.
  * @param prevState — from calculateRSI().state or a prior call

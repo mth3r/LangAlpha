@@ -157,6 +157,11 @@ export const MA_CONFIGS: MAConfig[] = [
 export const DEFAULT_ENABLED_MA: number[] = [20, 50];
 export const RSI_PERIODS: number[] = [7, 14, 21];
 
+// HHMA colors (bullish / bearish slope)
+export const HHMA_COLOR_BULL = '#10b981';   // green
+export const HHMA_COLOR_BEAR = '#ef4444';   // red
+export const HHMA_DEFAULT_LENGTH = 21;
+
 // Approximate trading bars per day per interval (extended hours: 4AM-8PM = 16h)
 export const BARS_PER_DAY: Record<string, number> = {
   '1s': 57600, '1min': 960, '5min': 192, '15min': 64, '30min': 32,
