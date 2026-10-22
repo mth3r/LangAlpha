@@ -117,7 +117,9 @@ class RedisCacheClient:
 
             # Test connection
             await self.client.ping()
-            logger.info(f"Redis cache connected: {self.url}")
+            # self.url embeds the password, so log only the endpoint
+            kw = self.pool.connection_kwargs
+            logger.info(f"Redis cache connected: {kw.get('host')}:{kw.get('port')}/{kw.get('db')}")
 
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
